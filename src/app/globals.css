@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+/*
+ * "V4B Hairline / Crusader" tokens. Components use the semantic Tailwind
+ * colors below (bg-cream, text-green, ...), so a dark theme later is just a
+ * second set of values for these variables.
+ */
+:root {
+  --green: #184a23;
+  --gold: #c99a06;
+  --gold-soft: #e8cc91;
+  --cream: #faf6e9;
+}
+
+@theme inline {
+  --color-green: var(--green);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-cream: var(--cream);
+  --font-sans: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+}
+
+body {
+  background: var(--cream);
+  color: var(--green);
+  font-family: var(--font-sans);
+}
+
+/* Hairline section title: small green caps + thin green underline. */
+@utility hairline-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--green);
+  border-bottom: 1px solid var(--green);
+  padding-bottom: 0.25rem;
+}

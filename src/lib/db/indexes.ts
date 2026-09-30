@@ -1,0 +1,39 @@
+import type { Db, IndexDescription } from "mongodb";
+import type { CollectionName } from "./collections";
+
+/** Index definitions. Applied by `pnpm db:indexes` (idempotent). */
+export const INDEXES: Partial<Record<CollectionName, IndexDescription[]>> = {
+  programs: [{ key: { schoolId: 1, sport: 1 }, unique: true }],
+  seasons: [{ key: { programId: 1, label: 1 }, unique: true }],
+  athletes: [{ key: { schoolId: 1, aliases: 1 } }],
+  seasonRosters: [
+    { key: { seasonId: 1, athleteId: 1 }, unique: true },
+    { key: { athleteId: 1 } },
+  ],
+  distances: [{ key: { sport: 1, value: 1, unit: 1 }, unique: true }],
+  courses: [{ key: { venueId: 1 } }],
+  meets: [
+    { key: { schoolId: 1, seasonId: 1, date: 1 } },
+    { key: { courseId: 1 } },
+    { key: { meetSeriesId: 1 } },
+  ],
+  races: [{ key: { meetId: 1 } }],
+  results: [
+    { key: { schoolId: 1, athleteId: 1, distanceId: 1, "mark.value": 1 } },
+    { key: { schoolId: 1, raceId: 1 } },
+  ],
+  raceEntries: [{ key: { raceId: 1, place: 1 } }],
+  taps: [
+    { key: { raceId: 1, checkpointId: 1, serverTimeMs: 1 } },
+    { key: { clientTapId: 1 }, unique: true },
+  ],
+  users: [{ key: { schoolId: 1, email: 1 }, unique: true }],
+  sessions: [{ key: { tokenHash: 1 }, unique: true }],
+  pins: [{ key: { userId: 1 } }],
+};
+
+export async function ensureIndexes(db: Db): Promise<void> {
+  for (const [name, indexes] of Object.entries(INDEXES)) {
+    await db.collection(name).createIndexes(indexes);
+  }
+}
