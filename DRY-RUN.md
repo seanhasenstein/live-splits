@@ -10,7 +10,7 @@
 
 ## Before Friday
 
-1. `pnpm db:clear-taps -- "Nightfall Classic" --yes` to wipe the test taps and
+1. `pnpm db:clear-taps "Nightfall Classic" --yes` to wipe the test taps and
    gun times from this week's testing.
 2. On the deployed site, join with the coach access code, open the meet,
    **Regenerate codes**, and write down the manager code, coach code and
