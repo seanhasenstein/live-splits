@@ -16,6 +16,11 @@ export const INDEXES: Partial<Record<CollectionName, IndexDescription[]>> = {
     { key: { schoolId: 1, seasonId: 1, date: 1 } },
     { key: { courseId: 1 } },
     { key: { meetSeriesId: 1 } },
+    // Join-code lookups. Partial so the nulls on meets without codes stay out.
+    ...(["managerCodeHash", "coachCodeHash", "viewerTokenHash"] as const).map((f) => ({
+      key: { [`joinCodes.${f}`]: 1 },
+      partialFilterExpression: { [`joinCodes.${f}`]: { $type: "string" } },
+    })),
   ],
   races: [{ key: { meetId: 1 } }],
   results: [

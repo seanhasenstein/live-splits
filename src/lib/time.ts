@@ -1,0 +1,85 @@
+import type { Precision } from "@/lib/db/schema";
+
+const PRECISION_DIGITS: Record<Precision, number> = {
+  tenths: 1,
+  hundredths: 2,
+  thousandths: 3,
+};
+
+/** Elapsed duration as "m:ss.t" (or "h:mm:ss.t"). Truncates, like timing systems do. */
+export function formatElapsed(ms: number, precision: Precision = "tenths"): string {
+  const digits = PRECISION_DIGITS[precision];
+  const sign = ms < 0 ? "-" : "";
+  const abs = Math.abs(ms);
+  const totalSeconds = Math.floor(abs / 1000);
+  const fraction = Math.floor((abs % 1000) / 10 ** (3 - digits));
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  const frac = String(fraction).padStart(digits, "0");
+  const base = h > 0 ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
+  return `${sign}${base}.${frac}`;
+}
+
+/** Wall-clock time of an instant in a zone, e.g. "7:10:23.4 PM". */
+export function formatClock(epochMs: number, timeZone: string, withTenths = true): string {
+  const base = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(epochMs);
+  if (!withTenths) return base;
+  const tenths = Math.floor((epochMs % 1000) / 100);
+  // Insert tenths after the seconds: "7:10:23 PM" -> "7:10:23.4 PM"
+  return base.replace(/(\d{2})( [AP]M)?$/, `$1.${tenths}$2`);
+}
+
+/** "Friday, Oct 2" for a local date string. */
+export function formatLocalDate(date: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(Date.UTC(y, m - 1, d));
+}
+
+/** "7:10 PM" for an "HH:mm" string. */
+export function formatTimeOfDay(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  const suffix = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${suffix}`;
+}
+
+/** Epoch ms for a wall-clock time ("HH:mm:ss" or "HH:mm:ss.t") on a local date in a zone. */
+export function zonedTimeToEpochMs(date: string, time: string, timeZone: string): number {
+  const [y, mo, d] = date.split("-").map(Number);
+  const [hh, mm, rest = "0"] = time.split(":");
+  const seconds = Number(rest);
+  const wallMs =
+    Date.UTC(y, mo - 1, d, Number(hh), Number(mm), Math.floor(seconds)) +
+    Math.round((seconds % 1) * 1000);
+  // Guess the zone offset at that instant, then correct once for DST edges.
+  let guess = wallMs - zoneOffsetMs(wallMs, timeZone);
+  guess = wallMs - zoneOffsetMs(guess, timeZone);
+  return guess;
+}
+
+/** Offset of `timeZone` from UTC at `epochMs`, in ms (America/Chicago in October: -5h). */
+function zoneOffsetMs(epochMs: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+  }).formatToParts(epochMs);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+  return asUtc - Math.floor(epochMs / 1000) * 1000;
+}
