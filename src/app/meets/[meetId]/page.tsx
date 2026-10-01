@@ -40,6 +40,12 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
         {venue && ` · ${venue.name}${venue.city ? `, ${venue.city}` : ""}`}
       </p>
 
+      {can(session, "tap", meet) && races.length > 0 && (
+        <LinkButton href={`/meets/${meet._id}/tap`} className="mb-6 w-full py-4 text-base">
+          Open tap screen
+        </LinkButton>
+      )}
+
       <Section
         title="Races"
         action={setup ? <LinkButton href={`/meets/${meet._id}/races/new`} className="px-3 py-1.5 text-xs">Add race</LinkButton> : undefined}

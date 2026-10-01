@@ -1,0 +1,160 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getClockSync } from "@/lib/client/clock";
+import { outboxAdd, outboxAll, outboxRemove, type OutboxTap } from "@/lib/client/outbox";
+import type { TapLike } from "@/lib/replay";
+import type { TapInput } from "@/lib/taps";
+
+type ServerTap = TapLike & { raceId: string; createdAt: string };
+
+const POLL_MS = 2500;
+const RETRY_MS = [1000, 2000, 4000, 8000, 15000];
+
+/**
+ * The live tap log for a race: what the server has, plus what this device has
+ * queued but not yet delivered. Polls the server and flushes the outbox.
+ */
+export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
+  const [serverTaps, setServerTaps] = useState<Map<string, ServerTap>>(() => new Map());
+  const [outbox, setOutbox] = useState<Map<string, OutboxTap>>(() => new Map());
+  const [gunTimeMs, setGunTimeMs] = useState(initialGunTimeMs);
+  const [online, setOnline] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const since = useRef(0);
+  const flushing = useRef(false);
+  const failures = useRef(0);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushRef = useRef<() => Promise<void>>(async () => {});
+
+  // --- polling -------------------------------------------------------------
+  const poll = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/races/${raceId}/taps?since=${since.current}`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = (await res.json()) as { taps: ServerTap[]; gunTimeMs: number | null; serverTimeMs: number };
+      since.current = body.serverTimeMs;
+      setGunTimeMs(body.gunTimeMs);
+      if (body.taps.length > 0) {
+        setServerTaps((prev) => {
+          const next = new Map(prev);
+          for (const t of body.taps) next.set(t.clientTapId, t);
+          return next;
+        });
+      }
+      setOnline(true);
+      setLoaded(true);
+    } catch {
+      setOnline(false);
+    }
+  }, [raceId]);
+
+  // Callers remount this hook per race (key={race.id}), so state starts fresh for each race.
+  useEffect(() => {
+    void poll();
+    const interval = setInterval(poll, POLL_MS);
+    return () => clearInterval(interval);
+  }, [poll]);
+
+  // --- outbox --------------------------------------------------------------
+  const flush = useCallback(async () => {
+    if (flushing.current) return;
+    flushing.current = true;
+    if (retryTimer.current) clearTimeout(retryTimer.current);
+    retryTimer.current = null;
+    try {
+      const pending = await outboxAll();
+      const byRace = new Map<string, OutboxTap[]>();
+      for (const t of pending) byRace.set(t.raceId, [...(byRace.get(t.raceId) ?? []), t]);
+      for (const [rid, taps] of byRace) {
+        const res = await fetch("/api/taps", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          // queuedAt rides along; the server's schema strips it.
+          body: JSON.stringify({ taps: taps.slice(0, 100) }),
+        });
+        if (res.status === 400 || res.status === 404) {
+          // Malformed or for a race that no longer exists; keeping them would block the queue
+          // forever. (401/403 are kept: the person can re-join and the taps go through.)
+          const body = (await res.json().catch(() => ({}))) as { error?: string };
+          console.error("taps rejected", rid, body.error);
+          await outboxRemove(taps.map((t) => t.clientTapId));
+          continue;
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = (await res.json()) as { accepted: string[]; gunTimeMs: number | null };
+        await outboxRemove(body.accepted);
+        if (rid === raceId) {
+          setGunTimeMs(body.gunTimeMs);
+          // Keep showing accepted taps until the next poll returns them from the server.
+          const accepted = new Set(body.accepted);
+          setServerTaps((prev) => {
+            const next = new Map(prev);
+            for (const t of taps) {
+              if (accepted.has(t.clientTapId) && !next.has(t.clientTapId)) {
+                next.set(t.clientTapId, { ...t, serverTimeMs: t.deviceTimeMs + t.clockOffsetMs, createdAt: new Date().toISOString() });
+              }
+            }
+            return next;
+          });
+        }
+      }
+      failures.current = 0;
+      setOnline(true);
+    } catch {
+      setOnline(false);
+      const delay = RETRY_MS[Math.min(failures.current++, RETRY_MS.length - 1)];
+      retryTimer.current = setTimeout(() => void flushRef.current(), delay);
+    } finally {
+      flushing.current = false;
+      setOutbox(new Map((await outboxAll()).map((t) => [t.clientTapId, t])));
+    }
+  }, [raceId]);
+
+  useEffect(() => {
+    flushRef.current = flush;
+    const kick = setTimeout(() => void flush(), 0);
+    const onOnline = () => void flush();
+    window.addEventListener("online", onOnline);
+    return () => {
+      clearTimeout(kick);
+      window.removeEventListener("online", onOnline);
+      if (retryTimer.current) clearTimeout(retryTimer.current);
+    };
+  }, [flush]);
+
+  /** Queue a tap: local first, then delivered in the background. */
+  const send = useCallback(
+    async (input: Omit<TapInput, "clientTapId" | "deviceTimeMs" | "clockOffsetMs" | "raceId"> & { deviceTimeMs?: number }) => {
+      const sync = getClockSync();
+      const tap: OutboxTap = {
+        clientTapId: crypto.randomUUID(),
+        raceId,
+        deviceTimeMs: input.deviceTimeMs ?? Date.now(),
+        clockOffsetMs: sync?.offsetMs ?? 0,
+        ...input,
+        queuedAt: Date.now(),
+      };
+      setOutbox((prev) => new Map(prev).set(tap.clientTapId, tap));
+      await outboxAdd(tap);
+      void flush();
+      return tap.clientTapId;
+    },
+    [raceId, flush],
+  );
+
+  /** Server taps plus this device's unsent ones, as replay input. */
+  const taps = useMemo<TapLike[]>(() => {
+    const all = new Map<string, TapLike>(serverTaps);
+    for (const t of outbox.values()) {
+      if (t.raceId === raceId && !all.has(t.clientTapId)) {
+        all.set(t.clientTapId, { ...t, serverTimeMs: t.deviceTimeMs + t.clockOffsetMs });
+      }
+    }
+    return [...all.values()];
+  }, [serverTaps, outbox, raceId]);
+
+  const unsent = useMemo(() => [...outbox.values()].filter((t) => t.raceId === raceId).length, [outbox, raceId]);
+
+  return { taps, gunTimeMs, send, online, loaded, unsent, refresh: poll };
+}
