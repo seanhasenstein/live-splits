@@ -83,3 +83,13 @@ function zoneOffsetMs(epochMs: number, timeZone: string): number {
   const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
   return asUtc - Math.floor(epochMs / 1000) * 1000;
 }
+
+/** "6:02.4", "6:02", "1:02:05.12" or "362.4" (seconds) → ms. Null if unreadable. */
+export function parseElapsed(text: string): number | null {
+  const m = text.trim().match(/^(?:(\d+):)?(?:(\d{1,2}):)?(\d{1,2}(?:\.\d{1,3})?)$/);
+  if (!m) return null;
+  const [, a, b, s] = m;
+  const h = a && b ? Number(a) : 0;
+  const min = a && b ? Number(b) : a ? Number(a) : 0;
+  return Math.round((h * 3600 + min * 60 + Number(s)) * 1000);
+}

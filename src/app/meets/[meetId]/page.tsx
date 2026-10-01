@@ -40,10 +40,17 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
         {venue && ` · ${venue.name}${venue.city ? `, ${venue.city}` : ""}`}
       </p>
 
-      {can(session, "tap", meet) && races.length > 0 && (
-        <LinkButton href={`/meets/${meet._id}/tap`} className="mb-6 w-full py-4 text-base">
-          Open tap screen
-        </LinkButton>
+      {races.length > 0 && (
+        <div className="mb-6 flex gap-2">
+          {can(session, "tap", meet) && (
+            <LinkButton href={`/meets/${meet._id}/tap`} className="flex-1 py-4 text-base">
+              Tap screen
+            </LinkButton>
+          )}
+          <LinkButton href={`/meets/${meet._id}/board`} variant="secondary" className="flex-1 py-4 text-base">
+            Live board
+          </LinkButton>
+        </div>
       )}
 
       <Section
