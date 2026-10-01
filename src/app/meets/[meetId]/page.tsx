@@ -66,11 +66,18 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
                   <span className="text-lg font-bold">{race.name}</span>
                   {race.scheduledStart && <span className="ml-2 text-sm text-green/70">{formatTimeOfDay(race.scheduledStart)}</span>}
                 </div>
-                {setup && (
-                  <Link href={`/meets/${meet._id}/races/${race._id}`} className="text-sm underline underline-offset-2">
-                    Edit
-                  </Link>
-                )}
+                <span className="flex gap-3 text-sm">
+                  {can(session, "export", meet) && (
+                    <a href={`/api/meets/${meet._id}/export?race=${race._id}`} className="underline underline-offset-2">
+                      CSV
+                    </a>
+                  )}
+                  {setup && (
+                    <Link href={`/meets/${meet._id}/races/${race._id}`} className="underline underline-offset-2">
+                      Edit
+                    </Link>
+                  )}
+                </span>
               </div>
               <p className="text-sm text-green/70">
                 {label(program?.settings.raceCategories, race.raceCategoryId)} ·{" "}

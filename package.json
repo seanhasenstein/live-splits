@@ -10,7 +10,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "db:indexes": "tsx --env-file=.env.local scripts/setup-indexes.ts",
     "db:seed": "tsx --env-file=.env.local scripts/seed.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:clear-taps": "tsx --env-file=.env.local scripts/clear-taps.ts"
   },
   "dependencies": {
     "mongodb": "^7.7.0",
