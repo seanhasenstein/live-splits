@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { Check, ChevronRight } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 
 /** A bordered white surface. Sections inside are separated by hairlines. */
@@ -68,14 +68,15 @@ export function ListRow({ icon, title, description, meta, href, onClick, chevron
   return <div className={cls}>{inner}</div>;
 }
 
-export function Badge({ tone = "neutral", dot, children }: { tone?: "neutral" | "brand" | "gold" | "danger"; dot?: boolean; children: ReactNode }) {
+export function Badge({ tone = "neutral", dot, children }: { tone?: "neutral" | "brand" | "gold" | "danger" | "ink"; dot?: boolean; children: ReactNode }) {
   const tones = {
     neutral: "bg-surface-2 text-ink border-line-strong",
+    ink: "bg-ink text-bg border-ink",
     brand: "bg-brand-soft text-brand-text border-brand/20",
     gold: "bg-gold-soft text-gold-text border-gold/40",
     danger: "bg-danger-soft text-danger border-danger/30",
   };
-  const dots = { neutral: "bg-ink-3", brand: "bg-brand-bright", gold: "bg-gold", danger: "bg-danger" };
+  const dots = { neutral: "bg-ink-3", ink: "bg-bg", brand: "bg-brand-bright", gold: "bg-gold", danger: "bg-danger" };
   return (
     <span className={`inline-flex h-6 items-center gap-1.5 rounded-full border px-2 text-xs font-medium ${tones[tone]}`}>
       {dot && <span className={`size-1.5 rounded-full ${dots[tone]}`} />}
@@ -112,4 +113,14 @@ export function Alert({ tone = "neutral", title, children }: { tone?: "neutral" 
 /** Tabular numerals for anything that is a time. */
 export function Time({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <span className={`tnum ${className}`}>{children}</span>;
+}
+
+/** The race is over: solid, so it can't be mistaken for a quiet state. */
+export function FinishedBadge() {
+  return (
+    <Badge tone="ink">
+      <Check className="size-3" strokeWidth={3} />
+      Finished
+    </Badge>
+  );
 }

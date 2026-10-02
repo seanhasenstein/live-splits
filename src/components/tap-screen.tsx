@@ -5,7 +5,7 @@ import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState 
 import { ArrowLeftRight, Check, Pencil, Undo2, X } from "lucide-react";
 import { ClockWarning } from "@/components/gun-panel";
 import { SessionMenu } from "@/components/session-menu";
-import { AppHeader, Badge, Button, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
+import { AppHeader, Badge, Button, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast, FinishedBadge } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
@@ -161,7 +161,7 @@ function SwitchControl({
             <div className="flex items-center gap-2 text-[13px] text-ink-2">
               <span className="font-medium text-ink">{pickedRace.name}</span>
               {pickedRace.finished ? (
-                <Badge tone="neutral">Finished</Badge>
+                <FinishedBadge />
               ) : summary === null ? (
                 <span>loading…</span>
               ) : summary.gunTimeMs ? (
@@ -376,7 +376,7 @@ function RaceTapper({
               {cp ? [...cp.byAthlete.values()].filter((m) => !m.missed).length : 0} of {race.athleteIds.length} recorded
             </span>
             <span aria-hidden>·</span>
-            {race.finished ? <Badge tone="neutral">Finished</Badge> : <RaceClock gunTimeMs={gunTimeMs} now={clock.now} />}
+            {race.finished ? <FinishedBadge /> : <RaceClock gunTimeMs={gunTimeMs} now={clock.now} />}
           </div>
         </div>
       </div>

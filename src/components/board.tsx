@@ -4,7 +4,7 @@ import Link from "next/link";
 import { type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pencil } from "lucide-react";
 import { SessionMenu } from "@/components/session-menu";
-import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Sheet, Stat, Time, Toast } from "@/components/ui";
+import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Sheet, Stat, Time, Toast, FinishedBadge } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type CheckpointState, type Mark, replay, type Slot } from "@/lib/replay";
@@ -153,7 +153,7 @@ function RaceBoard({
     <>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          {race.finished ? <Badge tone="neutral">Finished</Badge> : <RaceClock gunTimeMs={gunTimeMs} now={clock.now} />}
+          {race.finished ? <FinishedBadge /> : <RaceClock gunTimeMs={gunTimeMs} now={clock.now} />}
           {!online && (
             <Badge tone="danger" dot>
               Offline

@@ -4,7 +4,7 @@ import { Flag, MoreHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { clearGunTimeAction, setGunTimeAction, setRaceFinishedAction } from "@/app/actions/races";
-import { Alert, Badge, Button, Field, Input, Sheet, Time } from "@/components/ui";
+import { Alert, Badge, Button, Field, Input, Sheet, Time, FinishedBadge } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { formatClock, formatElapsed } from "@/lib/time";
 
@@ -104,7 +104,7 @@ export function GunPanel({ raceId, gunTimeMs: initialGun, finishedAt: initialFin
               Running
             </Badge>
           ) : finished ? (
-            <Badge tone="neutral">Finished</Badge>
+            <FinishedBadge />
           ) : (
             <Badge tone="neutral" dot>
               Not started
