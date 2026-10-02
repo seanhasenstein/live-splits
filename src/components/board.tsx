@@ -152,8 +152,8 @@ function RaceBoard({
 
   return (
     <>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3 sm:flex-1">
           <RaceStatus race={race} gunTimeMs={gunTimeMs} now={clock.now} />
           {!online && (
             <Badge tone="danger" dot>
@@ -161,20 +161,20 @@ function RaceBoard({
             </Badge>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
           {canFix &&
             (editing ? (
-              <Button size="sm" onClick={() => setEditing(false)}>
+              <Button size="sm" onClick={() => setEditing(false)} className="col-span-2 h-10 sm:col-span-1 sm:h-8">
                 Done
               </Button>
             ) : (
-              <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
+              <Button size="sm" variant="secondary" onClick={() => setEditing(true)} className="h-10 sm:h-8">
                 <Pencil className="size-3.5" />
                 Fix times
               </Button>
             ))}
           {canTap && !editing && (
-            <LinkButton href={`/meets/${meetId}/record?race=${race.id}`} size="sm" variant="secondary">
+            <LinkButton href={`/meets/${meetId}/record?race=${race.id}`} size="sm" variant="secondary" className="h-10 sm:h-8">
               Record splits
             </LinkButton>
           )}
