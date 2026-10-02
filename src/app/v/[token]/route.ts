@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { hashToken } from "@/lib/auth/crypto";
-import { createSession } from "@/lib/auth/session";
+import { can, createSession, getSession } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
 
@@ -12,6 +12,7 @@ export async function GET(_request: Request, { params }: RouteContext<"/v/[token
     deletedAt: null,
   });
   if (!meet) return new Response("This viewer link is no longer valid.", { status: 404 });
-  await createSession({ schoolId: meet.schoolId, meetId: meet._id, role: "viewer", name: "Viewer" });
+  // A coach or manager testing the link keeps their session.
+  if (!can(await getSession(), "view", meet)) await createSession({ schoolId: meet.schoolId, meetId: meet._id, role: "viewer", name: "Viewer" });
   redirect(`/meets/${meet._id}`);
 }

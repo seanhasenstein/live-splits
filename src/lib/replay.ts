@@ -62,7 +62,24 @@ export function replay(race: Pick<Race, "checkpoints">, taps: TapLike[]): RaceSt
   const marks = new Map<string, Mark>();
   const slots = new Map<string, Slot>();
 
-  for (const t of sortTaps(taps)) {
+  // A clock resync can order an undo/assign/edit a few ms before the tap it points at.
+  // Events whose target hasn't been seen yet are retried after everything else.
+  const sorted = sortTaps(taps);
+  const deferred: TapLike[] = [];
+  const apply = (t: TapLike, canDefer: boolean) => {
+    if (t.targetTapId && canDefer && !marks.has(t.targetTapId) && !slots.has(t.targetTapId)) {
+      deferred.push(t);
+      return;
+    }
+    applyOne(t);
+  };
+
+  for (const t of sorted) apply(t, true);
+  for (const t of deferred) apply(t, false);
+
+  return collect(race, marks, slots);
+
+  function applyOne(t: TapLike) {
     const time = t.timeMs ?? t.serverTimeMs;
     const by = t.createdBy?.name ?? null;
     switch (t.type) {
@@ -161,7 +178,9 @@ export function replay(race: Pick<Race, "checkpoints">, taps: TapLike[]): RaceSt
         break; // gun and tick don't affect checkpoint state
     }
   }
+}
 
+function collect(race: Pick<Race, "checkpoints">, marks: Map<string, Mark>, slots: Map<string, Slot>): RaceState {
   const state: RaceState = new Map(race.checkpoints.map((c) => [c.id, { pending: [], byAthlete: new Map() }]));
   const assignedSlots = new Set<string>();
   for (const m of marks.values()) {

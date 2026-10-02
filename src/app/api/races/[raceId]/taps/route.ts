@@ -16,8 +16,9 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
   if (!can(await getSession(), "view", meet)) return Response.json({ error: "Not allowed" }, { status: 403 });
 
   const since = Number(new URL(request.url).searchParams.get("since") ?? 0);
-  // Taps stored in the last second may still be landing; re-send that window so none are missed.
-  const serverTimeMs = Date.now() - 1000;
+  // Taps whose insert is still in flight have an earlier createdAt than this poll; re-send a
+  // generous window (clients dedupe by clientTapId) so a slow write is never skipped.
+  const serverTimeMs = Date.now() - 5000;
   const taps = await collection(await getDb(), "taps")
     .find(since > 0 ? { raceId, createdAt: { $gt: new Date(since) } } : { raceId })
     .sort({ createdAt: 1 })

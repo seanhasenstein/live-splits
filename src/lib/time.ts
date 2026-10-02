@@ -32,7 +32,7 @@ export function formatClock(epochMs: number, timeZone: string, withTenths = true
   if (!withTenths) return base;
   const tenths = Math.floor((epochMs % 1000) / 100);
   // Insert tenths after the seconds: "7:10:23 PM" -> "7:10:23.4 PM"
-  return base.replace(/(\d{2})( [AP]M)?$/, `$1.${tenths}$2`);
+  return base.replace(/(\d{2})([\s\u202f][AP]M)?$/, `$1.${tenths}$2`);
 }
 
 /** "Friday, Oct 2" for a local date string. */
@@ -86,7 +86,7 @@ function zoneOffsetMs(epochMs: number, timeZone: string): number {
 
 /** "6:02.4", "6:02", "1:02:05.12" or "362.4" (seconds) → ms. Null if unreadable. */
 export function parseElapsed(text: string): number | null {
-  const m = text.trim().match(/^(?:(\d+):)?(?:(\d{1,2}):)?(\d{1,2}(?:\.\d{1,3})?)$/);
+  const m = text.trim().match(/^(?:(\d+):)?(?:(\d{1,2}):)?(\d{1,4}(?:\.\d{1,3})?)$/);
   if (!m) return null;
   const [, a, b, s] = m;
   const h = a && b ? Number(a) : 0;

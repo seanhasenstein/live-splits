@@ -9,6 +9,14 @@ import type { TapInput } from "@/lib/taps";
 type ServerTap = TapLike & { raceId: string; createdAt: string };
 
 const POLL_MS = 2500;
+
+const postTaps = (taps: OutboxTap[]) =>
+  fetch("/api/taps", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    // queuedAt rides along; the server's schema strips it.
+    body: JSON.stringify({ taps }),
+  });
 const RETRY_MS = [1000, 2000, 4000, 8000, 15000];
 
 /**
@@ -20,6 +28,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
   const [outbox, setOutbox] = useState<Map<string, OutboxTap>>(() => new Map());
   const [gunTimeMs, setGunTimeMs] = useState(initialGunTimeMs);
   const [online, setOnline] = useState(true);
+  const [signedOut, setSignedOut] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const since = useRef(0);
   const flushing = useRef(false);
@@ -73,18 +82,36 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
       const byRace = new Map<string, OutboxTap[]>();
       for (const t of pending) byRace.set(t.raceId, [...(byRace.get(t.raceId) ?? []), t]);
       for (const [rid, taps] of byRace) {
-        const res = await fetch("/api/taps", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          // queuedAt rides along; the server's schema strips it.
-          body: JSON.stringify({ taps: taps.slice(0, 100) }),
-        });
+        const batch = taps.slice(0, 100);
+        if (taps.length > batch.length) flushAgain.current = true;
+        const res = await postTaps(batch);
+        if (res.status === 401 || res.status === 403) {
+          // Session gone: keep the taps, tell the person to rejoin.
+          setSignedOut(true);
+          return;
+        }
         if (res.status === 400 || res.status === 404) {
-          // Malformed or for a race that no longer exists; keeping them would block the queue
-          // forever. (401/403 are kept: the person can re-join and the taps go through.)
+          // One bad tap must not sink the batch: send the rest one by one and drop only rejects.
+          for (const t of batch) {
+            const one = await postTaps([t]);
+            if (one.ok) {
+              const body = (await one.json()) as { accepted: string[] };
+              await outboxRemove(body.accepted);
+            } else if (one.status === 400 || one.status === 404) {
+              const body = (await one.json().catch(() => ({}))) as { error?: string };
+              console.error("tap rejected", t.clientTapId, body.error);
+              await outboxRemove([t.clientTapId]);
+            } else {
+              throw new Error(`HTTP ${one.status}`);
+            }
+          }
+          continue;
+        }
+        if (res.status === 409) {
+          // The race was already started by someone else; this START is moot.
           const body = (await res.json().catch(() => ({}))) as { error?: string };
-          console.error("taps rejected", rid, body.error);
-          await outboxRemove(taps.map((t) => t.clientTapId));
+          console.warn("tap rejected", rid, body.error);
+          await outboxRemove(batch.filter((t) => t.type === "gun").map((t) => t.clientTapId));
           continue;
         }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -96,7 +123,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
           const accepted = new Set(body.accepted);
           setServerTaps((prev) => {
             const next = new Map(prev);
-            for (const t of taps) {
+            for (const t of batch) {
               if (accepted.has(t.clientTapId) && !next.has(t.clientTapId)) {
                 next.set(t.clientTapId, { ...t, serverTimeMs: t.deviceTimeMs + t.clockOffsetMs, createdAt: new Date().toISOString() });
               }
@@ -105,6 +132,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
           });
         }
       }
+      setSignedOut(false);
       failures.current = 0;
       setOnline(true);
     } catch {
@@ -169,5 +197,5 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
 
   const unsent = useMemo(() => [...outbox.values()].filter((t) => t.raceId === raceId).length, [outbox, raceId]);
 
-  return { taps, gunTimeMs, send, online, loaded, unsent, refresh: poll };
+  return { taps, gunTimeMs, send, online, signedOut, loaded, unsent, refresh: poll };
 }

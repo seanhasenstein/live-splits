@@ -58,6 +58,38 @@ export function RaceCard({ raceId, name, startLabel, details, headerActions, gun
     return () => clearTimeout(t);
   }, [armed]);
 
+  // The START payload is kept so a failed send can be retried with the original
+  // moment and id (the server dedupes on clientTapId).
+  const [pendingStart, setPendingStart] = useState<Record<string, unknown> | null>(null);
+
+  const sendStart = (payload: Record<string, unknown>) => {
+    startSend(async () => {
+      try {
+        const res = await fetch("/api/taps", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ taps: [payload] }),
+        });
+        const body = (await res.json().catch(() => ({}))) as { error?: string; gunTimeMs?: number | null };
+        if (res.status === 409) {
+          // Someone else started it first; show their gun, don't overwrite it.
+          setPendingStart(null);
+          setError(body.error ?? "This race was already started.");
+          router.refresh();
+          return;
+        }
+        if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+        setPendingStart(null);
+        setGunTimeMs(body.gunTimeMs ?? (payload.deviceTimeMs as number) + (payload.clockOffsetMs as number));
+        setError(null);
+        router.refresh();
+      } catch (e) {
+        setPendingStart(payload);
+        setError(`${e instanceof Error ? e.message : "Couldn't record the start."} The moment you tapped is saved; retry to send it.`);
+      }
+    });
+  };
+
   const fire = () => {
     const deviceTimeMs = Date.now();
     const sync = clock.sync;
@@ -66,38 +98,19 @@ export function RaceCard({ raceId, name, startLabel, details, headerActions, gun
       setError("The clock isn't synced yet. Try again in a second.");
       return;
     }
-    startSend(async () => {
-      try {
-        const res = await fetch("/api/taps", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            taps: [
-              {
-                clientTapId: crypto.randomUUID(),
-                type: "gun",
-                raceId,
-                checkpointId: null,
-                athleteId: null,
-                targetTapId: null,
-                deviceTimeMs,
-                clockOffsetMs: sync.offsetMs,
-                timeMs: null,
-                estimate: false,
-                missed: false,
-                note: null,
-              },
-            ],
-          }),
-        });
-        const body = (await res.json()) as { error?: string; gunTimeMs?: number | null };
-        if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-        setGunTimeMs(body.gunTimeMs ?? deviceTimeMs + sync.offsetMs);
-        setError(null);
-        router.refresh();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Couldn't record the start.");
-      }
+    sendStart({
+      clientTapId: crypto.randomUUID(),
+      type: "gun",
+      raceId,
+      checkpointId: null,
+      athleteId: null,
+      targetTapId: null,
+      deviceTimeMs,
+      clockOffsetMs: sync.offsetMs,
+      timeMs: null,
+      estimate: false,
+      missed: false,
+      note: null,
     });
   };
 
@@ -170,8 +183,13 @@ export function RaceCard({ raceId, name, startLabel, details, headerActions, gun
       )}
 
       {error && (
-        <div className="mt-2">
+        <div className="mt-2 space-y-2">
           <Alert tone="danger">{error}</Alert>
+          {pendingStart && (
+            <Button size="sm" onClick={() => sendStart(pendingStart)} disabled={sending}>
+              {sending ? "Sending…" : "Retry sending the start"}
+            </Button>
+          )}
         </div>
       )}
 

@@ -16,6 +16,7 @@ const TRAILING_HEADER = ["Previous SB", "Prev SB Meet", "New SB?", "Change", "Le
 
 /** m:ss, truncated, the way the workbook expects mile times to be typed. */
 export function formatWorkbookTime(ms: number): string {
+  if (ms < 0) return ""; // a tap before the gun is a mistake, not a time
   const total = Math.floor(ms / 1000);
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }

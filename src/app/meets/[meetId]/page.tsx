@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Download, Pencil, Plus, Users } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { CodesPanel } from "@/components/codes-panel";
 import { RaceCard, type RaceState } from "@/components/race-card";
 import { SessionMenu } from "@/components/session-menu";
@@ -52,6 +53,7 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
         right={<SessionMenu name={session.name} role={isSchoolCoach(session) ? "coach" : session.role} />}
       />
       <Page>
+        <AutoRefresh />
         <PageTitle title={meet.name} description={`${formatLocalDate(meet.date)}${venue ? ` · ${venue.name}${venue.city ? `, ${venue.city}` : ""}` : ""}`} />
 
         <Card className="mb-5">

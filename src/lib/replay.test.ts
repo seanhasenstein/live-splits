@@ -96,3 +96,25 @@ test("gun and taps at other checkpoints don't leak in", () => {
   expect(m1(taps).byAthlete.size).toBe(0);
   expect(replay(race, taps).get("m2")!.byAthlete.get("A")!.timeMs).toBe(1001);
 });
+
+test("an undo that sorts a few ms before its target still applies", () => {
+  const tap = log();
+  const taps = [
+    tap({ type: "name_tap", athleteId: "A", serverTimeMs: 1000 }),
+    // Clock resync lowered the offset: the void lands 'before' the tap it undoes.
+    tap({ type: "void", targetTapId: "t1000", serverTimeMs: 995 }),
+  ];
+  expect(m1(taps).byAthlete.has("A")).toBe(false);
+});
+
+test("replace then undo puts the original time back", () => {
+  const tap = log();
+  const taps = [
+    tap({ type: "name_tap", athleteId: "A", serverTimeMs: 5000 }), // original 5000
+    tap({ type: "void", targetTapId: "t1000", serverTimeMs: 6000 }), // replace: void old…
+    tap({ type: "name_tap", athleteId: "A", serverTimeMs: 6001 }), // …record new (6001)
+    tap({ type: "void", targetTapId: "t1002", serverTimeMs: 7000 }), // undo: void new…
+    tap({ type: "name_tap", athleteId: "A", timeMs: 5000, serverTimeMs: 7001 }), // …restore old
+  ];
+  expect(m1(taps).byAthlete.get("A")!.timeMs).toBe(5000);
+});

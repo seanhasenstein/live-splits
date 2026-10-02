@@ -49,12 +49,16 @@ export async function recordTaps(
   }
   for (const t of inputs) {
     if (t.raceId !== race._id) throw new TapError("All taps must belong to the race", 400);
+    // A live START on a race that already has a gun would silently re-base every time.
+    // Typed overrides (timeMs set) are deliberate and still allowed.
+    if (t.type === "gun" && t.timeMs === null && race.gunTimeMs !== null) {
+      throw new TapError("This race was already started. Use Adjust to change the gun time.", 409);
+    }
     if (t.checkpointId && !race.checkpoints.some((c) => c.id === t.checkpointId)) {
       throw new TapError(`Unknown checkpoint ${t.checkpointId}`, 400);
     }
   }
 
-  const now = new Date();
   const taps: Tap[] = inputs.map((t) =>
     COLLECTIONS.taps.schema.parse({
       _id: newId(),
@@ -63,7 +67,7 @@ export async function recordTaps(
       ...t,
       meetId: meet._id,
       serverTimeMs: t.deviceTimeMs + t.clockOffsetMs,
-      createdAt: now,
+      createdAt: new Date(0), // set just before insert, below
       createdBy: sessionActor(session),
     }),
   );
@@ -77,7 +81,9 @@ export async function recordTaps(
       (t) => t.clientTapId,
     ),
   );
-  const fresh = taps.filter((t) => !existing.has(t.clientTapId));
+  // Stamp createdAt as late as possible: pollers use it as a cursor.
+  const now = new Date();
+  const fresh = taps.filter((t) => !existing.has(t.clientTapId)).map((t) => ({ ...t, createdAt: now }));
   if (fresh.length > 0) {
     try {
       await tapsCol.insertMany(fresh, { ordered: false });
