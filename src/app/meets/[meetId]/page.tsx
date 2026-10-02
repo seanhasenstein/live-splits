@@ -111,17 +111,19 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
                   firedBy={firedBy[race._id] ?? null}
                   timeZone={meet.timeZone}
                   canGun={gun}
+                  actions={
+                    <div className="grid grid-cols-2 gap-2">
+                      {can(session, "tap", meet) && (
+                        <LinkButton href={`/meets/${meet._id}/record?race=${race._id}`} size="lg">
+                          Record splits
+                        </LinkButton>
+                      )}
+                      <LinkButton href={`/meets/${meet._id}/board?race=${race._id}`} size="lg" variant="secondary" className={can(session, "tap", meet) ? "" : "col-span-2"}>
+                        Live board
+                      </LinkButton>
+                    </div>
+                  }
                 />
-                <div className="grid grid-cols-2 gap-2">
-                  {can(session, "tap", meet) && (
-                    <LinkButton href={`/meets/${meet._id}/record?race=${race._id}`} size="lg">
-                      Record splits
-                    </LinkButton>
-                  )}
-                  <LinkButton href={`/meets/${meet._id}/board?race=${race._id}`} size="lg" variant="secondary" className={can(session, "tap", meet) ? "" : "col-span-2"}>
-                    Live board
-                  </LinkButton>
-                </div>
               </CardBody>
             ))
           )}

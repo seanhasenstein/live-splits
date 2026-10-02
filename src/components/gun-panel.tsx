@@ -15,6 +15,8 @@ type Props = {
   firedBy: string | null;
   timeZone: string;
   canGun: boolean;
+  /** Record splits / Live board, rendered inside the card. */
+  actions?: React.ReactNode;
 };
 
 /**
@@ -22,7 +24,7 @@ type Props = {
  * Start race…), running (big elapsed time; changes live behind "Adjust"),
  * finished (frozen). Nothing destructive is a single tap.
  */
-export function GunPanel({ raceId, gunTimeMs: initialGun, finishedAt: initialFinished, firedBy, timeZone, canGun }: Props) {
+export function GunPanel({ raceId, gunTimeMs: initialGun, finishedAt: initialFinished, firedBy, timeZone, canGun, actions }: Props) {
   const router = useRouter();
   const clock = useClock();
   const [gunTimeMs, setGunTimeMs] = useState(initialGun);
@@ -166,6 +168,8 @@ export function GunPanel({ raceId, gunTimeMs: initialGun, finishedAt: initialFin
           <Alert tone="danger">{error}</Alert>
         </div>
       )}
+
+      {actions && <div className="mt-3">{actions}</div>}
 
       {adjusting && (
         <AdjustSheet
