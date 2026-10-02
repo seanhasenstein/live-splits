@@ -32,7 +32,8 @@ type Props = {
   canTap: boolean;
 };
 
-const eventTimeMs = (e: SyntheticEvent) => Math.round(performance.timeOrigin + e.nativeEvent.timeStamp);
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const eventTimeMs = (_e: SyntheticEvent) => Date.now();
 
 const METERS_PER_MILE = 1609.344;
 

@@ -36,8 +36,13 @@ const DOUBLE_TAP_MS = 1000;
 const TOAST_MS = 4000;
 const FLASH_MS = 400;
 
-/** The moment the user actually tapped, as epoch ms (more honest than Date.now() after React work). */
-const eventTimeMs = (e: SyntheticEvent) => Math.round(performance.timeOrigin + e.nativeEvent.timeStamp);
+/**
+ * When the tap happened, as epoch ms. Date.now() in the handler is within a
+ * frame of the touch; the event's performance-clock timestamp is not used
+ * because iOS pauses that clock while the phone sleeps.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const eventTimeMs = (_e: SyntheticEvent) => Date.now();
 
 export function TapScreen({ meetId, meetName, session, initial, timeZone, races, athletes }: Props) {
   useWakeLock();

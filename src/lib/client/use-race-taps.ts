@@ -57,8 +57,14 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
   }, [poll]);
 
   // --- outbox --------------------------------------------------------------
+  const flushAgain = useRef(false);
+
   const flush = useCallback(async () => {
-    if (flushing.current) return;
+    if (flushing.current) {
+      // Something was queued mid-flush; run once more when this one ends.
+      flushAgain.current = true;
+      return;
+    }
     flushing.current = true;
     if (retryTimer.current) clearTimeout(retryTimer.current);
     retryTimer.current = null;
@@ -108,6 +114,10 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
     } finally {
       flushing.current = false;
       setOutbox(new Map((await outboxAll()).map((t) => [t.clientTapId, t])));
+      if (flushAgain.current) {
+        flushAgain.current = false;
+        void flushRef.current();
+      }
     }
   }, [raceId]);
 
@@ -115,10 +125,13 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
     flushRef.current = flush;
     const kick = setTimeout(() => void flush(), 0);
     const onOnline = () => void flush();
+    const onVisible = () => document.visibilityState === "visible" && void flush();
     window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       clearTimeout(kick);
       window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", onVisible);
       if (retryTimer.current) clearTimeout(retryTimer.current);
     };
   }, [flush]);
