@@ -596,8 +596,8 @@ function RaceStatus({ race, gunTimeMs, now }: { race: RaceInfo; gunTimeMs: numbe
   if (race.finished) {
     return (
       <div className="flex min-w-0 flex-1 items-center justify-center gap-2.5 rounded-lg bg-brand px-3 py-2 text-brand-ink sm:justify-start">
-        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-ink/20">
-          <Check className="size-3.5" strokeWidth={3} />
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-brand-ink/20">
+          <Check className="size-3" strokeWidth={3} />
         </span>
         <span className="text-sm font-semibold">Race finished</span>
       </div>
