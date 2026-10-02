@@ -150,7 +150,7 @@ export function GunPanel({ raceId, gunTimeMs: initialGun, timeZone, canGun }: Pr
                 type="button"
                 onClick={fire}
                 disabled={sending}
-                className="h-16 flex-1 rounded-lg bg-gold text-2xl font-semibold tracking-wide text-ink shadow-card active:bg-gold/80 disabled:opacity-50"
+                className="h-16 flex-1 rounded-lg bg-gold text-2xl font-semibold tracking-wide text-gold-ink shadow-card active:bg-gold/80 disabled:opacity-50"
               >
                 GUN
               </button>

@@ -12,7 +12,7 @@ const variants: Record<ButtonVariant, string> = {
   secondary: "border border-line-strong bg-surface text-ink hover:bg-surface-2 active:bg-line",
   ghost: "text-ink-2 hover:bg-surface-2 hover:text-ink active:bg-line",
   danger: "border border-danger/40 bg-surface text-danger hover:bg-danger-soft active:bg-danger-soft",
-  gold: "bg-gold text-ink hover:bg-gold/90 active:bg-gold/80",
+  gold: "bg-gold text-gold-ink hover:bg-gold/90 active:bg-gold/80",
 };
 
 const sizes: Record<ButtonSize, string> = {

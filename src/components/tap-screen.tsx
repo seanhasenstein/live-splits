@@ -275,7 +275,7 @@ function RaceTapper({
               onClick={(e) => onName(e, id)}
               className={`min-h-20 rounded-lg border px-3 py-2 text-left transition-colors select-none ${
                 flashId === id
-                  ? "border-gold bg-gold text-ink"
+                  ? "border-gold bg-gold text-gold-ink"
                   : done
                     ? "border-line bg-surface-2 text-ink-3"
                     : "border-line bg-surface text-ink shadow-card active:bg-gold-soft"
@@ -317,7 +317,7 @@ function RaceTapper({
         <button
           type="button"
           onClick={capture}
-          className={`h-16 flex-1 rounded-lg text-2xl font-semibold tracking-wide text-ink shadow-card select-none ${flashId === "capture" ? "bg-gold-soft" : "bg-gold active:bg-gold/80"}`}
+          className={`h-16 flex-1 rounded-lg text-2xl font-semibold tracking-wide text-gold-ink shadow-card select-none ${flashId === "capture" ? "bg-gold-soft" : "bg-gold active:bg-gold/80"}`}
         >
           Capture
         </button>

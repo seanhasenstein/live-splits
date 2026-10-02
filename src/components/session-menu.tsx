@@ -3,6 +3,7 @@
 import { LogOut } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { leaveAction } from "@/app/actions/auth";
+import { ThemeControl } from "@/components/theme";
 import { Button } from "@/components/ui";
 
 /** Who you are, and the way out. Leaving needs a code to get back in, so it asks first. */
@@ -40,6 +41,10 @@ export function SessionMenu({ name, role }: { name: string; role: string }) {
           <div className="px-3 py-2">
             <div className="truncate text-sm font-medium text-ink">{name}</div>
             <div className="text-xs text-ink-2 capitalize">{role}</div>
+          </div>
+          <div className="my-1 border-t border-line" />
+          <div className="px-2 py-1.5">
+            <ThemeControl />
           </div>
           <div className="my-1 border-t border-line" />
           {confirming ? (

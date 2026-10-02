@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Clock, Download, Flag, Users } from "lucide-react";
-import { SegmentedDemo, SheetDemo, ThemeToggle } from "@/components/design-demos";
+import { SegmentedDemo, SheetDemo } from "@/components/design-demos";
+import { ThemeControl } from "@/components/theme";
 import {
   Alert,
   AppHeader,
@@ -48,7 +49,7 @@ const colors = [
 export default function DesignPage() {
   return (
     <>
-      <AppHeader title="Design system" subtitle="tokens and components" right={<ThemeToggle />} />
+      <AppHeader title="Design system" subtitle="tokens and components" right={<ThemeControl className="w-56" />} />
       <Page wide className="space-y-10">
         <section>
           <SectionLabel className="mb-3">Color</SectionLabel>
@@ -214,11 +215,11 @@ export default function DesignPage() {
               <span className="block text-sm">Heronymus</span>
               <Time className="block text-sm font-semibold text-ink-2">6:15.3</Time>
             </button>
-            <div className="min-h-20 rounded-lg border-2 border-gold bg-gold px-3 py-2 text-left">
+            <div className="min-h-20 rounded-lg border-2 border-gold bg-gold px-3 py-2 text-left text-gold-ink">
               <span className="block text-xl leading-tight font-semibold">Emma</span>
               <span className="block text-sm">Krueger</span>
             </div>
-            <button type="button" className="flex min-h-20 items-center justify-center rounded-lg bg-gold text-2xl font-semibold tracking-wide text-ink">
+            <button type="button" className="flex min-h-20 items-center justify-center rounded-lg bg-gold text-2xl font-semibold tracking-wide text-gold-ink">
               Capture
             </button>
           </div>

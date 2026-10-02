@@ -16,7 +16,7 @@ export function Field({ label, hint, error, children }: { label: string; hint?: 
 }
 
 export const controlClass =
-  "h-10 rounded-md border border-line-strong bg-surface px-3 text-[15px] text-ink shadow-[0_1px_2px_rgb(0_0_0/0.03)] placeholder:text-ink-3 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 disabled:bg-surface-2 disabled:text-ink-3";
+  "control h-10 rounded-md border border-line-strong bg-surface px-3 text-[15px] text-ink shadow-[0_1px_2px_rgb(0_0_0/0.03)] placeholder:text-ink-3 disabled:bg-surface-2 disabled:text-ink-3";
 
 // Full width unless the caller sets a width.
 const withWidth = (className: string) => (/\bw-/.test(className) ? className : `w-full ${className}`);
@@ -39,7 +39,7 @@ export function Select({ className = "", children, ...props }: ComponentProps<"s
 export function Checkbox({ label, className = "", ...props }: ComponentProps<"input"> & { label: ReactNode }) {
   return (
     <label className={`flex cursor-pointer items-center gap-2.5 text-sm text-ink ${className}`}>
-      <input type="checkbox" className="size-[18px] rounded border-line-strong accent-brand" {...props} />
+      <input type="checkbox" className="checkbox" {...props} />
       {label}
     </label>
   );

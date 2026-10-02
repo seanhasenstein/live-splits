@@ -1,25 +1,7 @@
 "use client";
 
-import { Moon, Sun } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button, Segmented, Sheet } from "@/components/ui";
-
-export function ThemeToggle() {
-  const [theme, setTheme] = useState<"light" | "dark" | null>(null);
-  useEffect(() => {
-    if (theme) document.documentElement.dataset.theme = theme;
-  }, [theme]);
-  const toggle = () => {
-    const current = theme ?? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    setTheme(current === "dark" ? "light" : "dark");
-  };
-  return (
-    <Button variant="secondary" size="sm" onClick={toggle}>
-      {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
-      Theme
-    </Button>
-  );
-}
 
 export function SegmentedDemo() {
   const [v, setV] = useState("girls");
