@@ -15,7 +15,7 @@ type RaceInfo = {
   name: string;
   gunTimeMs: number | null;
   finished: boolean;
-  checkpoints: { id: string; label: string }[];
+  checkpoints: { id: string; label: string; meters: number }[];
   athleteIds: string[];
 };
 
@@ -32,6 +32,14 @@ type Props = {
 };
 
 const eventTimeMs = (e: SyntheticEvent) => Math.round(performance.timeOrigin + e.nativeEvent.timeStamp);
+
+const METERS_PER_MILE = 1609.344;
+
+/** Minutes-per-mile pace for a segment, as ms per mile. */
+const paceMsPerMile = (splitMs: number, segmentMeters: number) => (splitMs * METERS_PER_MILE) / segmentMeters;
+
+/** "+0:12" / "−0:04"; the sign reads as slower / faster than the previous segment. */
+const formatDelta = (ms: number) => `${ms < 0 ? "−" : "+"}${formatElapsed(Math.abs(ms)).replace(/\.\d$/, "")}`;
 
 export function Board({ meetId, meetName, session, initialRaceId, timeZone, races, athletes, canFix, canTap }: Props) {
   const [raceId, setRaceId] = useState(() => (races.some((r) => r.id === initialRaceId) ? initialRaceId! : (races[0]?.id ?? "")));
@@ -190,10 +198,19 @@ function RaceBoard({
           <thead>
             <tr className="border-b border-line text-left text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
               <th className="px-3 py-2 font-semibold sm:px-4">Athlete</th>
-              {race.checkpoints.map((c) => (
+              {race.checkpoints.map((c, i) => (
                 <th key={c.id} className="px-2 py-2 text-right font-semibold last:px-3 sm:last:px-4">
                   {c.label}
                   {view === "both" && <span className="block text-[10px] font-normal tracking-normal normal-case text-ink-3">cumulative · split</span>}
+                  {view === "splits" && (
+                    <span className="block text-[10px] font-normal tracking-normal normal-case text-ink-3">
+                      {(() => {
+                        const prev = i > 0 ? race.checkpoints[i - 1].meters : 0;
+                        const mi = (c.meters - prev) / METERS_PER_MILE;
+                        return `${Number.isInteger(+mi.toFixed(2)) ? mi.toFixed(0) : mi.toFixed(2)} mi`;
+                      })()}
+                    </span>
+                  )}
                 </th>
               ))}
             </tr>
@@ -212,6 +229,11 @@ function RaceBoard({
                 {row.marks.map((m, i) => {
                   const prevTime = i > 0 ? (row.marks[i - 1]?.timeMs ?? null) : gunTimeMs;
                   const split = m?.timeMs != null && prevTime != null ? m.timeMs - prevTime : null;
+                  const segMeters = race.checkpoints[i].meters - (i > 0 ? race.checkpoints[i - 1].meters : 0);
+                  // Previous segment's pace, for the vs-prev delta.
+                  const prevPrevTime = i > 1 ? (row.marks[i - 2]?.timeMs ?? null) : i === 1 ? gunTimeMs : null;
+                  const prevSplit = i > 0 && row.marks[i - 1]?.timeMs != null && prevPrevTime != null ? row.marks[i - 1]!.timeMs! - prevPrevTime : null;
+                  const prevPace = prevSplit !== null ? paceMsPerMile(prevSplit, race.checkpoints[i - 1].meters - (i > 1 ? race.checkpoints[i - 2].meters : 0)) : null;
                   const last = i === row.marks.length - 1;
                   const shown = m ? (m.missed ? "missed" : view === "splits" && i > 0 ? (split === null ? "—" : formatElapsed(split)) : fmt(m.timeMs)) : "—";
                   const cell = (
@@ -221,6 +243,12 @@ function RaceBoard({
                         {m && !m.missed && shown !== "—" && (m.estimate ? "~" : m.edited ? "*" : "")}
                       </Time>
                       {view === "both" && i > 0 && split !== null && <Time className="block text-[11px] text-ink-3">{formatElapsed(split)}</Time>}
+                      {view === "splits" && split !== null && (
+                        <Time className="block text-[11px] text-ink-3">
+                          {formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}/mi
+                          {prevPace !== null && ` · ${formatDelta(paceMsPerMile(split, segMeters) - prevPace)}`}
+                        </Time>
+                      )}
                     </>
                   );
                   return (
@@ -263,7 +291,9 @@ function RaceBoard({
 
       <p className="mt-3 text-xs text-ink-3">
         * edited &nbsp; ~ estimate &nbsp;{" "}
-        {view === "splits" ? "Splits are the time since the previous checkpoint." : "Cumulative time from the gun, with the split beneath."}{" "}
+        {view === "splits"
+          ? "Splits are the time since the previous checkpoint; beneath each, the pace per mile and the change from the previous segment (+ slower, − faster)."
+          : "Cumulative time from the gun, with the split beneath."}{" "}
         Updates every few seconds.
       </p>
 

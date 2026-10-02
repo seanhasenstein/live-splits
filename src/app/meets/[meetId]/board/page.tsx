@@ -30,7 +30,7 @@ export default async function BoardPage({ params, searchParams }: PageProps<"/me
         name: r.name,
         gunTimeMs: r.gunTimeMs,
         finished: !!r.finishedAt,
-        checkpoints: r.checkpoints.map((c) => ({ id: c.id, label: c.label })),
+        checkpoints: r.checkpoints.map((c) => ({ id: c.id, label: c.label, meters: c.distance.meters })),
         athleteIds: r.lineup.map((l) => l.athleteId),
       }))}
       athletes={Object.fromEntries(athletes.map((a) => [a._id, a.displayName]))}
