@@ -170,7 +170,7 @@ function SwitchControl({
                 </Badge>
               ) : (
                 <Badge tone="gold" dot>
-                  No gun yet
+                  Not started
                 </Badge>
               )}
               <span>· {pickedRace.athleteIds.length} athletes</span>
@@ -497,7 +497,7 @@ function RaceClock({ gunTimeMs, now }: { gunTimeMs: number | null; now: () => nu
   if (!gunTimeMs)
     return (
       <Badge tone="gold" dot>
-        No gun yet
+        Not started
       </Badge>
     );
   if (n === null) return <span>—</span>;

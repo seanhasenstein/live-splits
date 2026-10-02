@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Pencil } from "lucide-react";
+import { Check, Flag, Pencil } from "lucide-react";
 import { SessionMenu } from "@/components/session-menu";
 import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Sheet, Stat, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
@@ -605,11 +605,12 @@ function RaceStatus({ race, gunTimeMs, now }: { race: RaceInfo; gunTimeMs: numbe
   }
   if (!gunTimeMs)
     return (
-      <div className="flex items-center gap-2">
-        <Badge tone="gold" dot>
-          No gun yet
-        </Badge>
-        <span className="text-sm text-ink-2">Waiting for the start</span>
+      <div className="flex min-w-0 flex-1 items-center justify-center gap-2.5 rounded-lg border border-line bg-surface-2 px-3 py-2 text-ink sm:justify-start">
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-ink/10">
+          <Flag className="size-3" />
+        </span>
+        <span className="text-sm font-semibold">Not started</span>
+        <span className="text-sm text-ink-2">· waiting for the gun</span>
       </div>
     );
   const n = now();
