@@ -15,7 +15,6 @@ type RaceInfo = {
   name: string;
   gunTimeMs: number | null;
   finished: boolean;
-  finishedAtMs: number | null;
   checkpoints: { id: string; label: string; meters: number }[];
   athleteIds: string[];
 };
@@ -595,18 +594,12 @@ function RaceStatus({ race, gunTimeMs, now }: { race: RaceInfo; gunTimeMs: numbe
   }, [race.finished, gunTimeMs]);
 
   if (race.finished) {
-    const stoppedAt = gunTimeMs && race.finishedAtMs ? race.finishedAtMs - gunTimeMs : null;
     return (
       <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg bg-brand px-3 py-2 text-brand-ink">
         <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-ink/20">
           <Check className="size-3.5" strokeWidth={3} />
         </span>
         <span className="text-sm font-semibold">Race finished</span>
-        {stoppedAt !== null && (
-          <span className="text-sm opacity-80">
-            · clock stopped at <Time className="font-semibold opacity-100">{formatElapsed(stoppedAt)}</Time>
-          </span>
-        )}
       </div>
     );
   }
