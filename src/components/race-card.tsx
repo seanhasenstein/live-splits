@@ -4,7 +4,7 @@ import { CircleCheck, Flag, MoreHorizontal, Timer } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { clearGunTimeAction, setGunTimeAction, setRaceFinishedAction } from "@/app/actions/races";
-import { Alert, Badge, Button, Field, Input, Sheet, Time, FinishedBadge } from "@/components/ui";
+import { Alert, Badge, Button, Field, Input, Sheet, Time, RaceStateBadge } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { formatClock, formatElapsed } from "@/lib/time";
 
@@ -116,17 +116,7 @@ export function RaceCard({ raceId, name, startLabel, details, headerActions, gun
             {running ? <Timer className="size-4 text-danger" /> : finished ? <CircleCheck className="size-4 text-brand-text" /> : <Flag className="size-4 text-ink-2" />}
             <span className="text-base font-semibold text-ink">{name}</span>
             {startLabel && <Time className="text-sm text-ink-2">{startLabel}</Time>}
-            {running ? (
-              <Badge tone="danger" pulse>
-                In progress
-              </Badge>
-            ) : finished ? (
-              <FinishedBadge />
-            ) : (
-              <Badge tone="neutral" dot>
-                Not started
-              </Badge>
-            )}
+            <RaceStateBadge state={running ? "in_progress" : finished ? "finished" : "not_started"} />
             <ClockWarning sync={clock.sync} error={clock.error} />
           </div>
           <div className="mt-0.5 text-[13px] text-ink-2">{details}</div>

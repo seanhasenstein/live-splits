@@ -6,7 +6,7 @@ import { ArrowLeftRight, Check, Pencil, Undo2, X } from "lucide-react";
 import { ClockWarning } from "@/components/race-card";
 import { CheckpointCounts, RaceStatusBar } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
-import { AppHeader, Badge, Button, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast, FinishedBadge } from "@/components/ui";
+import { AppHeader, Badge, Button, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast, RaceStateBadge } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
@@ -161,18 +161,10 @@ function SwitchControl({
             )}
             <div className="flex items-center gap-2 text-[13px] text-ink-2">
               <span className="font-medium text-ink">{pickedRace.name}</span>
-              {pickedRace.finished ? (
-                <FinishedBadge />
-              ) : summary === null ? (
+              {summary === null && !pickedRace.finished ? (
                 <span>loading…</span>
-              ) : summary.gunTimeMs ? (
-                <Badge tone="brand" dot>
-                  Running
-                </Badge>
               ) : (
-                <Badge tone="gold" dot>
-                  Not started
-                </Badge>
+                <RaceStateBadge state={pickedRace.finished ? "finished" : summary?.gunTimeMs ? "in_progress" : "not_started"} />
               )}
               <span>· {pickedRace.athleteIds.length} athletes</span>
             </div>

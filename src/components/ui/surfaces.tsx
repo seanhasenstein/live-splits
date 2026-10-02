@@ -84,7 +84,7 @@ export function Badge({
   pulse,
   children,
 }: {
-  tone?: "neutral" | "brand" | "brand-solid" | "gold" | "danger" | "ink";
+  tone?: "neutral" | "neutral-solid" | "brand" | "brand-solid" | "gold" | "danger" | "danger-solid" | "ink";
   dot?: boolean;
   /** The dot pings; implies dot. */
   pulse?: boolean;
@@ -94,11 +94,22 @@ export function Badge({
     neutral: "bg-surface-2 text-ink border-line-strong",
     ink: "bg-ink text-bg border-ink",
     "brand-solid": "bg-brand text-brand-ink border-brand",
+    "danger-solid": "bg-danger text-white border-danger",
+    "neutral-solid": "bg-ink-2 text-bg border-ink-2",
     brand: "bg-brand-soft text-brand-text border-brand/20",
     gold: "bg-gold-soft text-gold-text border-gold/40",
     danger: "bg-danger-soft text-danger border-danger/30",
   };
-  const dots = { neutral: "bg-ink-3", ink: "bg-bg", brand: "bg-brand-bright", "brand-solid": "bg-brand-ink", gold: "bg-gold", danger: "bg-danger" };
+  const dots = {
+    neutral: "bg-ink-3",
+    "neutral-solid": "bg-bg",
+    ink: "bg-bg",
+    brand: "bg-brand-bright",
+    "brand-solid": "bg-brand-ink",
+    gold: "bg-gold",
+    danger: "bg-danger",
+    "danger-solid": "bg-white",
+  };
   return (
     <span className={`inline-flex h-6 items-center gap-1.5 rounded-full border px-2 text-xs font-medium ${tones[tone]}`}>
       {pulse ? <LiveDot className={dots[tone]} /> : dot && <span className={`size-1.5 rounded-full ${dots[tone]}`} />}
@@ -143,6 +154,22 @@ export function FinishedBadge() {
     <Badge tone="brand-solid">
       <Check className="size-3" strokeWidth={3} />
       Finished
+    </Badge>
+  );
+}
+
+/** Race state as a solid pill: gray not started, red (pulsing) in progress, green finished. */
+export function RaceStateBadge({ state }: { state: "not_started" | "in_progress" | "finished" }) {
+  if (state === "finished") return <FinishedBadge />;
+  if (state === "in_progress")
+    return (
+      <Badge tone="danger-solid" pulse>
+        In progress
+      </Badge>
+    );
+  return (
+    <Badge tone="neutral-solid" dot>
+      Not started
     </Badge>
   );
 }
