@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pencil } from "lucide-react";
+import { Check, Pencil } from "lucide-react";
 import { SessionMenu } from "@/components/session-menu";
-import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Sheet, Stat, Time, Toast, FinishedBadge } from "@/components/ui";
+import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Sheet, Stat, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type CheckpointState, type Mark, replay, type Slot } from "@/lib/replay";
@@ -15,6 +15,7 @@ type RaceInfo = {
   name: string;
   gunTimeMs: number | null;
   finished: boolean;
+  finishedAtMs: number | null;
   checkpoints: { id: string; label: string; meters: number }[];
   athleteIds: string[];
 };
@@ -152,8 +153,8 @@ function RaceBoard({
   return (
     <>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          {race.finished ? <FinishedBadge /> : <RaceClock gunTimeMs={gunTimeMs} now={clock.now} />}
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <RaceStatus race={race} gunTimeMs={gunTimeMs} now={clock.now} />
           {!online && (
             <Badge tone="danger" dot>
               Offline
@@ -182,11 +183,16 @@ function RaceBoard({
 
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex divide-x divide-line rounded-lg border border-line bg-surface shadow-card">
-          {counts.map((c) => (
-            <div key={c.label} className="flex-1 px-4 py-2.5 text-center sm:flex-none sm:px-5 sm:text-left">
-              <Stat value={`${c.n}/${race.athleteIds.length}`} label={c.label} tone={c.n === race.athleteIds.length && c.n > 0 ? "brand" : "ink"} />
-            </div>
-          ))}
+          {counts.map((c) => {
+            const total = race.athleteIds.length;
+            const complete = c.n === total && total > 0;
+            const short = race.finished && c.n < total;
+            return (
+              <div key={c.label} className="flex-1 px-4 py-2.5 text-center sm:flex-none sm:px-5 sm:text-left">
+                <Stat value={`${c.n}/${total}`} label={short ? `${c.label} · ${total - c.n} missing` : c.label} tone={complete ? "brand" : short ? "gold" : "ink"} />
+              </div>
+            );
+          })}
         </div>
         <Segmented
           value={view}
@@ -579,19 +585,47 @@ function Btn({ onClick, children, danger }: { onClick: (e: SyntheticEvent) => vo
   );
 }
 
-function RaceClock({ gunTimeMs, now }: { gunTimeMs: number | null; now: () => number | null }) {
+/** The race's state, sized to be seen: waiting, a big running clock, or a solid "finished" bar. */
+function RaceStatus({ race, gunTimeMs, now }: { race: RaceInfo; gunTimeMs: number | null; now: () => number | null }) {
   const [, tick] = useState(0);
   useEffect(() => {
+    if (race.finished || !gunTimeMs) return;
     const t = setInterval(() => tick((n) => n + 1), 100);
     return () => clearInterval(t);
-  }, []);
-  const n = now();
+  }, [race.finished, gunTimeMs]);
+
+  if (race.finished) {
+    const stoppedAt = gunTimeMs && race.finishedAtMs ? race.finishedAtMs - gunTimeMs : null;
+    return (
+      <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg bg-brand px-3 py-2 text-brand-ink">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-ink/20">
+          <Check className="size-3.5" strokeWidth={3} />
+        </span>
+        <span className="text-sm font-semibold">Race finished</span>
+        {stoppedAt !== null && (
+          <span className="text-sm opacity-80">
+            · clock stopped at <Time className="font-semibold opacity-100">{formatElapsed(stoppedAt)}</Time>
+          </span>
+        )}
+      </div>
+    );
+  }
   if (!gunTimeMs)
     return (
-      <Badge tone="gold" dot>
-        No gun yet
-      </Badge>
+      <div className="flex items-center gap-2">
+        <Badge tone="gold" dot>
+          No gun yet
+        </Badge>
+        <span className="text-sm text-ink-2">Waiting for the start</span>
+      </div>
     );
-  if (n === null) return <span>—</span>;
-  return <Time className="text-xl font-semibold text-ink">{formatElapsed(n - gunTimeMs)}</Time>;
+  const n = now();
+  return (
+    <div className="flex items-center gap-2.5">
+      <Time className="text-3xl font-semibold tracking-tight text-ink">{n === null ? "—" : formatElapsed(n - gunTimeMs)}</Time>
+      <Badge tone="brand" dot>
+        Running
+      </Badge>
+    </div>
+  );
 }
