@@ -9,7 +9,8 @@ import { useSyncExternalStore } from "react";
  */
 export type ThemePreference = "system" | "light" | "dark";
 
-const KEY = "ls_theme";
+export const THEME_STORAGE_KEY = "ls_theme";
+const KEY = THEME_STORAGE_KEY;
 const listeners = new Set<() => void>();
 
 function read(): ThemePreference {
@@ -42,12 +43,6 @@ function subscribe(l: () => void) {
 
 export function useThemePreference(): ThemePreference {
   return useSyncExternalStore(subscribe, read, () => "system");
-}
-
-/** Runs before hydration so a dark preference never flashes light. */
-export function ThemeScript() {
-  const code = `try{var t=localStorage.getItem(${JSON.stringify(KEY)});if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`;
-  return <script dangerouslySetInnerHTML={{ __html: code }} />;
 }
 
 const OPTIONS: { value: ThemePreference; label: string; Icon: typeof Sun }[] = [

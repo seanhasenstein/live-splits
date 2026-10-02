@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
-import { ThemeScript } from "@/components/theme";
+import { ThemeScript } from "@/components/theme-script";
 import { APP_DESCRIPTION, APP_NAME, THEME_COLOR } from "@/config/app";
 import "./globals.css";
 
