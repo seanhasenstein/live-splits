@@ -43,3 +43,6 @@ next-env.d.ts
 
 # roster contains student names
 /data/roster.csv
+
+# design references (screenshots of other products)
+/design/examples/

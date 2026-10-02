@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Time } from "@/components/ui";
+import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type CheckpointState, type Mark, replay, type Slot } from "@/lib/replay";
@@ -40,9 +40,9 @@ export function Board({ meetId, initialRaceId, timeZone, races, athletes, canFix
 
   if (!race) {
     return (
-      <main className="p-6 text-sm">
+      <main className="p-6 text-sm text-ink-2">
         No races yet.{" "}
-        <Link href={`/meets/${meetId}`} className="underline">
+        <Link href={`/meets/${meetId}`} className="text-ink underline">
           Back to the meet
         </Link>
         .
@@ -51,23 +51,15 @@ export function Board({ meetId, initialRaceId, timeZone, races, athletes, canFix
   }
 
   return (
-    <main className="flex min-h-dvh flex-col bg-cream">
-      <header className="sticky top-0 z-10 border-b border-green/20 bg-cream px-3 pt-2 pb-2">
-        <div className="flex gap-1">
-          {races.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => setRaceId(r.id)}
-              className={`flex-1 rounded px-2 py-2 text-sm font-bold uppercase tracking-wider ${r.id === race.id ? "bg-green text-cream" : "border border-green/40 text-green"}`}
-            >
-              {r.name}
-            </button>
-          ))}
-        </div>
-      </header>
-      <RaceBoard key={race.id} meetId={meetId} race={race} timeZone={timeZone} athletes={athletes} canFix={canFix} canTap={canTap} />
-    </main>
+    <>
+      <AppHeader back={{ href: `/meets/${meetId}`, label: "Meet" }} title="Live board" />
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-4">
+        {races.length > 1 && (
+          <Segmented value={race.id} onChange={setRaceId} options={races.map((r) => ({ value: r.id, label: r.name }))} className="mb-3 max-w-md" />
+        )}
+        <RaceBoard key={race.id} meetId={meetId} race={race} timeZone={timeZone} athletes={athletes} canFix={canFix} canTap={canTap} />
+      </main>
+    </>
   );
 }
 
@@ -129,95 +121,103 @@ function RaceBoard({
 
   return (
     <>
-      <div className="flex items-baseline justify-between px-3 pt-2 text-xs text-green/70">
+      <div className="mb-3 flex items-center justify-between gap-3">
         <RaceClock gunTimeMs={gunTimeMs} now={clock.now} />
-        <span>
-          {!online && <span className="font-bold text-red-700">offline · </span>}
-          {canTap && (
-            <Link href={`/meets/${meetId}/tap?race=${race.id}`} className="underline">
-              tap
-            </Link>
+        <div className="flex items-center gap-2">
+          {!online && (
+            <Badge tone="danger" dot>
+              Offline
+            </Badge>
           )}
-          {canTap && " · "}
-          <Link href={`/meets/${meetId}`} className="underline">
-            meet
-          </Link>
-        </span>
+          {canTap && (
+            <LinkButton href={`/meets/${meetId}/tap?race=${race.id}`} size="sm" variant="secondary">
+              Tap screen
+            </LinkButton>
+          )}
+        </div>
       </div>
 
-      <table className="mt-2 w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b-2 border-green text-left text-[11px] font-bold uppercase tracking-wider">
-            <th className="py-1.5 pl-3">Athlete</th>
-            {race.checkpoints.map((c) => (
-              <th key={c.id} className="py-1.5 pr-3 text-right">
-                {c.label}
-              </th>
+      <Card className="overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-line text-left text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
+              <th className="px-3 py-2 font-semibold sm:px-4">Athlete</th>
+              {race.checkpoints.map((c) => (
+                <th key={c.id} className="px-2 py-2 text-right font-semibold last:px-3 sm:last:px-4">
+                  {c.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {!loaded && (
+              <tr>
+                <td colSpan={race.checkpoints.length + 1} className="px-4 py-4 text-ink-3">
+                  Loading…
+                </td>
+              </tr>
+            )}
+            {rows.map((row) => (
+              <tr key={row.athleteId} className={row.reached < 0 ? "text-ink-3" : ""}>
+                <td className={`px-3 py-2 font-medium sm:px-4 ${row.reached < 0 ? "" : "text-ink"}`}>{athletes[row.athleteId]}</td>
+                {row.marks.map((m, i) => {
+                  const prevTime = i > 0 ? (row.marks[i - 1]?.timeMs ?? null) : gunTimeMs;
+                  const split = m?.timeMs != null && prevTime != null ? m.timeMs - prevTime : null;
+                  const last = i === row.marks.length - 1;
+                  const cell = (
+                    <>
+                      <Time className={`block ${m?.missed ? "italic" : last && m ? "font-semibold" : ""}`}>
+                        {m ? (m.missed ? "missed" : fmt(m.timeMs)) : "—"}
+                        {m && !m.missed && (m.estimate ? "~" : m.edited ? "*" : "")}
+                      </Time>
+                      {split !== null && i > 0 && <Time className="block text-[11px] text-ink-3">+{formatElapsed(split)}</Time>}
+                    </>
+                  );
+                  return (
+                    <td key={race.checkpoints[i].id} className="px-1 py-1 text-right align-top last:pr-2 sm:last:pr-3">
+                      {canFix ? (
+                        <button
+                          type="button"
+                          onClick={() => setFix({ athleteId: row.athleteId, cpIndex: i })}
+                          className="w-full rounded-md px-1.5 py-1 text-right hover:bg-surface-2 active:bg-gold-soft"
+                        >
+                          {cell}
+                        </button>
+                      ) : (
+                        <span className="block px-1.5 py-1">{cell}</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {!loaded && (
-            <tr>
-              <td colSpan={race.checkpoints.length + 1} className="px-3 py-3 text-green/60">
-                Loading…
-              </td>
-            </tr>
-          )}
-          {rows.map((row) => (
-            <tr key={row.athleteId} className={`border-b border-green/15 ${row.reached < 0 ? "text-green/40" : ""}`}>
-              <td className="py-1.5 pl-3 font-bold">{athletes[row.athleteId]}</td>
-              {row.marks.map((m, i) => {
-                const prevTime = i > 0 ? (row.marks[i - 1]?.timeMs ?? null) : gunTimeMs;
-                const split = m?.timeMs != null && prevTime != null ? m.timeMs - prevTime : null;
-                const cell = (
-                  <>
-                    <Time className={`block font-bold ${m?.missed ? "font-normal italic" : ""}`}>
-                      {m ? (m.missed ? "missed" : fmt(m.timeMs)) : "—"}
-                      {m && !m.missed && (m.estimate ? "~" : m.edited ? "*" : "")}
-                    </Time>
-                    {split !== null && i > 0 && <Time className="block text-[11px] text-green/60">+{formatElapsed(split)}</Time>}
-                  </>
-                );
-                return (
-                  <td key={race.checkpoints[i].id} className="py-1 pr-3 text-right align-top">
-                    {canFix ? (
-                      <button type="button" onClick={() => setFix({ athleteId: row.athleteId, cpIndex: i })} className="w-full rounded px-1 text-right active:bg-gold-soft">
-                        {cell}
-                      </button>
-                    ) : (
-                      cell
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          </tbody>
+        </table>
+      </Card>
 
       {pendingTotal > 0 && (
-        <div className="mx-3 mt-3 rounded border border-gold bg-gold-soft/50 px-3 py-2 text-sm">
-          <span className="font-bold">{pendingTotal} unassigned capture{pendingTotal === 1 ? "" : "s"}</span>
-          {race.checkpoints.map((c) => {
-            const p = state.get(c.id)?.pending ?? [];
-            return p.length ? (
-              <div key={c.id}>
-                {c.label}: {p.map((s) => fmt(s.timeMs)).join(", ")}
-              </div>
-            ) : null;
-          })}
-          {canFix && <div className="text-xs text-green/70">Tap an athlete&rsquo;s empty cell to give them one.</div>}
+        <div className="mt-3">
+          <Alert tone="gold" title={`${pendingTotal} unassigned capture${pendingTotal === 1 ? "" : "s"}`}>
+            {race.checkpoints.map((c) => {
+              const p = state.get(c.id)?.pending ?? [];
+              return p.length ? (
+                <div key={c.id} className="tnum">
+                  {c.label}: {p.map((s) => fmt(s.timeMs)).join(", ")}
+                </div>
+              ) : null;
+            })}
+            {canFix && <div className="mt-1 text-xs">Tap an athlete&rsquo;s empty cell to give them one.</div>}
+          </Alert>
         </div>
       )}
 
-      <p className="px-3 py-3 text-[11px] text-green/60">
+      <p className="mt-3 text-xs text-ink-3">
         * edited &nbsp; ~ estimate &nbsp; Updates every few seconds.{canFix && " Tap a time to fix it."}
       </p>
 
       {toast && (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-20 flex justify-center px-3">
-          <div className="rounded bg-green px-4 py-2 text-sm font-bold text-cream shadow-lg">{toast}</div>
+          <Toast title={toast} />
         </div>
       )}
 
@@ -342,148 +342,141 @@ function FixSheet({
 
   const list = (ids: string[], onPick: (e: SyntheticEvent, id: string) => void, empty: string) =>
     ids.length === 0 ? (
-      <p className="text-sm text-green/60">{empty}</p>
+      <p className="text-sm text-ink-2">{empty}</p>
     ) : (
       <div className="grid max-h-72 grid-cols-2 gap-2 overflow-y-auto">
         {ids.map((id) => {
           const m = cp?.byAthlete.get(id);
           return (
-            <button key={id} type="button" onClick={(e) => onPick(e, id)} className="rounded border-2 border-green px-2 py-2 text-left active:bg-gold-soft">
-              <span className="block font-bold">{athletes[id]}</span>
-              {m && !m.missed && <Time className="block text-xs text-green/60">{fmt(m.timeMs)}</Time>}
+            <button key={id} type="button" onClick={(e) => onPick(e, id)} className="rounded-lg border border-line bg-surface px-3 py-2 text-left hover:bg-surface-2 active:bg-gold-soft">
+              <span className="block text-sm font-medium text-ink">{athletes[id]}</span>
+              {m && !m.missed && <Time className="block text-xs text-ink-2">{fmt(m.timeMs)}</Time>}
             </button>
           );
         })}
       </div>
     );
 
+  const timeLabel = mark ? (mark.missed ? "missed" : fmt(mark.timeMs)) : "no time";
+
   return (
-    <div className="fixed inset-0 z-30 flex items-end bg-green/40" onClick={onClose}>
-      <div className="w-full rounded-t-xl bg-cream p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-baseline justify-between">
-          <div>
-            <span className="text-lg font-bold">{name}</span>
-            <span className="ml-2 text-sm text-green/70">{checkpoint.label}</span>
-          </div>
-          <Time className="text-xl font-bold">{mark ? (mark.missed ? "missed" : fmt(mark.timeMs)) : "—"}</Time>
+    <Sheet
+      title={name}
+      subtitle={
+        <>
+          {checkpoint.label} · <Time>{timeLabel}</Time>
+          {mark?.by && ` · recorded by ${mark.by}`}
+        </>
+      }
+      onClose={onClose}
+    >
+      {error && (
+        <div className="mb-3">
+          <Alert tone="danger">{error}</Alert>
         </div>
-        {mark?.by && <p className="-mt-2 mb-3 text-xs text-green/60">recorded by {mark.by}</p>}
-        {error && <p className="mb-2 text-sm text-red-700">{error}</p>}
+      )}
 
-        {mode === "menu" && mark && !mark.missed && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-4 gap-2">
-              <Btn onClick={(e) => nudge(e, -1000)}>−1s</Btn>
-              <Btn onClick={(e) => nudge(e, -500)}>−0.5s</Btn>
-              <Btn onClick={(e) => nudge(e, 500)}>+0.5s</Btn>
-              <Btn onClick={(e) => nudge(e, 1000)}>+1s</Btn>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <Btn onClick={() => setMode("type")}>Type time</Btn>
-              <Btn onClick={() => setMode("move")}>Move to…</Btn>
-              <Btn onClick={() => setMode("swap")}>Swap with…</Btn>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Btn onClick={markMissed}>Mark missed</Btn>
-              <Btn onClick={remove} danger>
-                Delete
-              </Btn>
-            </div>
+      {mode === "menu" && mark && !mark.missed && (
+        <div className="space-y-2">
+          <div className="grid grid-cols-4 gap-2">
+            <Btn onClick={(e) => nudge(e, -1000)}>−1s</Btn>
+            <Btn onClick={(e) => nudge(e, -500)}>−0.5s</Btn>
+            <Btn onClick={(e) => nudge(e, 500)}>+0.5s</Btn>
+            <Btn onClick={(e) => nudge(e, 1000)}>+1s</Btn>
           </div>
-        )}
+          <div className="grid grid-cols-3 gap-2">
+            <Btn onClick={() => setMode("type")}>Type time</Btn>
+            <Btn onClick={() => setMode("move")}>Move to…</Btn>
+            <Btn onClick={() => setMode("swap")}>Swap with…</Btn>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Btn onClick={markMissed}>Mark missed</Btn>
+            <Btn onClick={remove} danger>
+              Delete
+            </Btn>
+          </div>
+        </div>
+      )}
 
-        {mode === "menu" && (!mark || mark.missed) && (
-          <div className="space-y-3">
-            {cp && cp.pending.length > 0 && (
-              <div>
-                <p className="mb-1 text-xs font-bold uppercase tracking-wider text-green/70">Use an unassigned capture</p>
-                <div className="flex flex-wrap gap-2">
-                  {cp.pending.map((s) => (
-                    <Btn key={s.tapId} onClick={(e) => assignSlot(e, s)}>
-                      <Time>{fmt(s.timeMs)}</Time>
-                    </Btn>
-                  ))}
-                </div>
+      {mode === "menu" && (!mark || mark.missed) && (
+        <div className="space-y-3">
+          {cp && cp.pending.length > 0 && (
+            <div>
+              <SectionLabel className="mb-1.5">Use an unassigned capture</SectionLabel>
+              <div className="flex flex-wrap gap-2">
+                {cp.pending.map((s) => (
+                  <Btn key={s.tapId} onClick={(e) => assignSlot(e, s)}>
+                    <Time>{fmt(s.timeMs)}</Time>
+                  </Btn>
+                ))}
               </div>
-            )}
-            <div className="grid grid-cols-2 gap-2">
-              <Btn onClick={() => setMode("add")}>Add time</Btn>
-              {!mark?.missed && <Btn onClick={markMissed}>Mark missed</Btn>}
-              {mark?.missed && (
-                <Btn onClick={remove} danger>
-                  Clear missed
-                </Btn>
-              )}
             </div>
-          </div>
-        )}
-
-        {(mode === "type" || mode === "add") && (
-          <form onSubmit={saveTyped} className="space-y-3">
-            <label className="block">
-              <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-green/70">
-                {mode === "add" ? "Time" : "New time"} (elapsed, m:ss.t)
-              </span>
-              <input
-                autoFocus
-                value={typed}
-                onChange={(e) => setTyped(e.target.value)}
-                placeholder={gunTimeMs ? "6:02.4" : "set the gun time first"}
-                disabled={!gunTimeMs}
-                inputMode="decimal"
-                className="w-full rounded border border-green/40 bg-white px-3 py-3 font-mono text-xl tabular-nums"
-              />
-            </label>
-            {mode === "add" && (
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={estimate} onChange={(e) => setEstimate(e.target.checked)} className="size-5 accent-green" />
-                This is an estimate
-              </label>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <Btn onClick={() => setMode("add")}>Add time</Btn>
+            {!mark?.missed && <Btn onClick={markMissed}>Mark missed</Btn>}
+            {mark?.missed && (
+              <Btn onClick={remove} danger>
+                Clear missed
+              </Btn>
             )}
-            <div className="grid grid-cols-2 gap-2">
-              <button type="submit" disabled={!gunTimeMs} className="rounded bg-green px-3 py-3 text-sm font-bold uppercase tracking-wider text-cream disabled:opacity-40">
-                Save
-              </button>
-              <Btn onClick={() => setMode("menu")}>Back</Btn>
-            </div>
-          </form>
-        )}
-
-        {mode === "move" && (
-          <div className="space-y-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-green/70">Move this time to</p>
-            {list(withoutTime, moveTo, "Everyone else already has a time here; use Swap instead.")}
-            <Btn onClick={() => setMode("menu")}>Back</Btn>
           </div>
-        )}
+        </div>
+      )}
 
-        {mode === "swap" && (
-          <div className="space-y-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-green/70">Swap times with</p>
-            {list(withTime, swapWith, "Nobody else has a time here yet.")}
-            <Btn onClick={() => setMode("menu")}>Back</Btn>
+      {(mode === "type" || mode === "add") && (
+        <form onSubmit={saveTyped} className="space-y-3">
+          <Field label={`${mode === "add" ? "Time" : "New time"} (elapsed, m:ss.t)`}>
+            <Input
+              autoFocus
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder={gunTimeMs ? "6:02.4" : "set the gun time first"}
+              disabled={!gunTimeMs}
+              inputMode="decimal"
+              className="h-12 font-mono text-xl"
+            />
+          </Field>
+          {mode === "add" && <Checkbox label="This is an estimate" checked={estimate} onChange={(e) => setEstimate(e.target.checked)} />}
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="secondary" size="lg" onClick={() => setMode("menu")}>
+              Back
+            </Button>
+            <Button type="submit" size="lg" disabled={!gunTimeMs}>
+              Save
+            </Button>
           </div>
-        )}
+        </form>
+      )}
 
-        {mode === "menu" && (
-          <button type="button" onClick={onClose} className="mt-3 w-full py-2 text-sm text-green/70 underline">
-            Close
-          </button>
-        )}
-      </div>
-    </div>
+      {mode === "move" && (
+        <div className="space-y-3">
+          <SectionLabel>Move this time to</SectionLabel>
+          {list(withoutTime, moveTo, "Everyone else already has a time here; use Swap instead.")}
+          <Button variant="secondary" onClick={() => setMode("menu")} className="w-full">
+            Back
+          </Button>
+        </div>
+      )}
+
+      {mode === "swap" && (
+        <div className="space-y-3">
+          <SectionLabel>Swap times with</SectionLabel>
+          {list(withTime, swapWith, "Nobody else has a time here yet.")}
+          <Button variant="secondary" onClick={() => setMode("menu")} className="w-full">
+            Back
+          </Button>
+        </div>
+      )}
+    </Sheet>
   );
 }
 
 function Btn({ onClick, children, danger }: { onClick: (e: SyntheticEvent) => void; children: ReactNode; danger?: boolean }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded border-2 px-3 py-3 text-sm font-bold ${danger ? "border-red-700 text-red-700" : "border-green text-green"} active:bg-gold-soft`}
-    >
+    <Button variant={danger ? "danger" : "secondary"} size="lg" onClick={onClick}>
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -494,7 +487,12 @@ function RaceClock({ gunTimeMs, now }: { gunTimeMs: number | null; now: () => nu
     return () => clearInterval(t);
   }, []);
   const n = now();
-  if (!gunTimeMs) return <span className="text-base font-bold text-gold">No gun yet</span>;
+  if (!gunTimeMs)
+    return (
+      <Badge tone="gold" dot>
+        No gun yet
+      </Badge>
+    );
   if (n === null) return <span>—</span>;
-  return <Time className="text-xl font-bold text-green">{formatElapsed(n - gunTimeMs)}</Time>;
+  return <Time className="text-xl font-semibold text-ink">{formatElapsed(n - gunTimeMs)}</Time>;
 }

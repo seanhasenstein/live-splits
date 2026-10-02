@@ -1,10 +1,20 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { Download, Pencil, Plus, Users } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { CodesPanel } from "@/components/codes-panel";
-import { LeaveButton } from "@/components/leave-button";
 import { GunPanel } from "@/components/gun-panel";
-import { LinkButton, Page, Section } from "@/components/ui";
+import { SessionMenu } from "@/components/session-menu";
+import {
+  AnchorButton,
+  AppHeader,
+  Card,
+  CardBody,
+  CardHeader,
+  EmptyState,
+  LinkButton,
+  Page,
+  PageTitle,
+} from "@/components/ui";
 import { can, getSession, isSchoolCoach } from "@/lib/auth/session";
 import { getMeet, getProgram, listRaces, readJoinCodes } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
@@ -34,75 +44,93 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
   const label = (list: { id: string; label: string }[] | undefined, id: string) => list?.find((x) => x.id === id)?.label ?? id;
 
   return (
-    <Page title={meet.name} back={isSchoolCoach(session) ? { href: "/meets", label: "Meets" } : undefined}>
-      <p className="-mt-3 mb-6 text-sm text-green/70">
-        {formatLocalDate(meet.date)}
-        {venue && ` · ${venue.name}${venue.city ? `, ${venue.city}` : ""}`}
-      </p>
+    <>
+      <AppHeader
+        back={isSchoolCoach(session) ? { href: "/meets", label: "Meets" } : undefined}
+        right={<SessionMenu name={session.name} role={isSchoolCoach(session) ? "coach" : session.role} />}
+      />
+      <Page>
+        <PageTitle title={meet.name} description={`${formatLocalDate(meet.date)}${venue ? ` · ${venue.name}${venue.city ? `, ${venue.city}` : ""}` : ""}`} />
 
-      {races.length > 0 && (
-        <div className="mb-6 flex gap-2">
-          {can(session, "tap", meet) && (
-            <LinkButton href={`/meets/${meet._id}/tap`} className="flex-1 py-4 text-base">
-              Tap screen
+        {races.length > 0 && (
+          <div className="mb-5 grid grid-cols-2 gap-2">
+            {can(session, "tap", meet) && (
+              <LinkButton href={`/meets/${meet._id}/tap`} size="lg">
+                Tap screen
+              </LinkButton>
+            )}
+            <LinkButton href={`/meets/${meet._id}/board`} size="lg" variant="secondary" className={can(session, "tap", meet) ? "" : "col-span-2"}>
+              Live board
             </LinkButton>
-          )}
-          <LinkButton href={`/meets/${meet._id}/board`} variant="secondary" className="flex-1 py-4 text-base">
-            Live board
-          </LinkButton>
-        </div>
-      )}
-
-      <Section
-        title="Races"
-        action={setup ? <LinkButton href={`/meets/${meet._id}/races/new`} className="px-3 py-1.5 text-xs">Add race</LinkButton> : undefined}
-      >
-        {races.length === 0 && <p className="text-sm text-green/70">No races yet.</p>}
-        <ul className="space-y-5">
-          {races.map((race) => (
-            <li key={race._id}>
-              <div className="flex items-baseline justify-between">
-                <div>
-                  <span className="text-lg font-bold">{race.name}</span>
-                  {race.scheduledStart && <span className="ml-2 text-sm text-green/70">{formatTimeOfDay(race.scheduledStart)}</span>}
-                </div>
-                <span className="flex gap-3 text-sm">
-                  {can(session, "export", meet) && (
-                    <a href={`/api/meets/${meet._id}/export?race=${race._id}`} className="underline underline-offset-2">
-                      CSV
-                    </a>
-                  )}
-                  {setup && (
-                    <Link href={`/meets/${meet._id}/races/${race._id}`} className="underline underline-offset-2">
-                      Edit
-                    </Link>
-                  )}
-                </span>
-              </div>
-              <p className="text-sm text-green/70">
-                {label(program?.settings.raceCategories, race.raceCategoryId)} ·{" "}
-                {race.levelIds.map((l) => label(program?.settings.levels, l)).join(" + ")} ·{" "}
-                {distances.find((d) => d._id === race.distanceId)?.label ?? race.distanceId} · {race.lineup.length} athletes ·{" "}
-                {race.checkpoints.map((c) => c.label).join(", ") || "no checkpoints"}
-              </p>
-              <GunPanel raceId={race._id} gunTimeMs={race.gunTimeMs} timeZone={meet.timeZone} canGun={gun} />
-            </li>
-          ))}
-        </ul>
-      </Section>
-
-      {can(session, "export", meet) && (
-        <Section title="Join codes">
-          <CodesPanel meetId={meet._id} initialCodes={readJoinCodes(meet)} canRegenerate={setup} />
-        </Section>
-      )}
-
-      <div className="text-sm text-green/70">
-        You&rsquo;re <b>{session.name}</b> ({isSchoolCoach(session) ? "coach" : session.role}).
-        {!isSchoolCoach(session) && (
-          <LeaveButton />
+          </div>
         )}
-      </div>
-    </Page>
+
+        <Card className="mb-5">
+          <CardHeader
+            title="Races"
+            action={
+              setup ? (
+                <LinkButton href={`/meets/${meet._id}/races/new`} size="sm" variant="secondary">
+                  <Plus className="size-4" />
+                  Add race
+                </LinkButton>
+              ) : undefined
+            }
+          />
+          {races.length === 0 ? (
+            <div className="border-t border-line">
+              <EmptyState
+                icon={<Users />}
+                title="No races yet"
+                description={setup ? "Add each race on the schedule and pick who runs." : "The coach hasn't set up races yet."}
+                action={setup ? <LinkButton href={`/meets/${meet._id}/races/new`} size="sm">Add race</LinkButton> : undefined}
+              />
+            </div>
+          ) : (
+            races.map((race) => (
+              <CardBody key={race._id} className="space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-base font-semibold text-ink">{race.name}</span>
+                      {race.scheduledStart && <span className="tnum text-sm text-ink-2">{formatTimeOfDay(race.scheduledStart)}</span>}
+                    </div>
+                    <div className="mt-0.5 text-[13px] text-ink-2">
+                      {label(program?.settings.raceCategories, race.raceCategoryId)} · {race.levelIds.map((l) => label(program?.settings.levels, l)).join(" + ")} ·{" "}
+                      {distances.find((d) => d._id === race.distanceId)?.label ?? race.distanceId} · {race.lineup.length} athletes ·{" "}
+                      {race.checkpoints.map((c) => c.label).join(", ") || "no checkpoints"}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    {can(session, "export", meet) && (
+                      <AnchorButton href={`/api/meets/${meet._id}/export?race=${race._id}`} variant="ghost" size="sm" title="Download CSV">
+                        <Download className="size-4" />
+                        CSV
+                      </AnchorButton>
+                    )}
+                    {setup && (
+                      <LinkButton href={`/meets/${meet._id}/races/${race._id}`} variant="ghost" size="sm" title="Edit race">
+                        <Pencil className="size-4" />
+                        Edit
+                      </LinkButton>
+                    )}
+                  </div>
+                </div>
+                <GunPanel raceId={race._id} gunTimeMs={race.gunTimeMs} timeZone={meet.timeZone} canGun={gun} />
+              </CardBody>
+            ))
+          )}
+        </Card>
+
+        {can(session, "export", meet) && (
+          <Card>
+            <CardHeader title="Join codes" description="Managers join with the manager code; the viewer link is read-only." />
+            <CardBody>
+              <CodesPanel meetId={meet._id} initialCodes={readJoinCodes(meet)} canRegenerate={setup} />
+            </CardBody>
+          </Card>
+        )}
+      </Page>
+    </>
   );
 }

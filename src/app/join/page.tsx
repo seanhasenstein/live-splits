@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { JoinForm } from "@/components/join-form";
-import { Page } from "@/components/ui";
+import { Shield } from "@/components/ui";
 import { APP_NAME } from "@/config/app";
 
 export const metadata: Metadata = { title: "Join" };
@@ -8,15 +8,16 @@ export const metadata: Metadata = { title: "Join" };
 export default async function JoinPage({ searchParams }: PageProps<"/join">) {
   const { code } = await searchParams;
   return (
-    <Page title={APP_NAME}>
-      <p className="mb-2 text-sm">
-        <b>Managers:</b> enter the meet code from your coach and your first name. Your name goes on every time you record.
-      </p>
-      <p className="mb-5 text-sm text-green/70">
-        <b>Coaches:</b> the meet&rsquo;s coach code gets you fix and export; the school&rsquo;s coach access code (the
-        <code className="mx-1">COACH_ACCESS_CODE</code>setting) gets you meet setup.
-      </p>
+    <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-4 py-10">
+      <div className="mb-6 flex flex-col items-center text-center">
+        <Shield className="h-16" />
+        <h1 className="mt-4 text-xl font-semibold tracking-tight">{APP_NAME}</h1>
+        <p className="mt-1 text-sm text-ink-2">Enter the code your coach shared and your first name.</p>
+      </div>
       <JoinForm initialCode={typeof code === "string" ? code : ""} />
-    </Page>
+      <p className="mt-6 text-center text-[13px] text-ink-3">
+        Coaches: the meet&rsquo;s coach code opens fix and export; the school&rsquo;s coach access code opens meet setup.
+      </p>
+    </main>
   );
 }

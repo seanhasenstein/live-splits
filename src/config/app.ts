@@ -6,4 +6,4 @@ export const APP_DESCRIPTION = "Live cross country splits from the course.";
 
 // Brand colors needed outside CSS (manifest, viewport). Keep in sync with globals.css.
 export const THEME_COLOR = "#184A23";
-export const BACKGROUND_COLOR = "#FAF6E9";
+export const BACKGROUND_COLOR = "#F7F7F5";

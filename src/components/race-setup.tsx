@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { deleteRaceAction, saveRaceAction } from "@/app/actions/races";
 import { RaceForm } from "@/components/race-form";
-import { Button, Page } from "@/components/ui";
+import { AppHeader, Button, Page, PageTitle } from "@/components/ui";
 import { can, getSession } from "@/lib/auth/session";
 import { getMeet, getProgram, getRace, listDistances, listRoster } from "@/lib/data";
 
@@ -19,31 +19,39 @@ export async function RaceSetup({ meetId, raceId }: { meetId: string; raceId: st
   const [distances, roster] = await Promise.all([listDistances("xc"), listRoster(meet.seasonId)]);
 
   return (
-    <Page title={race ? race.name : "New race"} back={{ href: `/meets/${meet._id}`, label: meet.name }}>
-      <RaceForm
-        action={saveRaceAction.bind(null, meet._id, race?._id ?? null)}
-        program={program.settings}
-        distances={distances.map((d) => ({ id: d._id, label: d.label, value: d.value, unit: d.unit }))}
-        roster={roster.map((a) => ({ id: a._id, name: a.displayName, gender: a.gender, defaultLevelId: a.defaultLevelId }))}
-        race={
-          race && {
-            name: race.name,
-            raceCategoryId: race.raceCategoryId,
-            levelIds: race.levelIds,
-            distanceId: race.distanceId ?? distances[0]?._id ?? "",
-            scheduledStart: race.scheduledStart,
-            checkpoints: race.checkpoints.map((c) => ({ id: c.id, label: c.label, value: c.distance.value, unit: c.distance.unit, kind: c.kind })),
-            lineup: race.lineup,
+    <>
+      <AppHeader back={{ href: `/meets/${meet._id}`, label: meet.name }} />
+      <Page>
+        <PageTitle
+          title={race ? race.name : "New race"}
+          description={race ? "Changes apply to new taps; recorded times keep their checkpoint." : "Checkpoints are where managers stand."}
+        />
+        <RaceForm
+          action={saveRaceAction.bind(null, meet._id, race?._id ?? null)}
+          cancelHref={`/meets/${meet._id}`}
+          program={program.settings}
+          distances={distances.map((d) => ({ id: d._id, label: d.label, value: d.value, unit: d.unit }))}
+          roster={roster.map((a) => ({ id: a._id, name: a.displayName, gender: a.gender, defaultLevelId: a.defaultLevelId }))}
+          race={
+            race && {
+              name: race.name,
+              raceCategoryId: race.raceCategoryId,
+              levelIds: race.levelIds,
+              distanceId: race.distanceId ?? distances[0]?._id ?? "",
+              scheduledStart: race.scheduledStart,
+              checkpoints: race.checkpoints.map((c) => ({ id: c.id, label: c.label, value: c.distance.value, unit: c.distance.unit, kind: c.kind })),
+              lineup: race.lineup,
+            }
           }
-        }
-      />
-      {race && (
-        <form action={deleteRaceAction.bind(null, race._id)} className="mt-8 border-t border-green/20 pt-4">
-          <Button variant="danger" type="submit" className="px-3 py-1.5 text-xs">
-            Delete race
-          </Button>
-        </form>
-      )}
-    </Page>
+        />
+        {race && (
+          <form action={deleteRaceAction.bind(null, race._id)} className="mt-8 flex justify-end">
+            <Button variant="danger" size="sm" type="submit">
+              Delete race
+            </Button>
+          </form>
+        )}
+      </Page>
+    </>
   );
 }

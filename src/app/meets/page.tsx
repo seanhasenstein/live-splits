@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { CalendarDays, Plus } from "lucide-react";
 import { redirect } from "next/navigation";
-import { LeaveButton } from "@/components/leave-button";
-import { LinkButton, Page, Section } from "@/components/ui";
+import { SessionMenu } from "@/components/session-menu";
+import { AppHeader, Card, EmptyState, LinkButton, ListRow, Page, PageTitle } from "@/components/ui";
 import { getSession, isSchoolCoach } from "@/lib/auth/session";
 import { listMeets } from "@/lib/data";
 import { formatLocalDate } from "@/lib/time";
@@ -16,27 +16,36 @@ export default async function MeetsPage() {
 
   const meets = await listMeets(session.schoolId);
   return (
-    <Page title="Meets">
-      <Section title="This season" action={<LinkButton href="/meets/new" className="px-3 py-1.5 text-xs">New meet</LinkButton>}>
-        {meets.length === 0 ? (
-          <p className="text-sm text-green/70">No meets yet.</p>
-        ) : (
-          <ul className="divide-y divide-green/20">
-            {meets.map((m) => (
-              <li key={m._id}>
-                <Link href={`/meets/${m._id}`} className="flex items-baseline justify-between py-3 hover:bg-green/5">
-                  <span className="font-bold">{m.name}</span>
-                  <span className="text-sm text-green/70">{formatLocalDate(m.date)}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
-      <div className="text-sm text-green/70">
-        Signed in as <b>{session.name}</b> (coach).{" "}
-        <LeaveButton />
-      </div>
-    </Page>
+    <>
+      <AppHeader right={<SessionMenu name={session.name} role="coach" />} />
+      <Page>
+        <PageTitle
+          title="Meets"
+          description="This season"
+          action={
+            <LinkButton href="/meets/new" size="sm">
+              <Plus className="size-4" />
+              New meet
+            </LinkButton>
+          }
+        />
+        <Card>
+          {meets.length === 0 ? (
+            <EmptyState
+              icon={<CalendarDays />}
+              title="No meets yet"
+              description="Create the next meet, add its races, and share the join codes with your managers."
+              action={<LinkButton href="/meets/new" size="sm">New meet</LinkButton>}
+            />
+          ) : (
+            <div className="divide-y divide-line">
+              {meets.map((m) => (
+                <ListRow key={m._id} icon={<CalendarDays />} title={m.name} meta={formatLocalDate(m.date)} href={`/meets/${m._id}`} />
+              ))}
+            </div>
+          )}
+        </Card>
+      </Page>
+    </>
   );
 }

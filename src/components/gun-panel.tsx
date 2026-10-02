@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { clearGunTimeAction, setGunTimeAction } from "@/app/actions/races";
-import { Button, ErrorText, Input, Time } from "@/components/ui";
+import { Flag } from "lucide-react";
+import { Alert, Badge, Button, Field, Input, Time } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { formatClock, formatElapsed } from "@/lib/time";
 
@@ -108,24 +109,34 @@ export function GunPanel({ raceId, gunTimeMs: initialGun, timeZone, canGun }: Pr
   };
 
   return (
-    <div className="mt-3 rounded border border-green/30 bg-white p-3">
-      <div className="flex items-baseline justify-between">
-        <span className="text-xs font-bold uppercase tracking-wider text-green/80">Gun</span>
+    <div className="rounded-lg border border-line bg-surface-2/60 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Flag className="size-4 text-ink-2" />
+          <span className="text-[13px] font-medium text-ink">Gun</span>
+          {gunTimeMs !== null ? (
+            <Badge tone="brand" dot>
+              Started
+            </Badge>
+          ) : (
+            <Badge dot>Not started</Badge>
+          )}
+        </div>
         <ClockStatus sync={clock.sync} error={clock.error} />
       </div>
 
       {gunTimeMs !== null ? (
-        <div className="mt-2 flex items-baseline justify-between">
-          <div>
-            <Time className="text-2xl font-bold">{formatClock(gunTimeMs, timeZone)}</Time>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-baseline gap-3">
+            <Time className="text-xl font-semibold">{formatClock(gunTimeMs, timeZone)}</Time>
             <Elapsed gunTimeMs={gunTimeMs} now={clock.now} />
           </div>
           {canGun && (
-            <div className="flex gap-2">
-              <Button variant="secondary" onClick={() => setShowSet((s) => !s)} className="px-2 py-1 text-xs">
+            <div className="flex gap-1">
+              <Button variant="ghost" size="sm" onClick={() => setShowSet((s) => !s)}>
                 Set
               </Button>
-              <Button variant="danger" onClick={clear} disabled={sending} className="px-2 py-1 text-xs">
+              <Button variant="ghost" size="sm" onClick={clear} disabled={sending} className="text-danger hover:bg-danger-soft">
                 Clear
               </Button>
             </div>
@@ -139,34 +150,31 @@ export function GunPanel({ raceId, gunTimeMs: initialGun, timeZone, canGun }: Pr
                 type="button"
                 onClick={fire}
                 disabled={sending}
-                className="flex-1 rounded bg-gold py-5 text-2xl font-bold tracking-widest text-green active:bg-gold-soft disabled:opacity-50"
+                className="h-16 flex-1 rounded-lg bg-gold text-2xl font-semibold tracking-wide text-ink shadow-card active:bg-gold/80 disabled:opacity-50"
               >
                 GUN
               </button>
-              <Button variant="secondary" onClick={() => setArmed(false)} className="px-3">
+              <Button variant="secondary" size="lg" onClick={() => setArmed(false)} className="h-16">
                 Cancel
               </Button>
             </div>
           ) : (
             <div className="flex gap-2">
-              <Button onClick={() => setArmed(true)} disabled={sending || !clock.sync} className="flex-1 py-4 text-lg">
+              <Button size="lg" onClick={() => setArmed(true)} disabled={sending || !clock.sync} className="flex-1">
                 {sending ? "Recording…" : "Arm gun"}
               </Button>
-              <Button variant="secondary" onClick={() => setShowSet((s) => !s)} className="px-3 text-xs">
+              <Button variant="secondary" size="lg" onClick={() => setShowSet((s) => !s)}>
                 Type time
               </Button>
             </div>
           )}
-          <p className="mt-1 text-xs text-green/60">Arm, then tap GUN at the start. It disarms itself after 15s.</p>
+          <p className="mt-1.5 text-xs text-ink-3">Arm, then tap GUN at the start. It disarms itself after 15 seconds.</p>
         </div>
-      ) : (
-        <p className="mt-2 text-sm text-green/70">Not started.</p>
-      )}
+      ) : null}
 
       {showSet && canGun && (
         <form onSubmit={saveTyped} className="mt-3 flex items-end gap-2">
-          <label className="flex-1">
-            <span className="mb-1 block text-xs text-green/70">Clock time the gun went off (24h, {timeZone})</span>
+          <Field label={`Clock time the gun went off (24h, ${timeZone})`}>
             <Input
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
@@ -176,13 +184,17 @@ export function GunPanel({ raceId, gunTimeMs: initialGun, timeZone, canGun }: Pr
               required
               className="font-mono"
             />
-          </label>
-          <Button type="submit" disabled={sending} className="py-2.5">
+          </Field>
+          <Button type="submit" disabled={sending}>
             Save
           </Button>
         </form>
       )}
-      <ErrorText>{error}</ErrorText>
+      {error && (
+        <div className="mt-2">
+          <Alert tone="danger">{error}</Alert>
+        </div>
+      )}
     </div>
   );
 }
@@ -196,18 +208,18 @@ function Elapsed({ gunTimeMs, now }: { gunTimeMs: number; now: () => number | nu
   const n = now();
   if (n === null) return null;
   return (
-    <span className="ml-3 text-sm text-green/70">
+    <span className="text-sm text-ink-2">
       <Time>{formatElapsed(n - gunTimeMs)}</Time> elapsed
     </span>
   );
 }
 
 function ClockStatus({ sync, error }: { sync: { offsetMs: number; rttMs: number; syncedAt: number } | null; error: string | null }) {
-  if (error) return <span className="text-xs text-red-700">clock: {error}</span>;
-  if (!sync) return <span className="text-xs text-green/60">syncing clock…</span>;
+  if (error) return <span className="text-xs text-danger">clock: {error}</span>;
+  if (!sync) return <span className="text-xs text-ink-3">syncing clock…</span>;
   const sign = sync.offsetMs >= 0 ? "+" : "−";
   return (
-    <span className="text-xs text-green/60" title={`round trip ${sync.rttMs} ms`}>
+    <span className="tnum text-xs text-ink-3" title={`round trip ${sync.rttMs} ms`}>
       clock {sign}
       {Math.abs(sync.offsetMs)} ms
     </span>

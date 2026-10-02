@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Time } from "@/components/ui";
+import { ChevronLeft, Undo2, X } from "lucide-react";
+import { Badge, Button, Segmented, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
@@ -52,9 +53,9 @@ export function TapScreen({ meetId, initial, timeZone, races, athletes }: Props)
 
   if (!race || race.checkpoints.length === 0) {
     return (
-      <main className="p-6 text-sm">
+      <main className="p-6 text-sm text-ink-2">
         No races with checkpoints yet.{" "}
-        <Link href={`/meets/${meetId}`} className="underline">
+        <Link href={`/meets/${meetId}`} className="text-ink underline">
           Back to the meet
         </Link>
         .
@@ -71,32 +72,22 @@ export function TapScreen({ meetId, initial, timeZone, races, athletes }: Props)
       cpIndex={cpIndex}
       athletes={athletes}
       picker={
-        <div className="flex gap-2">
-          <select
-            value={race.id}
-            onChange={(e) => {
-              const r = races.find((x) => x.id === e.target.value)!;
-              setSel({ raceId: r.id, checkpointId: r.checkpoints[0]?.id ?? "" });
-            }}
-            className="min-w-0 flex-1 rounded border border-green/40 bg-white px-2 py-2 text-base font-bold"
-          >
-            {races.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-          <select
+        <div className="space-y-1.5">
+          {races.length > 1 && (
+            <Segmented
+              value={race.id}
+              onChange={(id) => {
+                const r = races.find((x) => x.id === id)!;
+                setSel({ raceId: r.id, checkpointId: r.checkpoints[0]?.id ?? "" });
+              }}
+              options={races.map((r) => ({ value: r.id, label: r.name }))}
+            />
+          )}
+          <Segmented
             value={race.checkpoints[cpIndex].id}
-            onChange={(e) => setSel({ raceId: race.id, checkpointId: e.target.value })}
-            className="min-w-0 flex-1 rounded border border-green/40 bg-white px-2 py-2 text-base font-bold"
-          >
-            {race.checkpoints.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}
-              </option>
-            ))}
-          </select>
+            onChange={(id) => setSel({ raceId: race.id, checkpointId: id })}
+            options={race.checkpoints.map((c) => ({ value: c.id, label: c.label }))}
+          />
         </div>
       }
     />
@@ -214,33 +205,38 @@ function RaceTapper({
   };
 
   return (
-    <main className="flex min-h-dvh flex-col bg-cream">
-      <header className="sticky top-0 z-10 border-b border-green/20 bg-cream px-3 pt-2 pb-2">
+    <main className="flex min-h-dvh flex-col bg-bg">
+      <header className="sticky top-0 z-10 border-b border-line bg-bg/95 px-3 pt-2 pb-2 backdrop-blur">
         {picker}
-        <div className="mt-1.5 flex items-baseline justify-between text-xs text-green/70">
+        <div className="mt-2 flex items-center justify-between">
           <RaceClock gunTimeMs={gunTimeMs} now={clock.now} />
-          <span>
-            {!clock.sync && "syncing clock · "}
-            {!online && <span className="font-bold text-red-700">offline · </span>}
-            {unsent > 0 && <span className="font-bold text-gold">{unsent} unsent · </span>}
-            <Link href={`/meets/${meetId}`} className="underline">
-              meet
+          <div className="flex items-center gap-2 text-xs text-ink-2">
+            {!clock.sync && <span>syncing clock…</span>}
+            {!online && (
+              <Badge tone="danger" dot>
+                Offline
+              </Badge>
+            )}
+            {unsent > 0 && <Badge tone="gold">{unsent} unsent</Badge>}
+            <Link href={`/meets/${meetId}`} className="rounded-md p-1.5 text-ink-2 hover:bg-surface-2" aria-label="Back to the meet">
+              <ChevronLeft className="size-5" />
             </Link>
-          </span>
+          </div>
         </div>
       </header>
 
       {cp && cp.pending.length > 0 && (
-        <div className="border-b border-gold bg-gold-soft/60 px-3 py-2">
-          <div className="text-xs font-bold uppercase tracking-wider text-green/80">
-            {cp.pending.length} unassigned · tap a name to fill the oldest
+        <div className="border-b border-gold/40 bg-gold-soft px-3 py-2">
+          <div className="flex items-center gap-2">
+            <Badge tone="gold">{cp.pending.length} unassigned</Badge>
+            <span className="text-xs text-gold-text">tap a name to fill the oldest</span>
           </div>
-          <div className="mt-1 flex flex-wrap gap-1.5">
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
             {cp.pending.map((s, i) => (
-              <span key={s.tapId} className={`flex items-center gap-1 rounded bg-white px-2 py-1 text-sm ${i === 0 ? "ring-2 ring-gold" : ""}`}>
-                <Time className="font-bold">{fmt(s.timeMs)}</Time>
-                <button type="button" onClick={(e) => deleteSlot(e, s)} aria-label="Delete this capture" className="px-1 text-green/50 hover:text-red-700">
-                  ×
+              <span key={s.tapId} className={`flex items-center gap-0.5 rounded-md bg-surface py-0.5 pl-2 text-sm ${i === 0 ? "ring-2 ring-gold" : "border border-line"}`}>
+                <Time className="font-semibold text-ink">{fmt(s.timeMs)}</Time>
+                <button type="button" onClick={(e) => deleteSlot(e, s)} aria-label="Delete this capture" className="rounded p-1 text-ink-3 hover:text-danger">
+                  <X className="size-3.5" />
                 </button>
               </span>
             ))}
@@ -249,7 +245,7 @@ function RaceTapper({
       )}
 
       <div className="grid flex-1 grid-cols-2 content-start gap-2 p-3 pb-40">
-        {!loaded && <p className="col-span-2 text-sm text-green/60">Loading…</p>}
+        {!loaded && <p className="col-span-2 text-sm text-ink-3">Loading…</p>}
         {ordered.map((id) => {
           const mark = cp?.byAthlete.get(id);
           const name = athletes[id] ?? "?";
@@ -257,17 +253,17 @@ function RaceTapper({
           const done = !!mark && !mark.missed;
           if (confirmId === id) {
             return (
-              <div key={id} className="flex min-h-20 flex-col justify-center rounded border-2 border-gold bg-white p-2 text-center">
-                <span className="text-sm">
-                  Replace <Time className="font-bold">{fmt(mark?.timeMs ?? null)}</Time>?
+              <div key={id} className="flex min-h-20 flex-col justify-center rounded-lg border-2 border-gold bg-surface p-2 text-center shadow-card">
+                <span className="text-sm text-ink">
+                  Replace <Time className="font-semibold">{fmt(mark?.timeMs ?? null)}</Time>?
                 </span>
-                <div className="mt-1 flex gap-1">
-                  <button type="button" onClick={(e) => record(e, id, mark ?? null)} className="flex-1 rounded bg-green py-2 text-sm font-bold text-cream">
+                <div className="mt-1.5 flex gap-1.5">
+                  <Button size="sm" onClick={(e) => record(e, id, mark ?? null)} className="flex-1">
                     Replace
-                  </button>
-                  <button type="button" onClick={() => setConfirmId(null)} className="flex-1 rounded border border-green py-2 text-sm font-bold">
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => setConfirmId(null)} className="flex-1">
                     Keep
-                  </button>
+                  </Button>
                 </div>
               </div>
             );
@@ -277,20 +273,20 @@ function RaceTapper({
               key={id}
               type="button"
               onClick={(e) => onName(e, id)}
-              className={`min-h-20 rounded border-2 px-2 py-2 text-left transition-colors select-none ${
+              className={`min-h-20 rounded-lg border px-3 py-2 text-left transition-colors select-none ${
                 flashId === id
-                  ? "border-gold bg-gold text-green"
+                  ? "border-gold bg-gold text-ink"
                   : done
-                    ? "border-green/20 bg-cream text-green/60"
-                    : "border-green bg-white text-green active:bg-gold-soft"
+                    ? "border-line bg-surface-2 text-ink-3"
+                    : "border-line bg-surface text-ink shadow-card active:bg-gold-soft"
               }`}
             >
-              <span className="block truncate text-xl leading-tight font-bold">{first}</span>
-              <span className="block truncate text-sm">{rest.join(" ")}</span>
+              <span className="block truncate text-xl leading-tight font-semibold">{first}</span>
+              <span className={`block truncate text-sm ${done ? "" : "text-ink-2"}`}>{rest.join(" ")}</span>
               {mark && (
-                <Time className={`block text-sm ${mark.missed ? "italic" : "font-bold"}`}>
+                <Time className={`block text-sm ${mark.missed ? "italic" : "font-semibold text-ink-2"}`}>
                   {mark.missed ? "missed" : fmt(mark.timeMs)}
-                  {mark.estimate && " ~"}
+                  {mark.estimate && !mark.missed && " ~"}
                 </Time>
               )}
             </button>
@@ -300,32 +296,30 @@ function RaceTapper({
 
       {toast && (
         <div className="pointer-events-none fixed inset-x-0 bottom-24 z-20 flex justify-center px-3">
-          <div className="pointer-events-auto flex items-center gap-3 rounded bg-green px-4 py-2.5 text-cream shadow-lg">
-            <Time className="text-sm font-bold">{toast}</Time>
-            {lastAction && (
-              <button type="button" onClick={undo} className="rounded bg-gold px-3 py-1 text-xs font-bold uppercase tracking-wider text-green">
-                Undo
-              </button>
-            )}
-          </div>
+          <Toast
+            title={toast}
+            action={
+              lastAction ? (
+                <Button size="sm" variant="secondary" onClick={undo}>
+                  Undo
+                </Button>
+              ) : undefined
+            }
+          />
         </div>
       )}
 
-      <div className="fixed inset-x-0 bottom-0 z-10 flex gap-2 border-t border-green/20 bg-cream p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <button
-          type="button"
-          onClick={undo}
-          disabled={!lastAction}
-          className="w-24 rounded border-2 border-green py-4 text-sm font-bold uppercase tracking-wider text-green disabled:opacity-30"
-        >
+      <div className="fixed inset-x-0 bottom-0 z-10 flex gap-2 border-t border-line bg-bg/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
+        <Button variant="secondary" size="lg" onClick={undo} disabled={!lastAction} className="h-16 w-24">
+          <Undo2 className="size-5" />
           Undo
-        </button>
+        </Button>
         <button
           type="button"
           onClick={capture}
-          className={`flex-1 rounded py-4 text-2xl font-bold tracking-widest text-green select-none ${flashId === "capture" ? "bg-gold-soft" : "bg-gold active:bg-gold-soft"}`}
+          className={`h-16 flex-1 rounded-lg text-2xl font-semibold tracking-wide text-ink shadow-card select-none ${flashId === "capture" ? "bg-gold-soft" : "bg-gold active:bg-gold/80"}`}
         >
-          CAPTURE
+          Capture
         </button>
       </div>
     </main>
@@ -339,7 +333,12 @@ function RaceClock({ gunTimeMs, now }: { gunTimeMs: number | null; now: () => nu
     return () => clearInterval(t);
   }, []);
   const n = now();
-  if (!gunTimeMs) return <span className="text-base font-bold text-gold">No gun yet</span>;
+  if (!gunTimeMs)
+    return (
+      <Badge tone="gold" dot>
+        No gun yet
+      </Badge>
+    );
   if (n === null) return <span>—</span>;
-  return <Time className="text-xl font-bold text-green">{formatElapsed(n - gunTimeMs)}</Time>;
+  return <Time className="text-xl font-semibold text-ink">{formatElapsed(n - gunTimeMs)}</Time>;
 }
