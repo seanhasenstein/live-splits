@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
+import { Pencil } from "lucide-react";
+import { SessionMenu } from "@/components/session-menu";
+import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Sheet, Stat, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type CheckpointState, type Mark, replay, type Slot } from "@/lib/replay";
@@ -12,12 +14,15 @@ type RaceInfo = {
   id: string;
   name: string;
   gunTimeMs: number | null;
+  finished: boolean;
   checkpoints: { id: string; label: string }[];
   athleteIds: string[];
 };
 
 type Props = {
   meetId: string;
+  meetName: string;
+  session: { name: string; role: string };
   initialRaceId: string | null;
   timeZone: string;
   races: RaceInfo[];
@@ -28,7 +33,7 @@ type Props = {
 
 const eventTimeMs = (e: SyntheticEvent) => Math.round(performance.timeOrigin + e.nativeEvent.timeStamp);
 
-export function Board({ meetId, initialRaceId, timeZone, races, athletes, canFix, canTap }: Props) {
+export function Board({ meetId, meetName, session, initialRaceId, timeZone, races, athletes, canFix, canTap }: Props) {
   const [raceId, setRaceId] = useState(() => (races.some((r) => r.id === initialRaceId) ? initialRaceId! : (races[0]?.id ?? "")));
   const race = races.find((r) => r.id === raceId) ?? races[0];
 
@@ -52,7 +57,7 @@ export function Board({ meetId, initialRaceId, timeZone, races, athletes, canFix
 
   return (
     <>
-      <AppHeader back={{ href: `/meets/${meetId}`, label: "Meet" }} title="Live board" />
+      <AppHeader title={meetName} titleHref={`/meets/${meetId}`} subtitle="Live board" right={<SessionMenu name={session.name} role={session.role} />} />
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-4">
         {races.length > 1 && (
           <Segmented value={race.id} onChange={setRaceId} options={races.map((r) => ({ value: r.id, label: r.name }))} className="mb-3 max-w-md" />
@@ -87,6 +92,8 @@ function RaceBoard({
     [race, taps],
   );
   const [fix, setFix] = useState<{ athleteId: string; cpIndex: number } | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [view, setView] = useState<"cumulative" | "splits">("cumulative");
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = useCallback((text: string) => {
@@ -119,23 +126,64 @@ function RaceBoard({
 
   const pendingTotal = race.checkpoints.reduce((n, c) => n + (state.get(c.id)?.pending.length ?? 0), 0);
 
+  const counts = race.checkpoints.map((c) => ({
+    label: c.label,
+    n: [...(state.get(c.id)?.byAthlete.values() ?? [])].filter((m) => !m.missed).length,
+  }));
+
   return (
     <>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <RaceClock gunTimeMs={gunTimeMs} now={clock.now} />
-        <div className="flex items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          {race.finished ? <Badge tone="neutral">Finished</Badge> : <RaceClock gunTimeMs={gunTimeMs} now={clock.now} />}
           {!online && (
             <Badge tone="danger" dot>
               Offline
             </Badge>
           )}
-          {canTap && (
-            <LinkButton href={`/meets/${meetId}/tap?race=${race.id}`} size="sm" variant="secondary">
-              Tap screen
+        </div>
+        <div className="flex items-center gap-2">
+          {canFix &&
+            (editing ? (
+              <Button size="sm" onClick={() => setEditing(false)}>
+                Done
+              </Button>
+            ) : (
+              <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
+                <Pencil className="size-3.5" />
+                Fix times
+              </Button>
+            ))}
+          {canTap && !editing && (
+            <LinkButton href={`/meets/${meetId}/record?race=${race.id}`} size="sm" variant="secondary">
+              Record splits
             </LinkButton>
           )}
         </div>
       </div>
+
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div className="flex gap-6">
+          {counts.map((c) => (
+            <Stat key={c.label} value={`${c.n}/${race.athleteIds.length}`} label={c.label} tone={c.n === race.athleteIds.length && c.n > 0 ? "brand" : "ink"} />
+          ))}
+        </div>
+        <Segmented
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "cumulative", label: "Cumulative" },
+            { value: "splits", label: "Splits" },
+          ]}
+          className="w-56"
+        />
+      </div>
+
+      {editing && (
+        <div className="mb-3">
+          <Alert tone="gold">Fix mode: tap any time to nudge, move, swap, mark missed or delete it. Tap Done when you&rsquo;re finished.</Alert>
+        </div>
+      )}
 
       <Card className="overflow-hidden">
         <table className="w-full text-sm">
@@ -164,27 +212,25 @@ function RaceBoard({
                   const prevTime = i > 0 ? (row.marks[i - 1]?.timeMs ?? null) : gunTimeMs;
                   const split = m?.timeMs != null && prevTime != null ? m.timeMs - prevTime : null;
                   const last = i === row.marks.length - 1;
+                  const shown = m ? (m.missed ? "missed" : view === "splits" && i > 0 ? (split === null ? "—" : formatElapsed(split)) : fmt(m.timeMs)) : "—";
                   const cell = (
-                    <>
-                      <Time className={`block ${m?.missed ? "italic" : last && m ? "font-semibold" : ""}`}>
-                        {m ? (m.missed ? "missed" : fmt(m.timeMs)) : "—"}
-                        {m && !m.missed && (m.estimate ? "~" : m.edited ? "*" : "")}
-                      </Time>
-                      {split !== null && i > 0 && <Time className="block text-[11px] text-ink-3">+{formatElapsed(split)}</Time>}
-                    </>
+                    <Time className={`block ${m?.missed ? "italic" : last && m && view === "cumulative" ? "font-semibold" : ""}`}>
+                      {shown}
+                      {m && !m.missed && shown !== "—" && (m.estimate ? "~" : m.edited ? "*" : "")}
+                    </Time>
                   );
                   return (
-                    <td key={race.checkpoints[i].id} className="px-1 py-1 text-right align-top last:pr-2 sm:last:pr-3">
-                      {canFix ? (
+                    <td key={race.checkpoints[i].id} className="px-1 py-1 text-right last:pr-2 sm:last:pr-3">
+                      {editing ? (
                         <button
                           type="button"
                           onClick={() => setFix({ athleteId: row.athleteId, cpIndex: i })}
-                          className="w-full rounded-md px-1.5 py-1 text-right hover:bg-surface-2 active:bg-gold-soft"
+                          className="w-full rounded-md border border-dashed border-line-strong px-1.5 py-1 text-right hover:bg-surface-2 active:bg-brand-soft"
                         >
                           {cell}
                         </button>
                       ) : (
-                        <span className="block px-1.5 py-1">{cell}</span>
+                        <span className="block px-1.5 py-1.5">{cell}</span>
                       )}
                     </td>
                   );
@@ -206,13 +252,13 @@ function RaceBoard({
                 </div>
               ) : null;
             })}
-            {canFix && <div className="mt-1 text-xs">Tap an athlete&rsquo;s empty cell to give them one.</div>}
+            {canFix && <div className="mt-1 text-xs">Use Fix times, then tap an athlete&rsquo;s empty cell to give them one.</div>}
           </Alert>
         </div>
       )}
 
       <p className="mt-3 text-xs text-ink-3">
-        * edited &nbsp; ~ estimate &nbsp; Updates every few seconds.{canFix && " Tap a time to fix it."}
+        * edited &nbsp; ~ estimate &nbsp; {view === "splits" ? "Splits are the time since the previous checkpoint." : "Cumulative time from the gun."} Updates every few seconds.
       </p>
 
       {toast && (

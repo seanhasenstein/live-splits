@@ -138,6 +138,9 @@ An event within a meet.
   `distanceId`, `measuredDistance` (perspective only; times are never adjusted).
 - `gunTimeMs` + `gunTimeSource` (`tap` | `official_results` | `manual`): the gun
   time currently in effect. Every gun tap and edit is also in the tap log.
+- `finishedAt` (added Oct 2, 2026): set when a coach marks the race finished.
+  Display only: the clock stops ticking and the board becomes the review
+  screen. Times are never affected.
 - `checkpoints[]`: `{ id, label, distance, kind: "split" | "finish" }`. Splits
   and taps reference `id`.
 - `lineup[]`: `{ athleteId, levelId }` — which of our athletes run in this

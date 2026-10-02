@@ -16,7 +16,7 @@ import {
   PageTitle,
 } from "@/components/ui";
 import { can, getSession, isSchoolCoach } from "@/lib/auth/session";
-import { getMeet, getProgram, listRaces, readJoinCodes } from "@/lib/data";
+import { getMeet, getProgram, gunFiredBy, listRaces, readJoinCodes } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
 import { formatLocalDate, formatTimeOfDay } from "@/lib/time";
@@ -33,11 +33,12 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
   const meet = await getMeet(meetId);
   if (!meet || !can(session, "view", meet)) notFound();
 
-  const [races, program, venue, distances] = await Promise.all([
-    listRaces(meet._id),
+  const races = await listRaces(meet._id);
+  const [program, venue, distances, firedBy] = await Promise.all([
     getProgram(meet.schoolId, "xc"),
     meet.venueId ? collection(await getDb(), "venues").findOne({ _id: meet.venueId }) : null,
     collection(await getDb(), "distances").find({ sport: "xc" }).toArray(),
+    gunFiredBy(races.map((r) => r._id)),
   ]);
   const setup = can(session, "setup", meet);
   const gun = can(session, "gun", meet);
@@ -51,19 +52,6 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
       />
       <Page>
         <PageTitle title={meet.name} description={`${formatLocalDate(meet.date)}${venue ? ` · ${venue.name}${venue.city ? `, ${venue.city}` : ""}` : ""}`} />
-
-        {races.length > 0 && (
-          <div className="mb-5 grid grid-cols-2 gap-2">
-            {can(session, "tap", meet) && (
-              <LinkButton href={`/meets/${meet._id}/tap`} size="lg">
-                Tap screen
-              </LinkButton>
-            )}
-            <LinkButton href={`/meets/${meet._id}/board`} size="lg" variant="secondary" className={can(session, "tap", meet) ? "" : "col-span-2"}>
-              Live board
-            </LinkButton>
-          </div>
-        )}
 
         <Card className="mb-5">
           <CardHeader
@@ -116,7 +104,24 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
                     )}
                   </div>
                 </div>
-                <GunPanel raceId={race._id} gunTimeMs={race.gunTimeMs} timeZone={meet.timeZone} canGun={gun} />
+                <GunPanel
+                  raceId={race._id}
+                  gunTimeMs={race.gunTimeMs}
+                  finishedAt={race.finishedAt?.toISOString() ?? null}
+                  firedBy={firedBy[race._id] ?? null}
+                  timeZone={meet.timeZone}
+                  canGun={gun}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  {can(session, "tap", meet) && (
+                    <LinkButton href={`/meets/${meet._id}/record?race=${race._id}`} size="lg">
+                      Record splits
+                    </LinkButton>
+                  )}
+                  <LinkButton href={`/meets/${meet._id}/board?race=${race._id}`} size="lg" variant="secondary" className={can(session, "tap", meet) ? "" : "col-span-2"}>
+                    Live board
+                  </LinkButton>
+                </div>
               </CardBody>
             ))
           )}

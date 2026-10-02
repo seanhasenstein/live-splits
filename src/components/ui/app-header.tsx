@@ -9,11 +9,14 @@ import { APP_NAME } from "@/config/app";
  */
 export function AppHeader({
   title,
+  titleHref,
   subtitle,
   back,
   right,
 }: {
   title?: ReactNode;
+  /** Makes the title a link (e.g. back to the meet). */
+  titleHref?: string;
   subtitle?: ReactNode;
   back?: { href: string; label: string };
   right?: ReactNode;
@@ -29,12 +32,18 @@ export function AppHeader({
         ) : (
           <Link href="/" className="flex items-center gap-2.5">
             <Shield className="h-7" />
-            <span className="text-[15px] font-semibold text-ink">{APP_NAME}</span>
+            <span className={`text-[15px] font-semibold text-ink ${title ? "hidden sm:inline" : ""}`}>{APP_NAME}</span>
           </Link>
         )}
         {title && (
           <div className="min-w-0 flex-1 border-l border-line pl-3">
-            <div className="truncate text-sm font-semibold text-ink">{title}</div>
+            {titleHref ? (
+              <Link href={titleHref} className="block truncate text-sm font-semibold text-ink hover:underline">
+                {title}
+              </Link>
+            ) : (
+              <div className="truncate text-sm font-semibold text-ink">{title}</div>
+            )}
             {subtitle && <div className="truncate text-xs text-ink-2">{subtitle}</div>}
           </div>
         )}

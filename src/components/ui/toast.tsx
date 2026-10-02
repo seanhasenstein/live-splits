@@ -14,7 +14,7 @@ export function Toast({
   action?: ReactNode;
 }) {
   const Icon = tone === "success" ? Check : tone === "danger" ? AlertCircle : Info;
-  const iconTone = tone === "success" ? "bg-brand text-brand-ink" : tone === "danger" ? "bg-danger text-white" : "bg-ink text-bg";
+  const iconTone = tone === "success" ? "bg-brand-bright text-white" : tone === "danger" ? "bg-danger text-white" : "bg-ink text-bg";
   return (
     <div className="pointer-events-auto flex items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2.5 shadow-sheet">
       <span className={`flex size-5 shrink-0 items-center justify-center rounded-full ${iconTone}`}>

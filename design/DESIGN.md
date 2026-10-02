@@ -66,3 +66,20 @@ Errors say what went wrong and what to do. Empty states invite the next action.
 - Checkbox: 18px, 4px radius, brand fill with a small check.
 - Text on gold is shield green in both themes.
 - Theme control is available to everyone in the session menu.
+
+## Round 2 (Oct 2, 2026)
+
+- Wording: "Record splits" (route `/record`), "Start race…" → START, "Race clock", "Fix times".
+- Race clock card: not started → one action; running → big elapsed, small gun
+  time + who started it, green tint; finished → frozen. Every change to a
+  running clock lives in the Adjust sheet, with what it does spelled out, and
+  removing the gun time takes two taps. Race status: `races.finishedAt`.
+- Clock sync is silent unless it's wrong ("Clock not synced", "Slow connection").
+- Gold is only for small attention badges. Capture is the ink button; the
+  confirmation flash is solid green; pending captures are green-tinted.
+- Recorded tiles carry a pencil glyph; the replace prompt is green-bordered.
+- Board: cumulative by default with a Cumulative | Splits toggle (no "+"),
+  per-checkpoint counters in the stat style, race clock beside the tabs,
+  and fixes only in an explicit Fix times mode.
+- Record and board screens have the full header (shield, meet name linking
+  back, session menu).

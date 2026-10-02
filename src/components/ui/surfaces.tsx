@@ -70,12 +70,12 @@ export function ListRow({ icon, title, description, meta, href, onClick, chevron
 
 export function Badge({ tone = "neutral", dot, children }: { tone?: "neutral" | "brand" | "gold" | "danger"; dot?: boolean; children: ReactNode }) {
   const tones = {
-    neutral: "bg-surface-2 text-ink-2 border-line",
+    neutral: "bg-surface-2 text-ink border-line-strong",
     brand: "bg-brand-soft text-brand-text border-brand/20",
     gold: "bg-gold-soft text-gold-text border-gold/40",
     danger: "bg-danger-soft text-danger border-danger/30",
   };
-  const dots = { neutral: "bg-ink-3", brand: "bg-brand", gold: "bg-gold", danger: "bg-danger" };
+  const dots = { neutral: "bg-ink-3", brand: "bg-brand-bright", gold: "bg-gold", danger: "bg-danger" };
   return (
     <span className={`inline-flex h-6 items-center gap-1.5 rounded-full border px-2 text-xs font-medium ${tones[tone]}`}>
       {dot && <span className={`size-1.5 rounded-full ${dots[tone]}`} />}

@@ -76,7 +76,7 @@ export async function saveRaceAction(
   if (raceId) {
     const race = await getRace(raceId);
     if (!race || race.meetId !== meet._id) return { error: "Race not found" };
-    const next = COLLECTIONS.races.schema.parse({ ...race, ...fields, updatedAt: now, updatedBy: actor });
+    const next = COLLECTIONS.races.schema.parse({ ...race, finishedAt: race.finishedAt ?? null, ...fields, updatedAt: now, updatedBy: actor });
     await races.replaceOne({ _id: race._id }, next);
   } else {
     const order = await races.countDocuments({ meetId: meet._id, deletedAt: null });
@@ -90,6 +90,7 @@ export async function saveRaceAction(
       measuredDistance: null,
       gunTimeMs: null,
       gunTimeSource: null,
+      finishedAt: null,
       sections: [],
       teamScoring: [],
       exclusions: {
@@ -194,6 +195,19 @@ export async function clearGunTimeAction(raceId: string): Promise<FormState> {
   await collection(db, "races").updateOne(
     { _id: race._id },
     { $set: { gunTimeMs: null, gunTimeSource: null, updatedAt: new Date(), updatedBy: sessionActor(session!) } },
+  );
+  return {};
+}
+
+/** Mark a race finished (the clock stops ticking; the board becomes the review screen) or reopen it. */
+export async function setRaceFinishedAction(raceId: string, finished: boolean): Promise<FormState> {
+  const session = await getSession();
+  const race = await getRace(raceId);
+  const meet = race && (await getMeet(race.meetId));
+  if (!race || !meet || !can(session, "gun", meet)) return { error: "Not allowed" };
+  await collection(await getDb(), "races").updateOne(
+    { _id: race._id },
+    { $set: { finishedAt: finished ? new Date() : null, updatedAt: new Date(), updatedBy: sessionActor(session!) } },
   );
   return {};
 }

@@ -101,7 +101,8 @@ export default function DesignPage() {
             <Button variant="secondary">Cancel</Button>
             <Button variant="ghost">Leave</Button>
             <Button variant="danger">Delete</Button>
-            <Button variant="gold">Gun</Button>
+            <Button variant="ink">Capture</Button>
+            <Button variant="gold">Gold</Button>
             <Button disabled>Saving…</Button>
             <Button size="sm" variant="secondary">
               <Download className="size-3.5" />
@@ -215,17 +216,17 @@ export default function DesignPage() {
               <span className="block text-sm">Heronymus</span>
               <Time className="block text-sm font-semibold text-ink-2">6:15.3</Time>
             </button>
-            <div className="min-h-20 rounded-lg border-2 border-gold bg-gold px-3 py-2 text-left text-gold-ink">
+            <div className="min-h-20 rounded-lg border-2 border-brand bg-brand px-3 py-2 text-left text-brand-ink">
               <span className="block text-xl leading-tight font-semibold">Emma</span>
               <span className="block text-sm">Krueger</span>
             </div>
-            <button type="button" className="flex min-h-20 items-center justify-center rounded-lg bg-gold text-2xl font-semibold tracking-wide text-gold-ink">
+            <button type="button" className="flex min-h-20 items-center justify-center rounded-lg bg-ink text-2xl font-semibold tracking-wide text-bg">
               Capture
             </button>
           </div>
-          <div className="mt-3 flex max-w-md items-center gap-2 rounded-lg border border-gold/50 bg-gold-soft px-3 py-2">
-            <Badge tone="gold">2 unassigned</Badge>
-            <Time className="rounded-md bg-surface px-2 py-0.5 text-sm font-semibold ring-2 ring-gold">6:02.4</Time>
+          <div className="mt-3 flex max-w-md items-center gap-2 rounded-lg border border-brand/20 bg-brand-soft px-3 py-2">
+            <Badge tone="brand">2 unassigned</Badge>
+            <Time className="rounded-md bg-surface px-2 py-0.5 text-sm font-semibold ring-2 ring-brand">6:02.4</Time>
             <Time className="rounded-md bg-surface px-2 py-0.5 text-sm font-semibold">6:02.9</Time>
           </div>
         </section>

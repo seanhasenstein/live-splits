@@ -110,6 +110,8 @@ export const Race = tenantDoc({
    */
   gunTimeMs: EpochMs.nullable(),
   gunTimeSource: z.enum(["tap", "official_results", "manual"]).nullable(),
+  /** Set when a coach marks the race finished: the clock stops ticking and the board becomes the review screen. */
+  finishedAt: z.date().nullable(),
   checkpoints: z.array(Checkpoint),
   /** Which of our athletes run in this race, and at which level. */
   lineup: z.array(z.object({ athleteId: Id, levelId: z.string().min(1) })),

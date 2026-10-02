@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { Board } from "@/components/board";
-import { can, getSession } from "@/lib/auth/session";
+import { can, getSession, isSchoolCoach } from "@/lib/auth/session";
 import { getMeet, listAthletes, listRaces } from "@/lib/data";
 
 export const metadata: Metadata = { title: "Live board" };
@@ -21,12 +21,15 @@ export default async function BoardPage({ params, searchParams }: PageProps<"/me
   return (
     <Board
       meetId={meet._id}
+      meetName={meet.name}
+      session={{ name: session.name, role: isSchoolCoach(session) ? "coach" : session.role }}
       initialRaceId={typeof race === "string" ? race : null}
       timeZone={meet.timeZone}
       races={races.map((r) => ({
         id: r._id,
         name: r.name,
         gunTimeMs: r.gunTimeMs,
+        finished: !!r.finishedAt,
         checkpoints: r.checkpoints.map((c) => ({ id: c.id, label: c.label })),
         athleteIds: r.lineup.map((l) => l.athleteId),
       }))}

@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, Undo2, X } from "lucide-react";
-import { Badge, Button, Segmented, Time, Toast } from "@/components/ui";
+import { Pencil, Undo2, X } from "lucide-react";
+import { ClockWarning } from "@/components/gun-panel";
+import { SessionMenu } from "@/components/session-menu";
+import { AppHeader, Badge, Button, Segmented, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
@@ -14,12 +16,15 @@ type RaceInfo = {
   id: string;
   name: string;
   gunTimeMs: number | null;
+  finished: boolean;
   checkpoints: { id: string; label: string }[];
   athleteIds: string[];
 };
 
 type Props = {
   meetId: string;
+  meetName: string;
+  session: { name: string; role: string };
   initial: { raceId: string | null; checkpointId: string | null };
   timeZone: string;
   races: RaceInfo[];
@@ -33,11 +38,11 @@ const FLASH_MS = 400;
 /** The moment the user actually tapped, as epoch ms (more honest than Date.now() after React work). */
 const eventTimeMs = (e: SyntheticEvent) => Math.round(performance.timeOrigin + e.nativeEvent.timeStamp);
 
-export function TapScreen({ meetId, initial, timeZone, races, athletes }: Props) {
+export function TapScreen({ meetId, meetName, session, initial, timeZone, races, athletes }: Props) {
   useWakeLock();
   // Selection lives in the URL (?race=&cp=) so a reload lands on the same checkpoint.
   const [sel, setSel] = useState(() => {
-    const r = races.find((x) => x.id === initial.raceId) ?? races[0];
+    const r = races.find((x) => x.id === initial.raceId) ?? races.find((x) => !x.finished) ?? races[0];
     const c = r?.checkpoints.find((x) => x.id === initial.checkpointId) ?? r?.checkpoints[0];
     return { raceId: r?.id ?? "", checkpointId: c?.id ?? "" };
   });
@@ -67,6 +72,8 @@ export function TapScreen({ meetId, initial, timeZone, races, athletes }: Props)
     <RaceTapper
       key={race.id}
       meetId={meetId}
+      meetName={meetName}
+      session={session}
       timeZone={timeZone}
       race={race}
       cpIndex={cpIndex}
@@ -98,6 +105,8 @@ type LastAction = { tapId: string; label: string };
 
 function RaceTapper({
   meetId,
+  meetName,
+  session,
   timeZone,
   race,
   cpIndex,
@@ -105,6 +114,8 @@ function RaceTapper({
   picker,
 }: {
   meetId: string;
+  meetName: string;
+  session: { name: string; role: string };
   timeZone: string;
   race: RaceInfo;
   cpIndex: number;
@@ -206,34 +217,37 @@ function RaceTapper({
 
   return (
     <main className="flex min-h-dvh flex-col bg-bg">
-      <header className="sticky top-0 z-10 border-b border-line bg-bg/95 px-3 pt-2 pb-2 backdrop-blur">
+      <AppHeader title={meetName} titleHref={`/meets/${meetId}`} subtitle={`${race.name} · ${checkpoint.label}`} right={<SessionMenu name={session.name} role={session.role} />} />
+      <div className="sticky top-14 z-10 border-b border-line bg-bg/95 px-3 pt-2 pb-2 backdrop-blur">
         {picker}
-        <div className="mt-2 flex items-center justify-between">
-          <RaceClock gunTimeMs={gunTimeMs} now={clock.now} />
-          <div className="flex items-center gap-2 text-xs text-ink-2">
-            {!clock.sync && <span>syncing clock…</span>}
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3">
+            {race.finished ? <Badge tone="neutral">Finished</Badge> : <RaceClock gunTimeMs={gunTimeMs} now={clock.now} />}
+            <span className="tnum text-[13px] text-ink-2">
+              {cp ? [...cp.byAthlete.values()].filter((m) => !m.missed).length : 0} of {race.athleteIds.length} at {checkpoint.label}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <ClockWarning sync={clock.sync} error={clock.error} />
             {!online && (
               <Badge tone="danger" dot>
                 Offline
               </Badge>
             )}
             {unsent > 0 && <Badge tone="gold">{unsent} unsent</Badge>}
-            <Link href={`/meets/${meetId}`} className="rounded-md p-1.5 text-ink-2 hover:bg-surface-2" aria-label="Back to the meet">
-              <ChevronLeft className="size-5" />
-            </Link>
           </div>
         </div>
-      </header>
+      </div>
 
       {cp && cp.pending.length > 0 && (
-        <div className="border-b border-gold/40 bg-gold-soft px-3 py-2">
+        <div className="border-b border-brand/20 bg-brand-soft px-3 py-2">
           <div className="flex items-center gap-2">
-            <Badge tone="gold">{cp.pending.length} unassigned</Badge>
-            <span className="text-xs text-gold-text">tap a name to fill the oldest</span>
+            <Badge tone="brand">{cp.pending.length} unassigned</Badge>
+            <span className="text-xs text-brand-text">tap a name to fill the oldest</span>
           </div>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {cp.pending.map((s, i) => (
-              <span key={s.tapId} className={`flex items-center gap-0.5 rounded-md bg-surface py-0.5 pl-2 text-sm ${i === 0 ? "ring-2 ring-gold" : "border border-line"}`}>
+              <span key={s.tapId} className={`flex items-center gap-0.5 rounded-md bg-surface py-0.5 pl-2 text-sm ${i === 0 ? "ring-2 ring-brand" : "border border-line"}`}>
                 <Time className="font-semibold text-ink">{fmt(s.timeMs)}</Time>
                 <button type="button" onClick={(e) => deleteSlot(e, s)} aria-label="Delete this capture" className="rounded p-1 text-ink-3 hover:text-danger">
                   <X className="size-3.5" />
@@ -253,7 +267,7 @@ function RaceTapper({
           const done = !!mark && !mark.missed;
           if (confirmId === id) {
             return (
-              <div key={id} className="flex min-h-20 flex-col justify-center rounded-lg border-2 border-gold bg-surface p-2 text-center shadow-card">
+              <div key={id} className="flex min-h-20 flex-col justify-center rounded-lg border-2 border-brand bg-surface p-2 text-center shadow-card">
                 <span className="text-sm text-ink">
                   Replace <Time className="font-semibold">{fmt(mark?.timeMs ?? null)}</Time>?
                 </span>
@@ -275,19 +289,22 @@ function RaceTapper({
               onClick={(e) => onName(e, id)}
               className={`min-h-20 rounded-lg border px-3 py-2 text-left transition-colors select-none ${
                 flashId === id
-                  ? "border-gold bg-gold text-gold-ink"
+                  ? "border-brand bg-brand text-brand-ink"
                   : done
                     ? "border-line bg-surface-2 text-ink-3"
-                    : "border-line bg-surface text-ink shadow-card active:bg-gold-soft"
+                    : "border-line bg-surface text-ink shadow-card active:bg-brand-soft"
               }`}
             >
               <span className="block truncate text-xl leading-tight font-semibold">{first}</span>
-              <span className={`block truncate text-sm ${done ? "" : "text-ink-2"}`}>{rest.join(" ")}</span>
+              <span className={`block truncate text-sm ${done || flashId === id ? "" : "text-ink-2"}`}>{rest.join(" ")}</span>
               {mark && (
-                <Time className={`block text-sm ${mark.missed ? "italic" : "font-semibold text-ink-2"}`}>
-                  {mark.missed ? "missed" : fmt(mark.timeMs)}
-                  {mark.estimate && !mark.missed && " ~"}
-                </Time>
+                <span className="mt-0.5 flex items-center gap-1 text-sm">
+                  <Time className={mark.missed ? "italic" : "font-semibold text-ink-2"}>
+                    {mark.missed ? "missed" : fmt(mark.timeMs)}
+                    {mark.estimate && !mark.missed && " ~"}
+                  </Time>
+                  <Pencil className="size-3 text-ink-3" aria-hidden />
+                </span>
               )}
             </button>
           );
@@ -317,7 +334,9 @@ function RaceTapper({
         <button
           type="button"
           onClick={capture}
-          className={`h-16 flex-1 rounded-lg text-2xl font-semibold tracking-wide text-gold-ink shadow-card select-none ${flashId === "capture" ? "bg-gold-soft" : "bg-gold active:bg-gold/80"}`}
+          className={`h-16 flex-1 rounded-lg text-2xl font-semibold tracking-wide shadow-card select-none ${
+            flashId === "capture" ? "bg-brand text-brand-ink" : "bg-ink text-bg active:bg-ink/80"
+          }`}
         >
           Capture
         </button>

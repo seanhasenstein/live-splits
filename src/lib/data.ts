@@ -80,3 +80,13 @@ export function readJoinCodes(meet: Meet): { managerCode: string; coachCode: str
   if (!manager || !coach || !viewer) return null;
   return { managerCode: formatCode(manager), coachCode: formatCode(coach), viewerPath: `/v/${viewer}` };
 }
+
+/** Name on the gun tap currently in effect, per race. */
+export async function gunFiredBy(raceIds: string[]): Promise<Record<string, string>> {
+  const taps = await collection(await getDb(), "taps")
+    .find({ raceId: { $in: raceIds }, type: "gun" })
+    .sort({ createdAt: 1 })
+    .project<{ raceId: string; createdBy: { name: string } }>({ raceId: 1, createdBy: 1 })
+    .toArray();
+  return Object.fromEntries(taps.map((t) => [t.raceId, t.createdBy.name]));
+}

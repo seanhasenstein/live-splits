@@ -21,8 +21,8 @@
 
 1. Both phones: open the site, **Add to Home Screen**, join with the manager
    code and a first name.
-2. One phone sets the gun on the meet page (Arm → GUN). The other should see
-   the race clock start on its tap screen within a few seconds.
+2. One phone sets the gun on the meet page (Start race… → START). The other should see
+   the race clock start on its Record splits screen within a few seconds.
 3. Phone A at "Mile 1": tap names as they pass; try CAPTURE twice then tap two
    names; try Undo; tap a name twice (second tap within 1s is ignored; later tap
    asks to replace).
@@ -37,7 +37,7 @@
 ## Meet day
 
 - Managers: join before leaving the bus (needs signal once); the screen stays
-  on while the tap screen is open.
-- Whoever is at the start arms and fires the gun for each race; if missed,
+  on while the Record splits screen is open.
+- Whoever is at the start starts the race clock for each race; if missed,
   the gun can be typed from the clock time or set later from official results.
 - After each race, the live board is the review screen; fix there, then export.

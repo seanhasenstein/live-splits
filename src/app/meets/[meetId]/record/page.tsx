@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { TapScreen } from "@/components/tap-screen";
-import { can, getSession } from "@/lib/auth/session";
+import { can, getSession, isSchoolCoach } from "@/lib/auth/session";
 import { getMeet, listAthletes, listRaces } from "@/lib/data";
 
-export const metadata: Metadata = { title: "Tap" };
+export const metadata: Metadata = { title: "Record splits" };
 
-export default async function TapPage({ params, searchParams }: PageProps<"/meets/[meetId]/tap">) {
+export default async function RecordPage({ params, searchParams }: PageProps<"/meets/[meetId]/record">) {
   const { meetId } = await params;
   const { race: raceParam, cp: cpParam } = await searchParams;
   const session = await getSession();
@@ -21,12 +21,15 @@ export default async function TapPage({ params, searchParams }: PageProps<"/meet
   return (
     <TapScreen
       meetId={meet._id}
+      meetName={meet.name}
+      session={{ name: session.name, role: isSchoolCoach(session) ? "coach" : session.role }}
       initial={{ raceId: typeof raceParam === "string" ? raceParam : null, checkpointId: typeof cpParam === "string" ? cpParam : null }}
       timeZone={meet.timeZone}
       races={races.map((r) => ({
         id: r._id,
         name: r.name,
         gunTimeMs: r.gunTimeMs,
+        finished: !!r.finishedAt,
         checkpoints: r.checkpoints.map((c) => ({ id: c.id, label: c.label })),
         athleteIds: r.lineup.map((l) => l.athleteId),
       }))}
