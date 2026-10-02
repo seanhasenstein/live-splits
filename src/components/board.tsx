@@ -615,10 +615,10 @@ function RaceStatus({ race, gunTimeMs, now }: { race: RaceInfo; gunTimeMs: numbe
     );
   const n = now();
   return (
-    <div className="flex min-w-0 flex-1 items-center justify-center gap-3 rounded-lg border border-brand/40 bg-brand-soft px-3 py-1.5 text-brand-text sm:justify-start">
+    <div className="flex min-w-0 flex-1 items-center justify-center gap-3 rounded-lg border border-danger/40 bg-danger-soft px-3 py-1.5 text-danger sm:justify-start">
       <span className="relative flex size-2.5 shrink-0">
-        <span className="absolute inset-0 animate-ping rounded-full bg-brand-bright opacity-60" />
-        <span className="relative inline-flex size-2.5 rounded-full bg-brand-bright" />
+        <span className="absolute inset-0 animate-ping rounded-full bg-danger opacity-60" />
+        <span className="relative inline-flex size-2.5 rounded-full bg-danger" />
       </span>
       <span className="text-sm font-semibold">In progress</span>
       <Time className="text-2xl font-semibold tracking-tight text-ink">{n === null ? "—" : formatElapsed(n - gunTimeMs)}</Time>

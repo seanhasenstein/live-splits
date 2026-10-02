@@ -94,14 +94,18 @@ export function GunPanel({ raceId, gunTimeMs: initialGun, finishedAt: initialFin
   const finished = gunTimeMs !== null && !!finishedAt;
 
   return (
-    <div className={`rounded-lg border p-3 ${running ? "border-brand/30 bg-brand-soft/60" : "border-line bg-surface-2/60"}`}>
+    <div
+      className={`rounded-lg border p-3 ${
+        running ? "border-danger/40 bg-danger-soft/70" : finished ? "border-brand/40 bg-brand-soft/70" : "border-line bg-surface-2/60"
+      }`}
+    >
       <div className="flex items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Flag className={`size-4 ${running ? "text-brand-text" : "text-ink-2"}`} />
+          <Flag className={`size-4 ${running ? "text-danger" : finished ? "text-brand-text" : "text-ink-2"}`} />
           <span className="text-[13px] font-medium text-ink">Race clock</span>
           {running ? (
-            <Badge tone="brand" dot>
-              Running
+            <Badge tone="danger" dot>
+              In progress
             </Badge>
           ) : finished ? (
             <FinishedBadge />
