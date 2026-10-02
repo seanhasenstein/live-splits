@@ -351,7 +351,7 @@ function RaceTapper({
         right={
           <>
             <LinkButton href={`/meets/${meetId}/board?race=${race.id}`} variant="secondary" size="sm">
-              Board
+              Live board
             </LinkButton>
             <SessionMenu name={session.name} role={session.role} />
           </>
