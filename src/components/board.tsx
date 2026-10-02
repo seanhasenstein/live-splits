@@ -605,12 +605,12 @@ function RaceStatus({ race, gunTimeMs, now }: { race: RaceInfo; gunTimeMs: numbe
   }
   if (!gunTimeMs)
     return (
-      <div className="flex min-w-0 flex-1 items-center justify-center gap-2.5 rounded-lg border border-line bg-surface-2 px-3 py-2 text-ink sm:justify-start">
-        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-ink/10">
+      <div className="flex min-w-0 flex-1 items-center justify-center gap-2.5 rounded-lg border border-gold/50 bg-gold-soft px-3 py-2 text-gold-text sm:justify-start">
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-gold/30">
           <Flag className="size-3" />
         </span>
         <span className="text-sm font-semibold">Not started</span>
-        <span className="text-sm text-ink-2">· waiting for the gun</span>
+        <span className="text-sm opacity-80">· waiting for the gun</span>
       </div>
     );
   const n = now();
