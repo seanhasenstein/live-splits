@@ -113,7 +113,7 @@ export function GunPanel({ raceId, gunTimeMs: initialGun, finishedAt: initialFin
           <ClockWarning sync={clock.sync} error={clock.error} />
         </div>
         {canGun && !armed && (
-          <Button variant="secondary" size="sm" onClick={() => setAdjusting(true)} aria-label={gunTimeMs !== null ? "Adjust the race clock" : "Set the gun time by hand"}>
+          <Button variant="subtle" size="sm" onClick={() => setAdjusting(true)} aria-label={gunTimeMs !== null ? "Adjust the race clock" : "Set the gun time by hand"}>
             <MoreHorizontal className="size-4" />
             {gunTimeMs !== null && "Adjust"}
           </Button>

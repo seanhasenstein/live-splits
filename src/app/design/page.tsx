@@ -99,6 +99,7 @@ export default function DesignPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Button>Save race</Button>
             <Button variant="secondary">Cancel</Button>
+            <Button variant="subtle">Adjust</Button>
             <Button variant="ghost">Leave</Button>
             <Button variant="danger">Delete</Button>
             <Button variant="ink">Capture</Button>
