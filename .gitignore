@@ -46,3 +46,6 @@ next-env.d.ts
 
 # design references (screenshots of other products)
 /design/examples/
+
+# post-meet PDFs list athletes; keep them local like the roster
+/design/post-meet-pdfs/
