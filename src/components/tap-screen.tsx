@@ -9,7 +9,7 @@ import { AppHeader, Badge, Button, LinkButton, SectionLabel, Segmented, Sheet, T
 import { useClock } from "@/lib/client/clock";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
-import { type Mark, replay, type Slot } from "@/lib/replay";
+import { type Mark, replay, type Slot, type TapLike } from "@/lib/replay";
 import { formatClock, formatElapsed } from "@/lib/time";
 
 type RaceInfo = {
@@ -78,7 +78,7 @@ export function TapScreen({ meetId, meetName, session, initial, timeZone, races,
       race={race}
       cpIndex={cpIndex}
       athletes={athletes}
-      picker={<SwitchControl races={races} race={race} checkpointId={race.checkpoints[cpIndex].id} onSwitch={setSel} />}
+      pickerFor={(current) => <SwitchControl races={races} race={race} checkpointId={race.checkpoints[cpIndex].id} current={current} onSwitch={setSel} />}
     />
   );
 }
@@ -87,22 +87,47 @@ export function TapScreen({ meetId, meetName, session, initial, timeZone, races,
  * Where taps go. Changing it is deliberate: open the sheet, pick, confirm.
  * A stray tap on a segmented control was too easy to make mid-race.
  */
+type RaceSummary = { counts: Record<string, number>; gunTimeMs: number | null };
+
 function SwitchControl({
   races,
   race,
   checkpointId,
+  current,
   onSwitch,
 }: {
   races: RaceInfo[];
   race: RaceInfo;
   checkpointId: string;
+  /** Live numbers for the race we're on; other races are fetched when picked. */
+  current: RaceSummary;
   onSwitch: (sel: { raceId: string; checkpointId: string }) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [pick, setPick] = useState({ raceId: race.id, checkpointId });
+  const [fetched, setFetched] = useState<Record<string, RaceSummary>>({});
   const pickedRace = races.find((r) => r.id === pick.raceId) ?? race;
   const pickedCp = pickedRace.checkpoints.find((c) => c.id === pick.checkpointId) ?? pickedRace.checkpoints[0];
   const changed = pick.raceId !== race.id || pick.checkpointId !== checkpointId;
+  const summary: RaceSummary | null = pickedRace.id === race.id ? current : (fetched[pickedRace.id] ?? null);
+
+  // Another race's numbers: one fetch of its log, replayed here.
+  useEffect(() => {
+    if (!open || pickedRace.id === race.id || fetched[pickedRace.id]) return;
+    let cancelled = false;
+    fetch(`/api/races/${pickedRace.id}/taps`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((body: { taps: TapLike[]; gunTimeMs: number | null }) => {
+        if (cancelled) return;
+        const st = replay({ checkpoints: pickedRace.checkpoints.map((c) => ({ ...c, distance: { value: 0, unit: "mi", meters: 0 }, kind: "split" })) }, body.taps);
+        const counts = Object.fromEntries(pickedRace.checkpoints.map((c) => [c.id, [...(st.get(c.id)?.byAthlete.values() ?? [])].filter((m) => !m.missed).length]));
+        setFetched((f) => ({ ...f, [pickedRace.id]: { counts, gunTimeMs: body.gunTimeMs } }));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open, pickedRace, race.id, fetched]);
 
   return (
     <>
@@ -133,11 +158,29 @@ function SwitchControl({
                 />
               </div>
             )}
+            <div className="flex items-center gap-2 text-[13px] text-ink-2">
+              <span className="font-medium text-ink">{pickedRace.name}</span>
+              {pickedRace.finished ? (
+                <Badge tone="neutral">Finished</Badge>
+              ) : summary === null ? (
+                <span>loading…</span>
+              ) : summary.gunTimeMs ? (
+                <Badge tone="brand" dot>
+                  Running
+                </Badge>
+              ) : (
+                <Badge tone="gold" dot>
+                  No gun yet
+                </Badge>
+              )}
+              <span>· {pickedRace.athleteIds.length} athletes</span>
+            </div>
             <div>
               <SectionLabel className="mb-1.5">Checkpoint</SectionLabel>
               <div className="grid gap-2">
                 {pickedRace.checkpoints.map((c) => {
                   const active = c.id === pick.checkpointId;
+                  const n = summary?.counts[c.id];
                   return (
                     <button
                       key={c.id}
@@ -147,8 +190,15 @@ function SwitchControl({
                         active ? "border-brand bg-brand-soft text-ink" : "border-line bg-surface text-ink hover:bg-surface-2"
                       }`}
                     >
-                      {c.label}
-                      {active && <Check className="size-4 text-brand-text" />}
+                      <span>{c.label}</span>
+                      <span className="flex items-center gap-2 text-[13px] font-normal text-ink-2">
+                        {n !== undefined && (
+                          <span className="tnum">
+                            {n} of {pickedRace.athleteIds.length} recorded
+                          </span>
+                        )}
+                        {active && <Check className="size-4 text-brand-text" />}
+                      </span>
                     </button>
                   );
                 })}
@@ -182,7 +232,7 @@ function RaceTapper({
   race,
   cpIndex,
   athletes,
-  picker,
+  pickerFor,
 }: {
   meetId: string;
   meetName: string;
@@ -191,7 +241,7 @@ function RaceTapper({
   race: RaceInfo;
   cpIndex: number;
   athletes: Record<string, string>;
-  picker: React.ReactNode;
+  pickerFor: (current: RaceSummary) => React.ReactNode;
 }) {
   const clock = useClock();
   const checkpoint = race.checkpoints[cpIndex];
@@ -312,7 +362,10 @@ function RaceTapper({
             )}
             {unsent > 0 && <Badge tone="gold">{unsent} unsent</Badge>}
           </div>
-          {picker}
+          {pickerFor({
+            gunTimeMs,
+            counts: Object.fromEntries(race.checkpoints.map((c) => [c.id, [...(state.get(c.id)?.byAthlete.values() ?? [])].filter((m) => !m.missed).length])),
+          })}
         </div>
         <div className="mt-1 text-center">
           <div className="text-2xl font-semibold tracking-tight text-ink">{checkpoint.label}</div>
