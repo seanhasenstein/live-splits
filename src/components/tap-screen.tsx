@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeftRight, Check, Pencil, Undo2, X } from "lucide-react";
 import { ClockWarning } from "@/components/race-card";
+import { CheckpointCounts, RaceStatusBar } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
 import { AppHeader, Badge, Button, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast, FinishedBadge } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
@@ -252,6 +253,11 @@ function RaceTapper({
   );
   const cp = state.get(checkpoint.id);
   const prev = cpIndex > 0 ? state.get(race.checkpoints[cpIndex - 1].id) : undefined;
+  const counts = race.checkpoints.map((c) => ({
+    id: c.id,
+    label: c.label,
+    n: [...(state.get(c.id)?.byAthlete.values() ?? [])].filter((m) => !m.missed).length,
+  }));
 
   // Grid order: by the previous checkpoint's order; athletes not yet seen there go last, by name.
   const ordered = useMemo(() => {
@@ -351,34 +357,25 @@ function RaceTapper({
           </>
         }
       />
-      <div className="sticky top-14 z-10 border-b border-line bg-bg/95 px-3 py-2.5 backdrop-blur">
+      <div className="sticky top-14 z-10 space-y-2 border-b border-line bg-bg/95 px-3 py-2.5 backdrop-blur">
+        <div className="flex items-center gap-2">
+          <RaceStatusBar name={race.name} finished={race.finished} gunTimeMs={gunTimeMs} now={clock.now} />
+          <ClockWarning sync={clock.sync} error={clock.error} />
+          {!online && (
+            <Badge tone="danger" dot>
+              Offline
+            </Badge>
+          )}
+          {unsent > 0 && <Badge tone="gold">{unsent} unsent</Badge>}
+        </div>
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5">
-            <ClockWarning sync={clock.sync} error={clock.error} />
-            {!online && (
-              <Badge tone="danger" dot>
-                Offline
-              </Badge>
-            )}
-            {unsent > 0 && <Badge tone="gold">{unsent} unsent</Badge>}
-          </div>
+          <div className="text-2xl font-semibold tracking-tight text-ink">{checkpoint.label}</div>
           {pickerFor({
             gunTimeMs,
-            counts: Object.fromEntries(race.checkpoints.map((c) => [c.id, [...(state.get(c.id)?.byAthlete.values() ?? [])].filter((m) => !m.missed).length])),
+            counts: Object.fromEntries(counts.map((c) => [c.id, c.n])),
           })}
         </div>
-        <div className="mt-1 text-center">
-          <div className="text-2xl font-semibold tracking-tight text-ink">{checkpoint.label}</div>
-          <div className="mt-0.5 flex items-center justify-center gap-2 text-[13px] text-ink-2">
-            <span>{race.name}</span>
-            <span aria-hidden>·</span>
-            <span className="tnum">
-              {cp ? [...cp.byAthlete.values()].filter((m) => !m.missed).length : 0} of {race.athleteIds.length} recorded
-            </span>
-            <span aria-hidden>·</span>
-            {race.finished ? <FinishedBadge /> : <RaceClock gunTimeMs={gunTimeMs} now={clock.now} />}
-          </div>
-        </div>
+        <CheckpointCounts counts={counts} total={race.athleteIds.length} loaded={loaded} finished={race.finished} activeId={checkpoint.id} />
       </div>
 
       {cp && cp.pending.length > 0 && (
@@ -485,21 +482,4 @@ function RaceTapper({
       </div>
     </main>
   );
-}
-
-function RaceClock({ gunTimeMs, now }: { gunTimeMs: number | null; now: () => number | null }) {
-  const [, tick] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => tick((n) => n + 1), 100);
-    return () => clearInterval(t);
-  }, []);
-  const n = now();
-  if (!gunTimeMs)
-    return (
-      <Badge tone="gold" dot>
-        Not started
-      </Badge>
-    );
-  if (n === null) return <span>—</span>;
-  return <Time className="font-semibold text-ink">{formatElapsed(n - gunTimeMs)}</Time>;
 }
