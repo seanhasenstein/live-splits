@@ -237,7 +237,7 @@ function RaceBoard({
             )}
             {rows.map((row) => (
               <tr key={row.athleteId} className={row.reached < 0 ? "text-ink-3" : ""}>
-                <td className={`px-3 py-2 font-medium sm:px-4 ${row.reached < 0 ? "" : "text-ink"}`}>{athletes[row.athleteId]}</td>
+                <td className={`px-3 py-2 align-top font-medium sm:px-4 ${row.reached < 0 ? "" : "text-ink"}`}>{athletes[row.athleteId]}</td>
                 {row.marks.map((m, i) => {
                   const prevTime = i > 0 ? (row.marks[i - 1]?.timeMs ?? null) : gunTimeMs;
                   const split = m?.timeMs != null && prevTime != null ? m.timeMs - prevTime : null;
@@ -269,7 +269,7 @@ function RaceBoard({
                     </>
                   );
                   return (
-                    <td key={race.checkpoints[i].id} className="px-1 py-1 text-right last:pr-2 sm:last:pr-3">
+                    <td key={race.checkpoints[i].id} className="px-1 py-1 text-right align-top last:pr-2 sm:last:pr-3">
                       {editing ? (
                         <button
                           type="button"
