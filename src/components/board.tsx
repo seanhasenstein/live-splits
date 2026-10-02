@@ -38,13 +38,13 @@ const METERS_PER_MILE = 1609.344;
 /** Minutes-per-mile pace for a segment, as ms per mile. */
 const paceMsPerMile = (splitMs: number, segmentMeters: number) => (splitMs * METERS_PER_MILE) / segmentMeters;
 
-/** "+0:12" / "−0:04": slower / faster than the previous segment. Green faster, amber slower; red stays for destructive things. */
+/** "+0:12" / "−0:04": slower / faster than the previous segment. Green faster, red slower, as timing apps do. */
 function DeltaText({ ms }: { ms: number }) {
   const rounded = Math.round(ms / 1000) * 1000;
   if (rounded === 0) return <span>±0:00</span>;
   const faster = rounded < 0;
   return (
-    <span className={`font-medium ${faster ? "text-brand-bright" : "text-gold-text"}`}>
+    <span className={`font-medium ${faster ? "text-brand-bright" : "text-danger"}`}>
       {faster ? "−" : "+"}
       {formatElapsed(Math.abs(rounded)).replace(/\.\d$/, "")}
     </span>
