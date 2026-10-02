@@ -163,7 +163,9 @@ export function RaceStateBadge({ state }: { state: "not_started" | "in_progress"
   if (state === "finished")
     return (
       <Badge tone="brand">
-        <Check className="size-3" strokeWidth={3} />
+        <span className="flex size-3.5 items-center justify-center rounded-full bg-brand-bright text-white">
+          <Check className="size-2.5" strokeWidth={3.5} />
+        </span>
         Finished
       </Badge>
     );
