@@ -24,15 +24,14 @@ export function AppHeader({
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-bg/90 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4">
-        {back ? (
-          <Link href={back.href} className="-ml-2 flex items-center gap-0.5 rounded-md py-1 pr-2 pl-1 text-sm text-ink-2 hover:bg-surface-2 hover:text-ink">
+        <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="Home">
+          <Shield className="h-7" />
+          {!back && <span className={`text-[15px] font-semibold text-ink ${title ? "hidden sm:inline" : ""}`}>{APP_NAME}</span>}
+        </Link>
+        {back && (
+          <Link href={back.href} className="flex items-center gap-0.5 rounded-md py-1 pr-2 pl-1 text-sm text-ink-2 hover:bg-surface-2 hover:text-ink">
             <ChevronLeft className="size-4" />
             {back.label}
-          </Link>
-        ) : (
-          <Link href="/" className="flex items-center gap-2.5">
-            <Shield className="h-7" />
-            <span className={`text-[15px] font-semibold text-ink ${title ? "hidden sm:inline" : ""}`}>{APP_NAME}</span>
           </Link>
         )}
         {title && (
