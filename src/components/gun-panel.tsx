@@ -113,7 +113,7 @@ export function GunPanel({ raceId, gunTimeMs: initialGun, finishedAt: initialFin
           <ClockWarning sync={clock.sync} error={clock.error} />
         </div>
         {canGun && !armed && (
-          <Button variant="ghost" size="sm" onClick={() => setAdjusting(true)} aria-label={gunTimeMs !== null ? "Adjust the race clock" : "Set the gun time by hand"}>
+          <Button variant="secondary" size="sm" onClick={() => setAdjusting(true)} aria-label={gunTimeMs !== null ? "Adjust the race clock" : "Set the gun time by hand"}>
             <MoreHorizontal className="size-4" />
             {gunTimeMs !== null && "Adjust"}
           </Button>
@@ -239,76 +239,90 @@ function AdjustSheet({
       }
       onClose={onClose}
     >
-      <div className="space-y-5">
+      <div className="space-y-3">
         {error && <Alert tone="danger">{error}</Alert>}
 
         {gunTimeMs !== null && (
-          <section>
-            {finished ? (
-              <>
-                <h3 className="text-sm font-semibold text-ink">Reopen the race</h3>
-                <p className="mt-0.5 mb-2 text-[13px] text-ink-2">The clock runs again and the board goes back to live.</p>
+          <Option
+            title={finished ? "Reopen the race" : "Mark the race finished"}
+            description={
+              finished
+                ? "The clock runs again and the board goes back to live."
+                : "Stops the running clock on screen and turns the board into the review screen. Times are not changed."
+            }
+            action={
+              finished ? (
                 <Button variant="secondary" onClick={() => setFinished(false)} disabled={pending}>
                   Reopen race
                 </Button>
-              </>
-            ) : (
-              <>
-                <h3 className="text-sm font-semibold text-ink">Mark the race finished</h3>
-                <p className="mt-0.5 mb-2 text-[13px] text-ink-2">
-                  Stops the running clock on screen and turns the board into the review screen. Times are not changed.
-                </p>
+              ) : (
                 <Button onClick={() => setFinished(true)} disabled={pending}>
                   Mark finished
                 </Button>
-              </>
-            )}
-          </section>
+              )
+            }
+          />
         )}
 
-        <section>
-          <h3 className="text-sm font-semibold text-ink">{gunTimeMs !== null ? "Change the gun time" : "Set the gun time by hand"}</h3>
-          <p className="mt-0.5 mb-2 text-[13px] text-ink-2">Enter the clock time the gun went off. Every recorded time is re-based on it; nothing is deleted.</p>
-          <form onSubmit={saveTyped} className="flex items-end gap-2">
-            <Field label={`24-hour clock time, ${timeZone}`}>
-              <Input
-                value={typed}
-                onChange={(e) => setTyped(e.target.value)}
-                placeholder="19:10:03.4"
-                pattern="\d{2}:\d{2}:\d{2}(\.\d)?"
-                inputMode="numeric"
-                required
-                className="font-mono"
-              />
-            </Field>
-            <Button type="submit" variant="secondary" disabled={pending}>
-              Save
-            </Button>
-          </form>
-        </section>
+        <Option
+          title={gunTimeMs !== null ? "Change the gun time" : "Set the gun time by hand"}
+          description="Enter the clock time the gun went off. Every recorded time is re-based on it; nothing is deleted."
+          action={
+            <form onSubmit={saveTyped} className="flex items-end gap-2">
+              <Field label={`24-hour clock time, ${timeZone}`}>
+                <Input
+                  value={typed}
+                  onChange={(e) => setTyped(e.target.value)}
+                  placeholder="19:10:03.4"
+                  pattern="\d{2}:\d{2}:\d{2}(\.\d)?"
+                  inputMode="numeric"
+                  required
+                  className="font-mono"
+                />
+              </Field>
+              <Button type="submit" variant="secondary" disabled={pending}>
+                Save
+              </Button>
+            </form>
+          }
+        />
 
         {gunTimeMs !== null && (
-          <section className="border-t border-line pt-4">
-            <h3 className="text-sm font-semibold text-ink">Remove the gun time</h3>
-            <p className="mt-0.5 mb-2 text-[13px] text-ink-2">Recorded times stay in the log; they show as clock times until a gun time is set again.</p>
-            {confirmRemove ? (
-              <div className="flex gap-2">
-                <Button variant="danger" onClick={remove} disabled={pending}>
-                  Yes, remove it
+          <Option
+            title="Remove the gun time"
+            description="Recorded times stay in the log; they show as clock times until a gun time is set again."
+            danger
+            action={
+              confirmRemove ? (
+                <div className="flex gap-2">
+                  <Button variant="danger" onClick={remove} disabled={pending}>
+                    Yes, remove it
+                  </Button>
+                  <Button variant="secondary" onClick={() => setConfirmRemove(false)}>
+                    Keep it
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="danger" onClick={() => setConfirmRemove(true)}>
+                  Remove gun time…
                 </Button>
-                <Button variant="secondary" onClick={() => setConfirmRemove(false)}>
-                  Keep it
-                </Button>
-              </div>
-            ) : (
-              <Button variant="ghost" onClick={() => setConfirmRemove(true)} className="text-danger hover:bg-danger-soft">
-                Remove gun time…
-              </Button>
-            )}
-          </section>
+              )
+            }
+          />
         )}
       </div>
     </Sheet>
+  );
+}
+
+/** One action in the adjust sheet: title, what it does, the control. */
+function Option({ title, description, action, danger }: { title: string; description: string; action: React.ReactNode; danger?: boolean }) {
+  return (
+    <section className={`rounded-lg border p-3 ${danger ? "border-danger/30" : "border-line"}`}>
+      <h3 className={`text-sm font-semibold ${danger ? "text-danger" : "text-ink"}`}>{title}</h3>
+      <p className="mt-0.5 text-[13px] text-ink-2">{description}</p>
+      <div className="mt-3">{action}</div>
+    </section>
   );
 }
 
