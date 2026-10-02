@@ -60,7 +60,7 @@ export function Board({ meetId, meetName, session, initialRaceId, timeZone, race
       <AppHeader title={meetName} titleHref={`/meets/${meetId}`} subtitle="Live board" right={<SessionMenu name={session.name} role={session.role} />} />
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-4">
         {races.length > 1 && (
-          <Segmented value={race.id} onChange={setRaceId} options={races.map((r) => ({ value: r.id, label: r.name }))} className="mb-3 max-w-md" />
+          <Segmented value={race.id} onChange={setRaceId} options={races.map((r) => ({ value: r.id, label: r.name }))} className="mb-3 lg:max-w-md" />
         )}
         <RaceBoard key={race.id} meetId={meetId} race={race} timeZone={timeZone} athletes={athletes} canFix={canFix} canTap={canTap} />
       </main>
@@ -93,7 +93,7 @@ function RaceBoard({
   );
   const [fix, setFix] = useState<{ athleteId: string; cpIndex: number } | null>(null);
   const [editing, setEditing] = useState(false);
-  const [view, setView] = useState<"cumulative" | "splits" | "both">("cumulative");
+  const [view, setView] = useState<"splits" | "both">("both");
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = useCallback((text: string) => {
@@ -172,11 +172,10 @@ function RaceBoard({
           value={view}
           onChange={setView}
           options={[
-            { value: "cumulative", label: "Cumulative" },
-            { value: "splits", label: "Splits" },
-            { value: "both", label: "Both" },
+            { value: "both", label: "Cumulative + splits" },
+            { value: "splits", label: "Splits only" },
           ]}
-          className="w-72"
+          className="w-full sm:w-80"
         />
       </div>
 
@@ -264,7 +263,7 @@ function RaceBoard({
 
       <p className="mt-3 text-xs text-ink-3">
         * edited &nbsp; ~ estimate &nbsp;{" "}
-        {view === "splits" ? "Splits are the time since the previous checkpoint." : view === "both" ? "Cumulative time from the gun, with the split beneath." : "Cumulative time from the gun."}{" "}
+        {view === "splits" ? "Splits are the time since the previous checkpoint." : "Cumulative time from the gun, with the split beneath."}{" "}
         Updates every few seconds.
       </p>
 
