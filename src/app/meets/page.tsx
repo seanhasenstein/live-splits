@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { leaveAction } from "@/app/actions/auth";
-import { Button, LinkButton, Page, Section } from "@/components/ui";
+import { LeaveButton } from "@/components/leave-button";
+import { LinkButton, Page, Section } from "@/components/ui";
 import { getSession, isSchoolCoach } from "@/lib/auth/session";
 import { listMeets } from "@/lib/data";
 import { formatLocalDate } from "@/lib/time";
@@ -35,11 +35,7 @@ export default async function MeetsPage() {
       </Section>
       <div className="text-sm text-green/70">
         Signed in as <b>{session.name}</b> (coach).{" "}
-        <form action={leaveAction} className="inline">
-          <Button variant="secondary" type="submit" className="ml-2 px-2 py-1 text-xs">
-            Leave
-          </Button>
-        </form>
+        <LeaveButton />
       </div>
     </Page>
   );

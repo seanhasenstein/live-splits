@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { leaveAction } from "@/app/actions/auth";
 import { CodesPanel } from "@/components/codes-panel";
+import { LeaveButton } from "@/components/leave-button";
 import { GunPanel } from "@/components/gun-panel";
-import { Button, LinkButton, Page, Section } from "@/components/ui";
+import { LinkButton, Page, Section } from "@/components/ui";
 import { can, getSession, isSchoolCoach } from "@/lib/auth/session";
 import { getMeet, getProgram, listRaces } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
@@ -100,11 +100,7 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
       <div className="text-sm text-green/70">
         You&rsquo;re <b>{session.name}</b> ({isSchoolCoach(session) ? "coach" : session.role}).
         {!isSchoolCoach(session) && (
-          <form action={leaveAction} className="inline">
-            <Button variant="secondary" type="submit" className="ml-2 px-2 py-1 text-xs">
-              Leave
-            </Button>
-          </form>
+          <LeaveButton />
         )}
       </div>
     </Page>
