@@ -615,11 +615,13 @@ function RaceStatus({ race, gunTimeMs, now }: { race: RaceInfo; gunTimeMs: numbe
     );
   const n = now();
   return (
-    <div className="flex items-center gap-2.5">
-      <Time className="text-3xl font-semibold tracking-tight text-ink">{n === null ? "—" : formatElapsed(n - gunTimeMs)}</Time>
-      <Badge tone="brand" dot>
-        Running
-      </Badge>
+    <div className="flex min-w-0 flex-1 items-center justify-center gap-3 rounded-lg border border-brand/40 bg-brand-soft px-3 py-1.5 text-brand-text sm:justify-start">
+      <span className="relative flex size-2.5 shrink-0">
+        <span className="absolute inset-0 animate-ping rounded-full bg-brand-bright opacity-60" />
+        <span className="relative inline-flex size-2.5 rounded-full bg-brand-bright" />
+      </span>
+      <span className="text-sm font-semibold">In progress</span>
+      <Time className="text-2xl font-semibold tracking-tight text-ink">{n === null ? "—" : formatElapsed(n - gunTimeMs)}</Time>
     </div>
   );
 }
