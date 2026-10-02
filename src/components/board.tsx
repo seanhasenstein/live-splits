@@ -38,8 +38,18 @@ const METERS_PER_MILE = 1609.344;
 /** Minutes-per-mile pace for a segment, as ms per mile. */
 const paceMsPerMile = (splitMs: number, segmentMeters: number) => (splitMs * METERS_PER_MILE) / segmentMeters;
 
-/** "+0:12" / "−0:04"; the sign reads as slower / faster than the previous segment. */
-const formatDelta = (ms: number) => `${ms < 0 ? "−" : "+"}${formatElapsed(Math.abs(ms)).replace(/\.\d$/, "")}`;
+/** "+0:12" / "−0:04": slower / faster than the previous segment. Green faster, amber slower; red stays for destructive things. */
+function DeltaText({ ms }: { ms: number }) {
+  const rounded = Math.round(ms / 1000) * 1000;
+  if (rounded === 0) return <span>±0:00</span>;
+  const faster = rounded < 0;
+  return (
+    <span className={`font-medium ${faster ? "text-brand-bright" : "text-gold-text"}`}>
+      {faster ? "−" : "+"}
+      {formatElapsed(Math.abs(rounded)).replace(/\.\d$/, "")}
+    </span>
+  );
+}
 
 export function Board({ meetId, meetName, session, initialRaceId, timeZone, races, athletes, canFix, canTap }: Props) {
   const [raceId, setRaceId] = useState(() => (races.some((r) => r.id === initialRaceId) ? initialRaceId! : (races[0]?.id ?? "")));
@@ -246,7 +256,12 @@ function RaceBoard({
                       {view === "splits" && split !== null && (
                         <Time className="block text-[11px] text-ink-3">
                           {formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}/mi
-                          {prevPace !== null && ` · ${formatDelta(paceMsPerMile(split, segMeters) - prevPace)}`}
+                          {prevPace !== null && (
+                            <>
+                              {" · "}
+                              <DeltaText ms={paceMsPerMile(split, segMeters) - prevPace} />
+                            </>
+                          )}
                         </Time>
                       )}
                     </>
