@@ -158,17 +158,23 @@ export function FinishedBadge() {
   );
 }
 
-/** Race state as a solid pill: gray not started, red (pulsing) in progress, green finished. */
+/** Race state as an outlined pill: gray not started, red (pulsing) in progress, green finished. */
 export function RaceStateBadge({ state }: { state: "not_started" | "in_progress" | "finished" }) {
-  if (state === "finished") return <FinishedBadge />;
+  if (state === "finished")
+    return (
+      <Badge tone="brand">
+        <Check className="size-3" strokeWidth={3} />
+        Finished
+      </Badge>
+    );
   if (state === "in_progress")
     return (
-      <Badge tone="danger-solid" pulse>
+      <Badge tone="danger" pulse>
         In progress
       </Badge>
     );
   return (
-    <Badge tone="neutral-solid" dot>
+    <Badge tone="neutral" dot>
       Not started
     </Badge>
   );
