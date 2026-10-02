@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pencil, Undo2, X } from "lucide-react";
+import { ArrowLeftRight, Check, Pencil, Undo2, X } from "lucide-react";
 import { ClockWarning } from "@/components/gun-panel";
 import { SessionMenu } from "@/components/session-menu";
-import { AppHeader, Badge, Button, Segmented, Time, Toast } from "@/components/ui";
+import { AppHeader, Badge, Button, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
@@ -78,26 +78,97 @@ export function TapScreen({ meetId, meetName, session, initial, timeZone, races,
       race={race}
       cpIndex={cpIndex}
       athletes={athletes}
-      picker={
-        <div className="space-y-1.5">
-          {races.length > 1 && (
-            <Segmented
-              value={race.id}
-              onChange={(id) => {
-                const r = races.find((x) => x.id === id)!;
-                setSel({ raceId: r.id, checkpointId: r.checkpoints[0]?.id ?? "" });
-              }}
-              options={races.map((r) => ({ value: r.id, label: r.name }))}
-            />
-          )}
-          <Segmented
-            value={race.checkpoints[cpIndex].id}
-            onChange={(id) => setSel({ raceId: race.id, checkpointId: id })}
-            options={race.checkpoints.map((c) => ({ value: c.id, label: c.label }))}
-          />
-        </div>
-      }
+      picker={<SwitchControl races={races} race={race} checkpointId={race.checkpoints[cpIndex].id} onSwitch={setSel} />}
     />
+  );
+}
+
+/**
+ * Where taps go. Changing it is deliberate: open the sheet, pick, confirm.
+ * A stray tap on a segmented control was too easy to make mid-race.
+ */
+function SwitchControl({
+  races,
+  race,
+  checkpointId,
+  onSwitch,
+}: {
+  races: RaceInfo[];
+  race: RaceInfo;
+  checkpointId: string;
+  onSwitch: (sel: { raceId: string; checkpointId: string }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pick, setPick] = useState({ raceId: race.id, checkpointId });
+  const pickedRace = races.find((r) => r.id === pick.raceId) ?? race;
+  const pickedCp = pickedRace.checkpoints.find((c) => c.id === pick.checkpointId) ?? pickedRace.checkpoints[0];
+  const changed = pick.raceId !== race.id || pick.checkpointId !== checkpointId;
+
+  return (
+    <>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => {
+          setPick({ raceId: race.id, checkpointId });
+          setOpen(true);
+        }}
+      >
+        <ArrowLeftRight className="size-3.5" />
+        Change
+      </Button>
+      {open && (
+        <Sheet title="Where are you recording?" subtitle="Taps go to the race and checkpoint you pick here." onClose={() => setOpen(false)}>
+          <div className="space-y-4">
+            {races.length > 1 && (
+              <div>
+                <SectionLabel className="mb-1.5">Race</SectionLabel>
+                <Segmented
+                  value={pick.raceId}
+                  onChange={(id) => {
+                    const r = races.find((x) => x.id === id)!;
+                    setPick({ raceId: r.id, checkpointId: r.checkpoints[0]?.id ?? "" });
+                  }}
+                  options={races.map((r) => ({ value: r.id, label: r.finished ? `${r.name} (finished)` : r.name }))}
+                />
+              </div>
+            )}
+            <div>
+              <SectionLabel className="mb-1.5">Checkpoint</SectionLabel>
+              <div className="grid gap-2">
+                {pickedRace.checkpoints.map((c) => {
+                  const active = c.id === pick.checkpointId;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setPick({ raceId: pickedRace.id, checkpointId: c.id })}
+                      className={`flex h-12 items-center justify-between rounded-lg border px-4 text-left text-base font-medium ${
+                        active ? "border-brand bg-brand-soft text-ink" : "border-line bg-surface text-ink hover:bg-surface-2"
+                      }`}
+                    >
+                      {c.label}
+                      {active && <Check className="size-4 text-brand-text" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <Button
+              size="lg"
+              disabled={!changed}
+              onClick={() => {
+                onSwitch(pick);
+                setOpen(false);
+              }}
+              className="w-full"
+            >
+              {changed ? `Record at ${pickedCp?.label ?? ""} · ${pickedRace.name}` : `Already at ${pickedCp?.label ?? ""} · ${pickedRace.name}`}
+            </Button>
+          </div>
+        </Sheet>
+      )}
+    </>
   );
 }
 
@@ -217,16 +288,21 @@ function RaceTapper({
 
   return (
     <main className="flex min-h-dvh flex-col bg-bg">
-      <AppHeader title={meetName} titleHref={`/meets/${meetId}`} subtitle={`${race.name} · ${checkpoint.label}`} right={<SessionMenu name={session.name} role={session.role} />} />
-      <div className="sticky top-14 z-10 border-b border-line bg-bg/95 px-3 pt-2 pb-2 backdrop-blur">
-        {picker}
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-3">
-            {race.finished ? <Badge tone="neutral">Finished</Badge> : <RaceClock gunTimeMs={gunTimeMs} now={clock.now} />}
-            <span className="tnum text-[13px] text-ink-2">
-              {cp ? [...cp.byAthlete.values()].filter((m) => !m.missed).length : 0} of {race.athleteIds.length} at {checkpoint.label}
-            </span>
-          </div>
+      <AppHeader
+        title={meetName}
+        titleHref={`/meets/${meetId}`}
+        subtitle="Record splits"
+        right={
+          <>
+            <LinkButton href={`/meets/${meetId}/board?race=${race.id}`} variant="secondary" size="sm">
+              Board
+            </LinkButton>
+            <SessionMenu name={session.name} role={session.role} />
+          </>
+        }
+      />
+      <div className="sticky top-14 z-10 border-b border-line bg-bg/95 px-3 py-2.5 backdrop-blur">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-1.5">
             <ClockWarning sync={clock.sync} error={clock.error} />
             {!online && (
@@ -235,6 +311,19 @@ function RaceTapper({
               </Badge>
             )}
             {unsent > 0 && <Badge tone="gold">{unsent} unsent</Badge>}
+          </div>
+          {picker}
+        </div>
+        <div className="mt-1 text-center">
+          <div className="text-2xl font-semibold tracking-tight text-ink">{checkpoint.label}</div>
+          <div className="mt-0.5 flex items-center justify-center gap-2 text-[13px] text-ink-2">
+            <span>{race.name}</span>
+            <span aria-hidden>·</span>
+            <span className="tnum">
+              {cp ? [...cp.byAthlete.values()].filter((m) => !m.missed).length : 0} of {race.athleteIds.length} recorded
+            </span>
+            <span aria-hidden>·</span>
+            {race.finished ? <Badge tone="neutral">Finished</Badge> : <RaceClock gunTimeMs={gunTimeMs} now={clock.now} />}
           </div>
         </div>
       </div>
@@ -327,9 +416,9 @@ function RaceTapper({
       )}
 
       <div className="fixed inset-x-0 bottom-0 z-10 flex gap-2 border-t border-line bg-bg/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
-        <Button variant="secondary" size="lg" onClick={undo} disabled={!lastAction} className="h-16 w-24">
-          <Undo2 className="size-5" />
-          Undo
+        <Button variant="secondary" size="lg" onClick={undo} disabled={!lastAction} className="h-16 w-20 flex-col gap-0.5 px-0">
+          <Undo2 className="size-6 shrink-0" />
+          <span className="text-xs">Undo</span>
         </Button>
         <button
           type="button"
@@ -359,5 +448,5 @@ function RaceClock({ gunTimeMs, now }: { gunTimeMs: number | null; now: () => nu
       </Badge>
     );
   if (n === null) return <span>—</span>;
-  return <Time className="text-xl font-semibold text-ink">{formatElapsed(n - gunTimeMs)}</Time>;
+  return <Time className="font-semibold text-ink">{formatElapsed(n - gunTimeMs)}</Time>;
 }

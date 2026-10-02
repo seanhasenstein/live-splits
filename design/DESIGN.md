@@ -83,3 +83,14 @@ Errors say what went wrong and what to do. Empty states invite the next action.
   and fixes only in an explicit Fix times mode.
 - Record and board screens have the full header (shield, meet name linking
   back, session menu).
+
+## Round 3 (Oct 2, 2026)
+
+- Record screen: the current checkpoint is the headline, centered, with race,
+  count and clock beneath. Switching race or checkpoint is deliberate: a
+  Change button opens a sheet and the switch needs a confirm tap.
+- Header carries a Board link; the meet name links back to the meet.
+- Undo is a stacked icon + label. Capture stays the ink button (red is kept
+  for destructive actions).
+- Sheets render through a portal (sticky bars with backdrop blur would
+  otherwise trap them).

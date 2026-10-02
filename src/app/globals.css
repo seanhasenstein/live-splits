@@ -23,7 +23,7 @@
   --gold-soft: #fff4c4; /* pending captures */
   --gold-text: #7a5d00;
   --gold-ink: #161715; /* text on gold */
-  --brand-bright: #2f9e4f; /* confirmations: toast icon, live dot */
+  --brand-bright: #22a447; /* confirmations: toast icon, live dot */
   --danger: #c0392b;
   --danger-soft: #fdecea;
   --shadow: 0 1px 2px rgb(20 23 21 / 0.06), 0 4px 16px rgb(20 23 21 / 0.06);
@@ -49,7 +49,7 @@
     --gold-soft: #3a3110;
     --gold-text: #f2cf4a;
     --gold-ink: #161715;
-    --brand-bright: #7fc48c;
+    --brand-bright: #2fb552;
     --danger: #e5584a;
     --danger-soft: #3a1c19;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 16px rgb(0 0 0 / 0.3);
@@ -74,7 +74,7 @@
   --gold-soft: #3a3110;
   --gold-text: #f2cf4a;
   --gold-ink: #161715;
-  --brand-bright: #7fc48c;
+  --brand-bright: #2fb552;
   --danger: #e5584a;
   --danger-soft: #3a1c19;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 16px rgb(0 0 0 / 0.3);

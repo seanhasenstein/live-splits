@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import { type ReactNode, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 /** Bottom sheet on phones, centered dialog on wide screens. */
 export function Sheet({ title, subtitle, onClose, children }: { title: ReactNode; subtitle?: ReactNode; onClose: () => void; children: ReactNode }) {
@@ -11,7 +12,9 @@ export function Sheet({ title, subtitle, onClose, children }: { title: ReactNode
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  return (
+  // Portal: a parent with backdrop-filter (the sticky bars) would otherwise trap position: fixed.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-ink/40 sm:items-center sm:p-6" onClick={onClose}>
       <div
         role="dialog"
@@ -30,6 +33,7 @@ export function Sheet({ title, subtitle, onClose, children }: { title: ReactNode
         </div>
         <div className="px-4 pb-4">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
