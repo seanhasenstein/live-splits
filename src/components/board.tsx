@@ -162,8 +162,8 @@ function RaceBoard({
         </div>
       </div>
 
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-        <div className="flex gap-6">
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex justify-center gap-8 sm:justify-start sm:gap-6">
           {counts.map((c) => (
             <Stat key={c.label} value={`${c.n}/${race.athleteIds.length}`} label={c.label} tone={c.n === race.athleteIds.length && c.n > 0 ? "brand" : "ink"} />
           ))}
