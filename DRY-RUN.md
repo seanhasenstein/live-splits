@@ -41,3 +41,16 @@
 - Whoever is at the start starts the race clock for each race; if missed,
   the gun can be typed from the clock time or set later from official results.
 - After each race, the live board is the review screen; fix there, then export.
+
+## After the meet (in order)
+
+1. **Athlete race status (DNS / DNR / DNF):** a status on each lineup entry,
+   set from the board's Fix sheet or the race edit page and logged as a tap
+   event (`dnf` after a given checkpoint). Counters become "accounted for"
+   with the DNF/DNS count beneath; the board moves them to the bottom with a
+   label; the CSV writes DNF/DNS in the Finish column. Results get
+   `status: dnf | dns | dnr`.
+2. **Results / mat import** (plan step 6): paste or upload the official
+   results, store the full field as race entries, match our athletes by
+   name/alias, and the app-vs-mat comparison report.
+3. Field-test fixes from tonight's notes.
