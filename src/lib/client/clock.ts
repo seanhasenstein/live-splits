@@ -22,11 +22,15 @@ let current: ClockSync | null = null;
 let inFlight: Promise<ClockSync> | null = null;
 const listeners = new Set<() => void>();
 
+const STALE_MS = 10 * 60 * 1000;
+
 function load(): ClockSync | null {
   if (current) return current;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) current = JSON.parse(raw) as ClockSync;
+    const saved = raw ? (JSON.parse(raw) as ClockSync) : null;
+    // A sync from an earlier day says nothing about this device's clock now.
+    if (saved && Date.now() - saved.syncedAt < STALE_MS) current = saved;
   } catch {
     // storage unavailable; stay in memory only
   }

@@ -71,7 +71,14 @@ export function RaceForm({ action, cancelHref, program, distances, roster, race 
     if (next) setCheckpoints((cps) => cps.map((c) => (c.kind === "finish" ? { ...c, value: next.value, unit: next.unit } : c)));
   };
 
-  const toggleLevel = (id: string) => setLevelIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+  const toggleLevel = (id: string) => {
+    const removing = levelIds.includes(id);
+    const next = removing ? levelIds.filter((x) => x !== id) : [...levelIds, id];
+    if (next.length === 0) return; // a race needs at least one level
+    setLevelIds(next);
+    // Athletes on a removed level move to the first remaining one.
+    if (removing) setLineup((m) => new Map([...m].map(([a, l]) => [a, l === id ? next[0] : l])));
+  };
   const updateCheckpoint = (i: number, patch: Partial<Checkpoint>) => setCheckpoints((cps) => cps.map((c, j) => (j === i ? { ...c, ...patch } : c)));
   const levelFor = (a: RosterEntry) => (levelIds.includes(a.defaultLevelId) ? a.defaultLevelId : levelIds[0]);
 

@@ -224,7 +224,7 @@ type LastAction = {
   tapId: string;
   label: string;
   /** Set when the action replaced an earlier time, so undo can put it back. */
-  restore?: { athleteId: string; timeMs: number; estimate: boolean };
+  restore?: { athleteId: string; timeMs: number; estimate: boolean; fromSlotId: string | null };
 };
 
 function RaceTapper({
@@ -248,7 +248,7 @@ function RaceTapper({
 }) {
   const clock = useClock();
   const checkpoint = race.checkpoints[cpIndex];
-  const { taps, gunTimeMs, send, online, signedOut, loaded, unsent } = useRaceTaps(race.id, race.gunTimeMs);
+  const { taps, gunTimeMs, send, online, signedOut, rejected, loaded, unsent } = useRaceTaps(race.id, race.gunTimeMs);
   const state = useMemo(
     () => replay({ checkpoints: race.checkpoints.map((c) => ({ ...c, distance: { value: 0, unit: "mi", meters: 0 }, kind: "split" })) }, taps),
     [race, taps],
@@ -316,7 +316,10 @@ function RaceTapper({
     const promise = slot
       ? send({ ...base, type: "assign", athleteId, targetTapId: slot.tapId, deviceTimeMs })
       : send({ ...base, type: "name_tap", athleteId, deviceTimeMs });
-    const restore = replacing && replacing.timeMs !== null ? { athleteId, timeMs: replacing.timeMs, estimate: replacing.estimate } : undefined;
+    const restore =
+      replacing && replacing.timeMs !== null
+        ? { athleteId, timeMs: replacing.timeMs, estimate: replacing.estimate, fromSlotId: replacing.fromSlotId }
+        : undefined;
     void promise.then((tapId) => setLastAction({ tapId, label: athletes[athleteId] ?? "tap", restore }));
     flash(athleteId);
     showToast(`${replacing ? "Replaced" : "Recorded"} ${athletes[athleteId]} ${fmt(slot ? slot.timeMs : deviceTimeMs + offset)}`);
@@ -337,9 +340,11 @@ function RaceTapper({
     const t = eventTimeMs(e);
     void send({ ...base, type: "void", targetTapId: lastAction.tapId, deviceTimeMs: t });
     if (lastAction.restore) {
-      // The replaced time was voided; record it again as a manual time so nothing is lost.
-      const { athleteId, timeMs, estimate } = lastAction.restore;
-      void send({ ...base, type: "name_tap", athleteId, timeMs, estimate, deviceTimeMs: t + 1 });
+      // The replaced time was voided; give it back. A time that came from a capture is
+      // re-assigned from that capture (which the replace had released to pending).
+      const { athleteId, timeMs, estimate, fromSlotId } = lastAction.restore;
+      if (fromSlotId) void send({ ...base, type: "assign", athleteId, targetTapId: fromSlotId, deviceTimeMs: t + 1 });
+      else void send({ ...base, type: "name_tap", athleteId, timeMs, estimate, deviceTimeMs: t + 1 });
       showToast(`Undid replace · ${athletes[athleteId]} back to ${fmt(timeMs)}`);
     } else {
       showToast(`Undid ${lastAction.label}`);
@@ -386,6 +391,11 @@ function RaceTapper({
             )
           )}
           {unsent > 0 && <Badge tone="gold">{unsent} unsent</Badge>}
+          {rejected > 0 && (
+            <Badge tone="danger" dot>
+              {rejected} rejected
+            </Badge>
+          )}
         </div>
         <div className="flex items-center justify-between gap-3">
           <div className="text-2xl font-semibold tracking-tight text-ink">{checkpoint.label}</div>

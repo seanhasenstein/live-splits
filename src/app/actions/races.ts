@@ -73,9 +73,19 @@ export async function saveRaceAction(
     lineup: payload.lineup,
   };
 
+  if (new Set(checkpoints.map((c) => c.id)).size !== checkpoints.length) return { error: "Checkpoint ids must be unique" };
+
   if (raceId) {
     const race = await getRace(raceId);
     if (!race || race.meetId !== meet._id) return { error: "Race not found" };
+    // Recorded times live under checkpoint ids; dropping one would hide them.
+    const used = (await collection(db, "taps").distinct("checkpointId", { raceId: race._id })).filter((id): id is string => !!id);
+    const kept = new Set(checkpoints.map((c) => c.id));
+    const missing = used.filter((id) => !kept.has(id));
+    if (missing.length > 0) {
+      const labels = missing.map((id) => race.checkpoints.find((c) => c.id === id)?.label ?? id);
+      return { error: `${labels.join(", ")} already has recorded times and can't be removed.` };
+    }
     const next = COLLECTIONS.races.schema.parse({ ...race, finishedAt: race.finishedAt ?? null, ...fields, updatedAt: now, updatedBy: actor });
     await races.replaceOne({ _id: race._id }, next);
   } else {

@@ -29,6 +29,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
   const [gunTimeMs, setGunTimeMs] = useState(initialGunTimeMs);
   const [online, setOnline] = useState(true);
   const [signedOut, setSignedOut] = useState(false);
+  const [rejected, setRejected] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const since = useRef(0);
   const flushing = useRef(false);
@@ -83,11 +84,11 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
       for (const t of pending) byRace.set(t.raceId, [...(byRace.get(t.raceId) ?? []), t]);
       for (const [rid, taps] of byRace) {
         const batch = taps.slice(0, 100);
-        if (taps.length > batch.length) flushAgain.current = true;
         const res = await postTaps(batch);
         if (res.status === 401 || res.status === 403) {
           // Session gone: keep the taps, tell the person to rejoin.
           setSignedOut(true);
+          flushAgain.current = false;
           return;
         }
         if (res.status === 400 || res.status === 404) {
@@ -100,6 +101,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
             } else if (one.status === 400 || one.status === 404) {
               const body = (await one.json().catch(() => ({}))) as { error?: string };
               console.error("tap rejected", t.clientTapId, body.error);
+              setRejected((n) => n + 1);
               await outboxRemove([t.clientTapId]);
             } else {
               throw new Error(`HTTP ${one.status}`);
@@ -131,12 +133,15 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
             return next;
           });
         }
+        // More than one batch queued for this race: go again, but only now that this one landed.
+        if (taps.length > batch.length) flushAgain.current = true;
       }
       setSignedOut(false);
       failures.current = 0;
       setOnline(true);
     } catch {
       setOnline(false);
+      flushAgain.current = false; // the retry timer owns the next attempt
       const delay = RETRY_MS[Math.min(failures.current++, RETRY_MS.length - 1)];
       retryTimer.current = setTimeout(() => void flushRef.current(), delay);
     } finally {
@@ -197,5 +202,5 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
 
   const unsent = useMemo(() => [...outbox.values()].filter((t) => t.raceId === raceId).length, [outbox, raceId]);
 
-  return { taps, gunTimeMs, send, online, signedOut, loaded, unsent, refresh: poll };
+  return { taps, gunTimeMs, send, online, signedOut, rejected, loaded, unsent, refresh: poll };
 }

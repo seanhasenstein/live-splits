@@ -118,3 +118,18 @@ test("replace then undo puts the original time back", () => {
   ];
   expect(m1(taps).byAthlete.get("A")!.timeMs).toBe(5000);
 });
+
+test("replace a captured time, then undo: the capture goes back to the athlete, not to pending", () => {
+  const tap = log();
+  const taps = [
+    tap({ type: "capture", serverTimeMs: 1000 }), // t1000
+    tap({ type: "assign", athleteId: "X", targetTapId: "t1000", serverTimeMs: 2000 }), // t1001
+    tap({ type: "void", targetTapId: "t1001", serverTimeMs: 3000 }), // replace: void the assign…
+    tap({ type: "name_tap", athleteId: "X", serverTimeMs: 3001 }), // …record a new time (t1003)
+    tap({ type: "void", targetTapId: "t1003", serverTimeMs: 4000 }), // undo: void the new time…
+    tap({ type: "assign", athleteId: "X", targetTapId: "t1000", serverTimeMs: 4001 }), // …re-assign the capture
+  ];
+  const cp = m1(taps);
+  expect(cp.byAthlete.get("X")!.timeMs).toBe(1000);
+  expect(cp.pending).toHaveLength(0);
+});

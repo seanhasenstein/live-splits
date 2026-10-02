@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Share } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useState, useSyncExternalStore, useTransition } from "react";
 import { type JoinCodes, regenerateCodesAction } from "@/app/actions/meets";
 import { Alert, Button } from "@/components/ui";
 
@@ -14,7 +14,11 @@ export function CodesPanel({ meetId, initialCodes, canRegenerate }: { meetId: st
   const [error, setError] = useState<string>();
   const [pending, start] = useTransition();
   const [confirming, setConfirming] = useState(false);
-  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  const origin = useSyncExternalStore(
+    () => () => {},
+    () => window.location.origin,
+    () => "",
+  );
 
   const regenerate = () => {
     setConfirming(false);

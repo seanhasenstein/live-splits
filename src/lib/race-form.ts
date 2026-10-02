@@ -19,6 +19,6 @@ export const RacePayload = z.object({
       }),
     )
     .min(1, "Add at least one checkpoint"),
-  lineup: z.array(z.object({ athleteId: Id, levelId: z.string().min(1) })),
+  lineup: z.array(z.object({ athleteId: Id, levelId: z.string().min(1) })).min(1, "Pick at least one athlete"),
 });
 export type RacePayload = z.infer<typeof RacePayload>;

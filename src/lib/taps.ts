@@ -49,11 +49,7 @@ export async function recordTaps(
   }
   for (const t of inputs) {
     if (t.raceId !== race._id) throw new TapError("All taps must belong to the race", 400);
-    // A live START on a race that already has a gun would silently re-base every time.
-    // Typed overrides (timeMs set) are deliberate and still allowed.
-    if (t.type === "gun" && t.timeMs === null && race.gunTimeMs !== null) {
-      throw new TapError("This race was already started. Use Adjust to change the gun time.", 409);
-    }
+
     if (t.checkpointId && !race.checkpoints.some((c) => c.id === t.checkpointId)) {
       throw new TapError(`Unknown checkpoint ${t.checkpointId}`, 400);
     }
@@ -84,6 +80,11 @@ export async function recordTaps(
   // Stamp createdAt as late as possible: pollers use it as a cursor.
   const now = new Date();
   const fresh = taps.filter((t) => !existing.has(t.clientTapId)).map((t) => ({ ...t, createdAt: now }));
+  // A live START on a race that already has a gun would silently re-base every time.
+  // Typed overrides (timeMs set) are deliberate; a retry of the START we already stored is fine.
+  if (race.gunTimeMs !== null && fresh.some((t) => t.type === "gun" && t.timeMs === null)) {
+    throw new TapError("This race was already started. Use Adjust to change the gun time.", 409);
+  }
   if (fresh.length > 0) {
     try {
       await tapsCol.insertMany(fresh, { ordered: false });
