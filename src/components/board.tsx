@@ -93,7 +93,7 @@ function RaceBoard({
   );
   const [fix, setFix] = useState<{ athleteId: string; cpIndex: number } | null>(null);
   const [editing, setEditing] = useState(false);
-  const [view, setView] = useState<"cumulative" | "splits">("cumulative");
+  const [view, setView] = useState<"cumulative" | "splits" | "both">("cumulative");
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = useCallback((text: string) => {
@@ -174,8 +174,9 @@ function RaceBoard({
           options={[
             { value: "cumulative", label: "Cumulative" },
             { value: "splits", label: "Splits" },
+            { value: "both", label: "Both" },
           ]}
-          className="w-56"
+          className="w-72"
         />
       </div>
 
@@ -193,6 +194,7 @@ function RaceBoard({
               {race.checkpoints.map((c) => (
                 <th key={c.id} className="px-2 py-2 text-right font-semibold last:px-3 sm:last:px-4">
                   {c.label}
+                  {view === "both" && <span className="block text-[10px] font-normal tracking-normal normal-case text-ink-3">cumulative · split</span>}
                 </th>
               ))}
             </tr>
@@ -214,10 +216,13 @@ function RaceBoard({
                   const last = i === row.marks.length - 1;
                   const shown = m ? (m.missed ? "missed" : view === "splits" && i > 0 ? (split === null ? "—" : formatElapsed(split)) : fmt(m.timeMs)) : "—";
                   const cell = (
-                    <Time className={`block ${m?.missed ? "italic" : last && m && view === "cumulative" ? "font-semibold" : ""}`}>
-                      {shown}
-                      {m && !m.missed && shown !== "—" && (m.estimate ? "~" : m.edited ? "*" : "")}
-                    </Time>
+                    <>
+                      <Time className={`block ${m?.missed ? "italic" : last && m && view !== "splits" ? "font-semibold" : ""}`}>
+                        {shown}
+                        {m && !m.missed && shown !== "—" && (m.estimate ? "~" : m.edited ? "*" : "")}
+                      </Time>
+                      {view === "both" && i > 0 && split !== null && <Time className="block text-[11px] text-ink-3">{formatElapsed(split)}</Time>}
+                    </>
                   );
                   return (
                     <td key={race.checkpoints[i].id} className="px-1 py-1 text-right last:pr-2 sm:last:pr-3">
@@ -258,7 +263,9 @@ function RaceBoard({
       )}
 
       <p className="mt-3 text-xs text-ink-3">
-        * edited &nbsp; ~ estimate &nbsp; {view === "splits" ? "Splits are the time since the previous checkpoint." : "Cumulative time from the gun."} Updates every few seconds.
+        * edited &nbsp; ~ estimate &nbsp;{" "}
+        {view === "splits" ? "Splits are the time since the previous checkpoint." : view === "both" ? "Cumulative time from the gun, with the split beneath." : "Cumulative time from the gun."}{" "}
+        Updates every few seconds.
       </p>
 
       {toast && (
