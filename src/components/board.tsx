@@ -184,11 +184,11 @@ function RaceBoard({
         <div className="flex divide-x divide-line rounded-lg border border-line bg-surface shadow-card">
           {counts.map((c) => {
             const total = race.athleteIds.length;
-            const complete = c.n === total && total > 0;
-            const short = race.finished && c.n < total;
+            const complete = loaded && c.n === total && total > 0;
+            const short = loaded && race.finished && c.n < total;
             return (
               <div key={c.label} className="flex-1 px-4 py-2.5 text-center sm:flex-none sm:px-5 sm:text-left">
-                <Stat value={`${c.n}/${total}`} label={short ? `${c.label} · ${total - c.n} missing` : c.label} tone={complete ? "brand" : short ? "gold" : "ink"} />
+                <Stat value={loaded ? `${c.n}/${total}` : "—"} label={short ? `${c.label} · ${total - c.n} missing` : c.label} tone={complete ? "brand" : short ? "gold" : "ink"} />
               </div>
             );
           })}
@@ -595,7 +595,7 @@ function RaceStatus({ race, gunTimeMs, now }: { race: RaceInfo; gunTimeMs: numbe
 
   if (race.finished) {
     return (
-      <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg bg-brand px-3 py-2 text-brand-ink">
+      <div className="flex min-w-0 flex-1 items-center justify-center gap-2.5 rounded-lg bg-brand px-3 py-2 text-brand-ink sm:justify-start">
         <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-ink/20">
           <Check className="size-3.5" strokeWidth={3} />
         </span>
