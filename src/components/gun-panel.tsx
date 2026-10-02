@@ -199,6 +199,7 @@ function AdjustSheet({
 }) {
   const [typed, setTyped] = useState("");
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [confirmFinish, setConfirmFinish] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -255,9 +256,18 @@ function AdjustSheet({
                 <Button variant="secondary" onClick={() => setFinished(false)} disabled={pending}>
                   Reopen race
                 </Button>
+              ) : confirmFinish ? (
+                <div className="flex gap-2">
+                  <Button onClick={() => setFinished(true)} disabled={pending}>
+                    Yes, mark finished
+                  </Button>
+                  <Button variant="secondary" onClick={() => setConfirmFinish(false)}>
+                    Not yet
+                  </Button>
+                </div>
               ) : (
-                <Button onClick={() => setFinished(true)} disabled={pending}>
-                  Mark finished
+                <Button variant="secondary" onClick={() => setConfirmFinish(true)} disabled={pending}>
+                  Mark finished…
                 </Button>
               )
             }
