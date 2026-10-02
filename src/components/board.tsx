@@ -4,7 +4,7 @@ import Link from "next/link";
 import { type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, Flag, Pencil } from "lucide-react";
 import { SessionMenu } from "@/components/session-menu";
-import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Sheet, Stat, Time, Toast } from "@/components/ui";
+import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, LiveDot, SectionLabel, Segmented, Sheet, Stat, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type CheckpointState, type Mark, replay, type Slot } from "@/lib/replay";
@@ -616,10 +616,7 @@ function RaceStatus({ race, gunTimeMs, now }: { race: RaceInfo; gunTimeMs: numbe
   const n = now();
   return (
     <div className="flex min-w-0 flex-1 items-center justify-center gap-3 rounded-lg border border-danger/40 bg-danger-soft px-3 py-1.5 text-danger sm:justify-start">
-      <span className="relative flex size-2.5 shrink-0">
-        <span className="absolute inset-0 animate-ping rounded-full bg-danger opacity-60" />
-        <span className="relative inline-flex size-2.5 rounded-full bg-danger" />
-      </span>
+      <LiveDot className="bg-danger" />
       <span className="text-sm font-semibold">In progress</span>
       <Time className="text-2xl font-semibold tracking-tight text-ink">{n === null ? "—" : formatElapsed(n - gunTimeMs)}</Time>
     </div>

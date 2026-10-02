@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ComponentProps } from "react";
 
-export type ButtonVariant = "primary" | "secondary" | "subtle" | "ghost" | "danger" | "gold" | "ink";
+export type ButtonVariant = "primary" | "secondary" | "subtle" | "ghost" | "danger" | "danger-solid" | "gold" | "ink";
 export type ButtonSize = "sm" | "md" | "lg";
 
 const base =
@@ -13,6 +13,7 @@ const variants: Record<ButtonVariant, string> = {
   subtle: "border border-ink/10 bg-transparent text-ink-2 hover:border-ink/20 hover:text-ink active:bg-ink/5",
   ghost: "text-ink-2 hover:bg-surface-2 hover:text-ink active:bg-line",
   danger: "border border-danger/40 bg-surface text-danger hover:bg-danger-soft active:bg-danger-soft",
+  "danger-solid": "bg-danger text-white hover:bg-danger/90 active:bg-danger/80",
   gold: "bg-gold text-gold-ink hover:bg-gold/90 active:bg-gold/80",
   ink: "bg-ink text-bg hover:bg-ink/90 active:bg-ink/80",
 };

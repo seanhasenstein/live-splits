@@ -1,12 +1,14 @@
 "use client";
 
-import { Flag, MoreHorizontal } from "lucide-react";
+import { CircleCheck, Flag, MoreHorizontal, Timer } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { clearGunTimeAction, setGunTimeAction, setRaceFinishedAction } from "@/app/actions/races";
 import { Alert, Badge, Button, Field, Input, Sheet, Time, FinishedBadge } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { formatClock, formatElapsed } from "@/lib/time";
+
+export type RaceState = "not_started" | "in_progress" | "finished";
 
 type Props = {
   raceId: string;
@@ -15,8 +17,8 @@ type Props = {
   firedBy: string | null;
   timeZone: string;
   canGun: boolean;
-  /** Record splits / Live board, rendered inside the card. */
-  actions?: React.ReactNode;
+  /** Record splits / Live board, rendered inside the card; gets the race state so it can match. */
+  actions?: (state: RaceState) => React.ReactNode;
 };
 
 /**
@@ -103,10 +105,10 @@ export function GunPanel({ raceId, gunTimeMs: initialGun, finishedAt: initialFin
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Flag className={`size-4 ${running ? "text-danger" : finished ? "text-brand-text" : "text-ink-2"}`} />
+          {running ? <Timer className="size-4 text-danger" /> : finished ? <CircleCheck className="size-4 text-brand-text" /> : <Flag className="size-4 text-ink-2" />}
           <span className="text-[13px] font-medium text-ink">Race clock</span>
           {running ? (
-            <Badge tone="danger" dot>
+            <Badge tone="danger" pulse>
               In progress
             </Badge>
           ) : finished ? (
@@ -169,7 +171,7 @@ export function GunPanel({ raceId, gunTimeMs: initialGun, finishedAt: initialFin
         </div>
       )}
 
-      {actions && <div className="mt-3">{actions}</div>}
+      {actions && <div className="mt-3">{actions(running ? "in_progress" : finished ? "finished" : "not_started")}</div>}
 
       {adjusting && (
         <AdjustSheet

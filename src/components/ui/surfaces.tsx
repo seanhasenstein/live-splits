@@ -68,7 +68,28 @@ export function ListRow({ icon, title, description, meta, href, onClick, chevron
   return <div className={cls}>{inner}</div>;
 }
 
-export function Badge({ tone = "neutral", dot, children }: { tone?: "neutral" | "brand" | "brand-solid" | "gold" | "danger" | "ink"; dot?: boolean; children: ReactNode }) {
+/** A small dot that pings, for anything live. */
+export function LiveDot({ className = "bg-danger" }: { className?: string }) {
+  return (
+    <span className="relative flex size-2 shrink-0">
+      <span className={`absolute inset-0 animate-ping rounded-full opacity-60 ${className}`} />
+      <span className={`relative inline-flex size-2 rounded-full ${className}`} />
+    </span>
+  );
+}
+
+export function Badge({
+  tone = "neutral",
+  dot,
+  pulse,
+  children,
+}: {
+  tone?: "neutral" | "brand" | "brand-solid" | "gold" | "danger" | "ink";
+  dot?: boolean;
+  /** The dot pings; implies dot. */
+  pulse?: boolean;
+  children: ReactNode;
+}) {
   const tones = {
     neutral: "bg-surface-2 text-ink border-line-strong",
     ink: "bg-ink text-bg border-ink",
@@ -80,7 +101,7 @@ export function Badge({ tone = "neutral", dot, children }: { tone?: "neutral" | 
   const dots = { neutral: "bg-ink-3", ink: "bg-bg", brand: "bg-brand-bright", "brand-solid": "bg-brand-ink", gold: "bg-gold", danger: "bg-danger" };
   return (
     <span className={`inline-flex h-6 items-center gap-1.5 rounded-full border px-2 text-xs font-medium ${tones[tone]}`}>
-      {dot && <span className={`size-1.5 rounded-full ${dots[tone]}`} />}
+      {pulse ? <LiveDot className={dots[tone]} /> : dot && <span className={`size-1.5 rounded-full ${dots[tone]}`} />}
       {children}
     </span>
   );

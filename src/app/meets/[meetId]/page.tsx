@@ -12,6 +12,7 @@ import {
   CardHeader,
   EmptyState,
   LinkButton,
+  LiveDot,
   Page,
   PageTitle,
 } from "@/components/ui";
@@ -111,18 +112,23 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
                   firedBy={firedBy[race._id] ?? null}
                   timeZone={meet.timeZone}
                   canGun={gun}
-                  actions={
+                  actions={(state) => (
                     <div className="grid grid-cols-2 gap-2">
                       {can(session, "tap", meet) && (
-                        <LinkButton href={`/meets/${meet._id}/record?race=${race._id}`} size="lg">
+                        <LinkButton
+                          href={`/meets/${meet._id}/record?race=${race._id}`}
+                          size="lg"
+                          variant={state === "in_progress" ? "danger-solid" : state === "finished" ? "primary" : "ink"}
+                        >
+                          {state === "in_progress" && <LiveDot className="bg-white" />}
                           Record splits
                         </LinkButton>
                       )}
-                      <LinkButton href={`/meets/${meet._id}/board?race=${race._id}`} size="lg" variant="secondary" className={can(session, "tap", meet) ? "" : "col-span-2"}>
+                      <LinkButton href={`/meets/${meet._id}/board?race=${race._id}`} size="lg" variant="subtle" className={can(session, "tap", meet) ? "" : "col-span-2"}>
                         Live board
                       </LinkButton>
                     </div>
-                  }
+                  )}
                 />
               </CardBody>
             ))
