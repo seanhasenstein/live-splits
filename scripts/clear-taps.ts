@@ -22,7 +22,7 @@ async function main() {
     return;
   }
   await collection(db, "taps").deleteMany({ raceId: { $in: raceIds } });
-  await collection(db, "races").updateMany({ _id: { $in: raceIds } }, { $set: { gunTimeMs: null, gunTimeSource: null } });
+  await collection(db, "races").updateMany({ _id: { $in: raceIds } }, { $set: { gunTimeMs: null, gunTimeSource: null, finishedAt: null } });
   console.log("Deleted taps and cleared gun times.");
 }
 
