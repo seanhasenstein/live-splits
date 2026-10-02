@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Download, Pencil, Plus, Users } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { CodesPanel } from "@/components/codes-panel";
-import { GunPanel } from "@/components/gun-panel";
+import { GunPanel, type RaceState } from "@/components/gun-panel";
 import { SessionMenu } from "@/components/session-menu";
 import {
   AnchorButton,
@@ -112,23 +112,26 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
                   firedBy={firedBy[race._id] ?? null}
                   timeZone={meet.timeZone}
                   canGun={gun}
-                  actions={(state) => (
-                    <div className="grid grid-cols-2 gap-2">
-                      {can(session, "tap", meet) && (
-                        <LinkButton
-                          href={`/meets/${meet._id}/record?race=${race._id}`}
-                          size="lg"
-                          variant={state === "in_progress" ? "danger-solid" : state === "finished" ? "primary" : "ink"}
-                        >
-                          {state === "in_progress" && <LiveDot className="bg-white" />}
-                          Record splits
+                  actions={Object.fromEntries(
+                    (["not_started", "in_progress", "finished"] as const).map((state) => [
+                      state,
+                      <div key={state} className="grid grid-cols-2 gap-2">
+                        {can(session, "tap", meet) && (
+                          <LinkButton
+                            href={`/meets/${meet._id}/record?race=${race._id}`}
+                            size="lg"
+                            variant={state === "in_progress" ? "danger-solid" : state === "finished" ? "primary" : "ink"}
+                          >
+                            {state === "in_progress" && <LiveDot className="bg-white" />}
+                            Record splits
+                          </LinkButton>
+                        )}
+                        <LinkButton href={`/meets/${meet._id}/board?race=${race._id}`} size="lg" variant="subtle" className={can(session, "tap", meet) ? "" : "col-span-2"}>
+                          Live board
                         </LinkButton>
-                      )}
-                      <LinkButton href={`/meets/${meet._id}/board?race=${race._id}`} size="lg" variant="subtle" className={can(session, "tap", meet) ? "" : "col-span-2"}>
-                        Live board
-                      </LinkButton>
-                    </div>
-                  )}
+                      </div>,
+                    ]),
+                  ) as Record<RaceState, React.ReactNode>}
                 />
               </CardBody>
             ))

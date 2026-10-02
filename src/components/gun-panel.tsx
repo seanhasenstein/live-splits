@@ -17,8 +17,8 @@ type Props = {
   firedBy: string | null;
   timeZone: string;
   canGun: boolean;
-  /** Record splits / Live board, rendered inside the card; gets the race state so it can match. */
-  actions?: (state: RaceState) => React.ReactNode;
+  /** Record splits / Live board, rendered inside the card; one version per race state so it can match. */
+  actions?: Record<RaceState, React.ReactNode>;
 };
 
 /**
@@ -171,7 +171,7 @@ export function GunPanel({ raceId, gunTimeMs: initialGun, finishedAt: initialFin
         </div>
       )}
 
-      {actions && <div className="mt-3">{actions(running ? "in_progress" : finished ? "finished" : "not_started")}</div>}
+      {actions && <div className="mt-3">{actions[running ? "in_progress" : finished ? "finished" : "not_started"]}</div>}
 
       {adjusting && (
         <AdjustSheet
