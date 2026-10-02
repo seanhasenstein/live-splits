@@ -181,9 +181,11 @@ function RaceBoard({
       </div>
 
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex justify-center gap-8 sm:justify-start sm:gap-6">
+        <div className="flex divide-x divide-line rounded-lg border border-line bg-surface shadow-card">
           {counts.map((c) => (
-            <Stat key={c.label} value={`${c.n}/${race.athleteIds.length}`} label={c.label} tone={c.n === race.athleteIds.length && c.n > 0 ? "brand" : "ink"} />
+            <div key={c.label} className="flex-1 px-4 py-2.5 text-center sm:flex-none sm:px-5 sm:text-left">
+              <Stat value={`${c.n}/${race.athleteIds.length}`} label={c.label} tone={c.n === race.athleteIds.length && c.n > 0 ? "brand" : "ink"} />
+            </div>
           ))}
         </div>
         <Segmented
