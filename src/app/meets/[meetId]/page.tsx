@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Download, Pencil, Plus, Users } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { CodesPanel } from "@/components/codes-panel";
-import { GunPanel, type RaceState } from "@/components/gun-panel";
+import { RaceCard, type RaceState } from "@/components/race-card";
 import { SessionMenu } from "@/components/session-menu";
 import {
   AnchorButton,
@@ -76,37 +76,30 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
               />
             </div>
           ) : (
-            races.map((race) => (
-              <CardBody key={race._id} className="space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-base font-semibold text-ink">{race.name}</span>
-                      {race.scheduledStart && <span className="tnum text-sm text-ink-2">{formatTimeOfDay(race.scheduledStart)}</span>}
-                    </div>
-                    <div className="mt-0.5 text-[13px] text-ink-2">
-                      {label(program?.settings.raceCategories, race.raceCategoryId)} · {race.levelIds.map((l) => label(program?.settings.levels, l)).join(" + ")} ·{" "}
-                      {distances.find((d) => d._id === race.distanceId)?.label ?? race.distanceId} · {race.lineup.length} athletes ·{" "}
-                      {race.checkpoints.map((c) => c.label).join(", ") || "no checkpoints"}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 gap-1">
-                    {can(session, "export", meet) && (
-                      <AnchorButton href={`/api/meets/${meet._id}/export?race=${race._id}`} variant="ghost" size="sm" title="Download CSV">
-                        <Download className="size-4" />
-                        CSV
-                      </AnchorButton>
-                    )}
-                    {setup && (
-                      <LinkButton href={`/meets/${meet._id}/races/${race._id}`} variant="ghost" size="sm" title="Edit race">
-                        <Pencil className="size-4" />
-                        Edit
-                      </LinkButton>
-                    )}
-                  </div>
-                </div>
-                <GunPanel
+            <div className="space-y-3 border-t border-line p-3">
+              {races.map((race) => (
+                <RaceCard
+                  key={race._id}
                   raceId={race._id}
+                  name={race.name}
+                  startLabel={race.scheduledStart ? formatTimeOfDay(race.scheduledStart) : null}
+                  details={`${label(program?.settings.raceCategories, race.raceCategoryId)} · ${race.levelIds.map((l) => label(program?.settings.levels, l)).join(" + ")} · ${
+                    distances.find((d) => d._id === race.distanceId)?.label ?? race.distanceId
+                  } · ${race.lineup.length} athletes · ${race.checkpoints.map((c) => c.label).join(", ") || "no checkpoints"}`}
+                  headerActions={
+                    <>
+                      {can(session, "export", meet) && (
+                        <AnchorButton href={`/api/meets/${meet._id}/export?race=${race._id}`} variant="subtle" size="sm" title="Download CSV" aria-label="Download CSV">
+                          <Download className="size-4" />
+                        </AnchorButton>
+                      )}
+                      {setup && (
+                        <LinkButton href={`/meets/${meet._id}/races/${race._id}`} variant="subtle" size="sm" title="Edit race" aria-label="Edit race">
+                          <Pencil className="size-4" />
+                        </LinkButton>
+                      )}
+                    </>
+                  }
                   gunTimeMs={race.gunTimeMs}
                   finishedAt={race.finishedAt?.toISOString() ?? null}
                   firedBy={firedBy[race._id] ?? null}
@@ -133,8 +126,8 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
                     ]),
                   ) as Record<RaceState, React.ReactNode>}
                 />
-              </CardBody>
-            ))
+              ))}
+            </div>
           )}
         </Card>
 

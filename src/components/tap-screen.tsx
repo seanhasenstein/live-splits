@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeftRight, Check, Pencil, Undo2, X } from "lucide-react";
-import { ClockWarning } from "@/components/gun-panel";
+import { ClockWarning } from "@/components/race-card";
 import { SessionMenu } from "@/components/session-menu";
 import { AppHeader, Badge, Button, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast, FinishedBadge } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";

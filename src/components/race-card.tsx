@@ -12,6 +12,13 @@ export type RaceState = "not_started" | "in_progress" | "finished";
 
 type Props = {
   raceId: string;
+  name: string;
+  /** "7:10 PM" or null. */
+  startLabel: string | null;
+  /** "Girls · Varsity + JV · 5K · 10 athletes · Mile 1, Mile 2, Finish" */
+  details: string;
+  /** CSV / Edit, shown on the title row for coaches. */
+  headerActions?: React.ReactNode;
   gunTimeMs: number | null;
   finishedAt: string | null;
   firedBy: string | null;
@@ -22,11 +29,11 @@ type Props = {
 };
 
 /**
- * The race clock on the meet page. Three states: not started (one action:
- * Start race…), running (big elapsed time; changes live behind "Adjust"),
+ * One race on the meet page, tinted by its state: not started (one action:
+ * Start race…), in progress (big elapsed time; changes live behind "Adjust"),
  * finished (frozen). Nothing destructive is a single tap.
  */
-export function GunPanel({ raceId, gunTimeMs: initialGun, finishedAt: initialFinished, firedBy, timeZone, canGun, actions }: Props) {
+export function RaceCard({ raceId, name, startLabel, details, headerActions, gunTimeMs: initialGun, finishedAt: initialFinished, firedBy, timeZone, canGun, actions }: Props) {
   const router = useRouter();
   const clock = useClock();
   const [gunTimeMs, setGunTimeMs] = useState(initialGun);
@@ -99,37 +106,44 @@ export function GunPanel({ raceId, gunTimeMs: initialGun, finishedAt: initialFin
 
   return (
     <div
-      className={`rounded-lg border p-3 ${
-        running ? "border-danger/40 bg-danger-soft/70" : finished ? "border-brand/40 bg-brand-soft/70" : "border-line bg-surface-2/60"
+      className={`rounded-lg border p-4 ${
+        running ? "border-danger/40 bg-danger-soft/70" : finished ? "border-brand/40 bg-brand-soft/70" : "border-line bg-surface"
       }`}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {running ? <Timer className="size-4 text-danger" /> : finished ? <CircleCheck className="size-4 text-brand-text" /> : <Flag className="size-4 text-ink-2" />}
-          <span className="text-[13px] font-medium text-ink">Race clock</span>
-          {running ? (
-            <Badge tone="danger" pulse>
-              In progress
-            </Badge>
-          ) : finished ? (
-            <FinishedBadge />
-          ) : (
-            <Badge tone="neutral" dot>
-              Not started
-            </Badge>
-          )}
-          <ClockWarning sync={clock.sync} error={clock.error} />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            {running ? <Timer className="size-4 text-danger" /> : finished ? <CircleCheck className="size-4 text-brand-text" /> : <Flag className="size-4 text-ink-2" />}
+            <span className="text-base font-semibold text-ink">{name}</span>
+            {startLabel && <Time className="text-sm text-ink-2">{startLabel}</Time>}
+            {running ? (
+              <Badge tone="danger" pulse>
+                In progress
+              </Badge>
+            ) : finished ? (
+              <FinishedBadge />
+            ) : (
+              <Badge tone="neutral" dot>
+                Not started
+              </Badge>
+            )}
+            <ClockWarning sync={clock.sync} error={clock.error} />
+          </div>
+          <div className="mt-0.5 text-[13px] text-ink-2">{details}</div>
         </div>
-        {canGun && !armed && (
-          <Button variant="subtle" size="sm" onClick={() => setAdjusting(true)} aria-label={gunTimeMs !== null ? "Adjust the race clock" : "Set the gun time by hand"}>
-            <MoreHorizontal className="size-4" />
-            {gunTimeMs !== null && "Adjust"}
-          </Button>
-        )}
+        <div className="flex shrink-0 items-center gap-1">
+          {headerActions}
+          {canGun && !armed && (
+            <Button variant="subtle" size="sm" onClick={() => setAdjusting(true)} aria-label={gunTimeMs !== null ? "Adjust the race clock" : "Set the gun time by hand"}>
+              <MoreHorizontal className="size-4" />
+              {gunTimeMs !== null && "Adjust"}
+            </Button>
+          )}
+        </div>
       </div>
 
       {gunTimeMs !== null ? (
-        <div className="mt-2">
+        <div className="mt-3">
           <Elapsed gunTimeMs={gunTimeMs} finishedAt={finishedAt} now={clock.now} />
           <div className="mt-0.5 text-[13px] text-ink-2">
             Gun <Time>{formatClock(gunTimeMs, timeZone)}</Time>
@@ -162,7 +176,7 @@ export function GunPanel({ raceId, gunTimeMs: initialGun, finishedAt: initialFin
           </p>
         </div>
       ) : (
-        <p className="mt-2 text-[13px] text-ink-2">Waiting for the start.</p>
+        <p className="mt-3 text-[13px] text-ink-2">Waiting for the start.</p>
       )}
 
       {error && (
