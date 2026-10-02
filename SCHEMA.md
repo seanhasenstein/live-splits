@@ -123,9 +123,14 @@ checkpoint distances and measured distances.
 
 ### meets
 `programId`, `seasonId`, optional `meetSeriesId`/`venueId`/`courseId`, `name`,
-local `date` + `timeZone`, `weather`, and `joinCodes` (hashes only: manager
-code, coach code, viewer token). The hash will be keyed (HMAC) so a typed code
-can be looked up by hashing it; that lands with join codes in step 2.
+local `date` + `timeZone`, `weather`, and `joinCodes`: for each of the manager
+code, coach code and viewer token, a keyed hash (`...Hash`, HMAC with
+`SESSION_SECRET`; a typed code is hashed and looked up) and the value encrypted
+at rest (`...Enc`, AES-256-GCM with a key derived from `SESSION_SECRET`) so
+coaches can see and re-share codes from the meet page. *Changed Oct 2, 2026 from
+hash-only*, because codes shown once at creation had to be tracked outside the
+app. Changing `SESSION_SECRET` makes existing codes unreadable and unmatchable:
+regenerate them.
 
 ### races
 An event within a meet.

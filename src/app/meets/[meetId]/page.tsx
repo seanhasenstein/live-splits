@@ -6,7 +6,7 @@ import { LeaveButton } from "@/components/leave-button";
 import { GunPanel } from "@/components/gun-panel";
 import { LinkButton, Page, Section } from "@/components/ui";
 import { can, getSession, isSchoolCoach } from "@/lib/auth/session";
-import { getMeet, getProgram, listRaces } from "@/lib/data";
+import { getMeet, getProgram, listRaces, readJoinCodes } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
 import { formatLocalDate, formatTimeOfDay } from "@/lib/time";
@@ -91,9 +91,9 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
         </ul>
       </Section>
 
-      {setup && (
+      {can(session, "export", meet) && (
         <Section title="Join codes">
-          <CodesPanel meetId={meet._id} initialCodes={null} />
+          <CodesPanel meetId={meet._id} initialCodes={readJoinCodes(meet)} canRegenerate={setup} />
         </Section>
       )}
 

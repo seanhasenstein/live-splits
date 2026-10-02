@@ -2,14 +2,13 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { formatCode, generateCode, generateToken, hashCode, hashToken } from "@/lib/auth/crypto";
+import { encrypt, formatCode, generateCode, generateToken, hashCode, hashToken } from "@/lib/auth/crypto";
 import { can, getSession, isSchoolCoach, sessionActor } from "@/lib/auth/session";
 import { getMeet, getProgram, getSeasonFor } from "@/lib/data";
 import { getDb, newId } from "@/lib/db/client";
 import { collection, COLLECTIONS } from "@/lib/db/collections";
 import { LocalDate, type Meet, TimeZone } from "@/lib/db/schema";
 
-/** Plaintext codes exist only in this response; only hashes are stored. */
 export type JoinCodes = { managerCode: string; coachCode: string; viewerPath: string };
 export type MeetFormState = { error?: string; created?: { meetId: string; codes: JoinCodes } };
 export type CodesState = { error?: string; codes?: JoinCodes };
@@ -28,6 +27,9 @@ function newJoinCodes(): { codes: JoinCodes; hashes: Meet["joinCodes"] } {
       managerCodeHash: hashCode(managerCode),
       coachCodeHash: hashCode(coachCode),
       viewerTokenHash: hashToken(viewerToken),
+      managerCodeEnc: encrypt(managerCode),
+      coachCodeEnc: encrypt(coachCode),
+      viewerTokenEnc: encrypt(viewerToken),
     },
   };
 }

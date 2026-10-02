@@ -26,7 +26,8 @@ pnpm dev
 - A coach types `COACH_ACCESS_CODE` on `/join` to get a school-level coach
   session: create meets, set up races, see/regenerate join codes.
 - Each meet has a **manager code** (tap, fix, gun) and a **coach code** (same
-  plus export), shown once when created or regenerated; only hashes are stored.
+  plus export). Coaches see them on the meet page any time (stored encrypted)
+  and can share `/join?code=…` links; Regenerate replaces them.
 - The **viewer link** (`/v/<token>`) opens a read-only session.
 - Sessions live in an httpOnly cookie for a year.
 

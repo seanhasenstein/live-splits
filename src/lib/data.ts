@@ -1,4 +1,5 @@
 import "server-only";
+import { decrypt, formatCode } from "@/lib/auth/crypto";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
 import type { Athlete, Distance, Meet, Program, Race, School, Season, Sport } from "@/lib/db/schema";
@@ -69,4 +70,13 @@ export async function listRoster(seasonId: string): Promise<RosterAthlete[]> {
 
 export async function listAthletes(schoolId: string, ids: string[]): Promise<Athlete[]> {
   return collection(await getDb(), "athletes").find({ schoolId, _id: { $in: ids } }).toArray();
+}
+
+/** A meet's join codes, readable again for coaches. Null for meets created before codes were stored encrypted. */
+export function readJoinCodes(meet: Meet): { managerCode: string; coachCode: string; viewerPath: string } | null {
+  const manager = decrypt(meet.joinCodes.managerCodeEnc);
+  const coach = decrypt(meet.joinCodes.coachCodeEnc);
+  const viewer = decrypt(meet.joinCodes.viewerTokenEnc);
+  if (!manager || !coach || !viewer) return null;
+  return { managerCode: formatCode(manager), coachCode: formatCode(coach), viewerPath: `/v/${viewer}` };
 }

@@ -11,8 +11,8 @@ export function MeetForm({ defaultTimeZone, defaultState }: { defaultTimeZone: s
   if (state.created) {
     return (
       <div>
-        <p className="mb-4 text-sm">Meet created. These codes are shown once; write them down or share them now.</p>
-        <CodesPanel meetId={state.created.meetId} initialCodes={state.created.codes} />
+        <p className="mb-4 text-sm">Meet created. Share these with your managers; they stay available on the meet page.</p>
+        <CodesPanel meetId={state.created.meetId} initialCodes={state.created.codes} canRegenerate />
         <LinkButton href={`/meets/${state.created.meetId}`} className="mt-4 w-full">
           Set up races
         </LinkButton>

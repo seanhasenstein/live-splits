@@ -32,13 +32,17 @@ export const Meet = tenantDoc({
   timeZone: TimeZone,
   weather: Weather.nullable(),
   /**
-   * Join codes are stored hashed only (keyed hash, so a code can be looked up
-   * by hashing what the person typed). The viewer token backs the read-only link.
+   * Join codes: a keyed hash for lookup (what the person typed is hashed and
+   * matched) plus the code encrypted at rest, so coaches can see and re-share
+   * it. The viewer token backs the read-only link.
    */
   joinCodes: z.object({
     managerCodeHash: z.string().min(1).nullable(),
     coachCodeHash: z.string().min(1).nullable(),
     viewerTokenHash: z.string().min(1).nullable(),
+    managerCodeEnc: z.string().min(1).nullable(),
+    coachCodeEnc: z.string().min(1).nullable(),
+    viewerTokenEnc: z.string().min(1).nullable(),
   }),
 });
 export type Meet = z.infer<typeof Meet>;

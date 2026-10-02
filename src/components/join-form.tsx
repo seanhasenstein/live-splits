@@ -4,13 +4,14 @@ import { useActionState } from "react";
 import { joinAction } from "@/app/actions/auth";
 import { Button, ErrorText, Field, Input } from "@/components/ui";
 
-export function JoinForm() {
+export function JoinForm({ initialCode = "" }: { initialCode?: string }) {
   const [state, action, pending] = useActionState(joinAction, {});
   return (
     <form action={action}>
       <Field label="Code">
         <Input
           name="code"
+          defaultValue={initialCode}
           placeholder="ABC-DEF"
           autoCapitalize="characters"
           autoComplete="off"

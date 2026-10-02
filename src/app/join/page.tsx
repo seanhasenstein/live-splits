@@ -5,7 +5,8 @@ import { APP_NAME } from "@/config/app";
 
 export const metadata: Metadata = { title: "Join" };
 
-export default function JoinPage() {
+export default async function JoinPage({ searchParams }: PageProps<"/join">) {
+  const { code } = await searchParams;
   return (
     <Page title={APP_NAME}>
       <p className="mb-2 text-sm">
@@ -15,7 +16,7 @@ export default function JoinPage() {
         <b>Coaches:</b> the meet&rsquo;s coach code gets you fix and export; the school&rsquo;s coach access code (the
         <code className="mx-1">COACH_ACCESS_CODE</code>setting) gets you meet setup.
       </p>
-      <JoinForm />
+      <JoinForm initialCode={typeof code === "string" ? code : ""} />
     </Page>
   );
 }
