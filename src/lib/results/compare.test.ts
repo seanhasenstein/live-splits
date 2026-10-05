@@ -1,15 +1,16 @@
 import { expect, test } from "vitest";
+import type { Race } from "../db/schema";
 import { replay, type TapLike } from "../replay";
 import { compareRace } from "./compare";
 
-const race = {
+const race: Pick<Race, "gunTimeMs" | "lineup" | "checkpoints"> = {
   gunTimeMs: 1_000_000,
   lineup: [{ athleteId: "A", levelId: "v" }, { athleteId: "B", levelId: "v" }],
   checkpoints: [
     { id: "m1", label: "Mile 1", distance: { value: 1, unit: "mi", meters: 1609.344 }, kind: "split" },
     { id: "fin", label: "Finish", distance: { value: 5, unit: "km", meters: 5000 }, kind: "finish" },
   ],
-} as const;
+};
 
 const tap = (id: string, p: Partial<TapLike> & { type: TapLike["type"] }): TapLike => ({
   clientTapId: id, checkpointId: "m1", athleteId: null, targetTapId: null, serverTimeMs: 0, timeMs: null, estimate: false, missed: false, ...p,
