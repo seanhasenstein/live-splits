@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Download, Pencil, Plus, Users } from "lucide-react";
+import { Download, GitCompare, Pencil, Plus, Upload, Users } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { CodesPanel } from "@/components/codes-panel";
@@ -60,12 +60,20 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
           <CardHeader
             title="Races"
             action={
-              setup ? (
-                <LinkButton href={`/meets/${meet._id}/races/new`} size="sm" variant="secondary">
-                  <Plus className="size-4" />
-                  Add race
-                </LinkButton>
-              ) : undefined
+              <div className="flex gap-1">
+                {can(session, "export", meet) && races.length > 0 && (
+                  <LinkButton href={`/meets/${meet._id}/import`} size="sm" variant="secondary">
+                    <Upload className="size-4" />
+                    Import results
+                  </LinkButton>
+                )}
+                {setup && (
+                  <LinkButton href={`/meets/${meet._id}/races/new`} size="sm" variant="secondary">
+                    <Plus className="size-4" />
+                    Add race
+                  </LinkButton>
+                )}
+              </div>
             }
           />
           {races.length === 0 ? (
@@ -90,6 +98,11 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
                   } · ${race.lineup.length} athletes · ${race.checkpoints.map((c) => c.label).join(", ") || "no checkpoints"}`}
                   headerActions={
                     <>
+                      {race.officialImportId && can(session, "export", meet) && (
+                        <LinkButton href={`/meets/${meet._id}/compare?race=${race._id}`} variant="subtle" size="sm" title="App vs official">
+                          <GitCompare className="size-4" />
+                        </LinkButton>
+                      )}
                       {can(session, "export", meet) && (
                         <AnchorButton href={`/api/meets/${meet._id}/export?race=${race._id}`} variant="subtle" size="sm" title="Download CSV" aria-label="Download CSV">
                           <Download className="size-4" />
@@ -107,6 +120,7 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
                   firedBy={firedBy[race._id] ?? null}
                   timeZone={meet.timeZone}
                   canGun={gun}
+                  hasOfficial={!!race.officialImportId}
                   actions={Object.fromEntries(
                     (["not_started", "in_progress", "finished"] as const).map((state) => [
                       state,

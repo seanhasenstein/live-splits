@@ -65,8 +65,8 @@ export function Page({ children, wide = false, className = "" }: { children: Rea
 
 export function PageTitle({ title, description, action }: { title: ReactNode; description?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="mb-5 flex items-end justify-between gap-3">
-      <div className="min-w-0">
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div className="min-w-0 flex-1 basis-64">
         <h1 className="text-xl font-semibold tracking-tight text-ink">{title}</h1>
         {description && <p className="mt-0.5 text-sm text-ink-2">{description}</p>}
       </div>

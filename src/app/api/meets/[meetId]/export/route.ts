@@ -5,6 +5,7 @@ import { collection } from "@/lib/db/collections";
 import { buildExportRows, toCsv } from "@/lib/export";
 import { gradeForSeason } from "@/lib/grade";
 import { getRaceState } from "@/lib/race-state";
+import { getOfficialTimes } from "@/lib/results/import";
 
 /** `?race=<id>` → CSV of that race in the split-workbook layout. Coaches only. */
 export async function GET(request: Request, { params }: RouteContext<"/api/meets/[meetId]/export">) {
@@ -18,10 +19,11 @@ export async function GET(request: Request, { params }: RouteContext<"/api/meets
   if (!race || race.meetId !== meet._id) return new Response("Race not found", { status: 404 });
 
   const db = await getDb();
-  const [program, season, state, athletes] = await Promise.all([
+  const [program, season, state, official, athletes] = await Promise.all([
     getProgram(meet.schoolId, "xc"),
     collection(db, "seasons").findOne({ _id: meet.seasonId }),
     getRaceState(race),
+    getOfficialTimes(race),
     listAthletes(
       meet.schoolId,
       race.lineup.map((l) => l.athleteId),
@@ -33,6 +35,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/meets
   const rows = buildExportRows({
     race,
     state,
+    official,
     levelLabel,
     athletes: athletes.map((a) => ({
       _id: a._id,
@@ -45,9 +48,12 @@ export async function GET(request: Request, { params }: RouteContext<"/api/meets
 
   const [y, m, d] = meet.date.split("-");
   const title = `${race.name} · ${meet.name} · ${Number(m)}/${Number(d)}/${y.slice(2)}`;
-  const note = race.gunTimeMs
-    ? "Cumulative times from the app (m:ss, truncated). Place and Official Finish come from the official results. Flag columns: estimate, edited, missed."
-    : "No gun time was set for this race, so times are blank. Set the gun time and export again.";
+  const hasOfficial = Object.keys(official).length > 0;
+  const note = hasOfficial
+    ? "Place, Official Finish and mat mile times from the imported official results; other mile times from the app (m:ss, truncated). Flag columns: official, estimate, edited, missed."
+    : race.gunTimeMs
+      ? "Cumulative times from the app (m:ss, truncated). Place and Official Finish come from the official results. Flag columns: estimate, edited, missed."
+      : "No gun time was set for this race, so times are blank. Set the gun time and export again.";
   const csv = toCsv([[title], [note], [], ...rows]);
   const fileName = `${meet.date}-${meet.name}-${race.name}.csv`.replace(/[^\w.-]+/g, "-").toLowerCase();
 

@@ -1,5 +1,7 @@
 import type { Athlete, Race } from "@/lib/db/schema";
 import type { Mark, RaceState } from "@/lib/replay";
+import type { OfficialTimes } from "./results/import";
+import { formatElapsed } from "./time";
 
 /**
  * CSV in the layout of Sean's split workbook (one sheet per race):
@@ -32,8 +34,10 @@ export function buildExportRows(input: {
   state: RaceState;
   athletes: ExportAthlete[];
   levelLabel: (id: string) => string;
+  /** Imported results: fills Place and Official Finish, and replaces app mile times where mats exist. */
+  official?: OfficialTimes;
 }): string[][] {
-  const { race, state, athletes, levelLabel } = input;
+  const { race, state, athletes, levelLabel, official = {} } = input;
   const splits = race.checkpoints.filter((c) => c.kind === "split");
   const finish = race.checkpoints.find((c) => c.kind === "finish");
   const gun = race.gunTimeMs;
@@ -56,22 +60,28 @@ export function buildExportRows(input: {
     // Furthest checkpoint reached (finish = highest), then the time there.
     const progress = [...splitMarks, finishMark].map(elapsed);
     const reached = progress.reduce<number>((best, t, i) => (t === null ? best : i), -1);
+    const o = official[a._id];
+    const officialSplit = (c: (typeof splits)[number]) => o?.byCheckpoint[c.id] ?? null;
     return {
       level: levelOrder.get(a.levelId) ?? 99,
-      reached,
-      time: reached < 0 ? Infinity : (progress[reached] ?? Infinity),
+      reached: o?.finishMs != null ? progress.length : reached,
+      time: o?.finishMs ?? (reached < 0 ? Infinity : (progress[reached] ?? Infinity)),
       name: a.displayName,
       cells: [
         levelLabel(a.levelId),
-        "", // Place: from official results
+        o?.place != null ? String(o.place) : o && o.status !== "finished" ? o.status.toUpperCase() : "",
         a.displayName,
         a.grade === null ? "" : String(a.grade),
-        "", // Official Finish: from official results
+        o?.finishMs != null ? formatElapsed(o.finishMs) : "",
         elapsed(finishMark) === null ? "" : formatWorkbookTime(elapsed(finishMark)!),
-        ...splitMarks.map((m) => (elapsed(m) === null ? "" : formatWorkbookTime(elapsed(m)!))),
+        ...splits.map((c, i) => {
+          const off = officialSplit(c);
+          const app = elapsed(splitMarks[i]);
+          return off !== null ? formatWorkbookTime(off) : app === null ? "" : formatWorkbookTime(app);
+        }),
         ...TRAILING_HEADER.map(() => ""),
         ...(finish ? [flag(finishMark)] : []),
-        ...splitMarks.map(flag),
+        ...splits.map((c, i) => (officialSplit(c) !== null ? "official" : flag(splitMarks[i]))),
       ],
     };
   });

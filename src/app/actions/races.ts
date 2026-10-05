@@ -11,6 +11,7 @@ import { newId } from "@/lib/db/client";
 import { Id } from "@/lib/db/schema";
 import { RacePayload } from "@/lib/race-form";
 import { distanceValue } from "@/lib/distance";
+import { gunFromOfficial } from "@/lib/results/import";
 import { recordTaps, TapError } from "@/lib/taps";
 import { zonedTimeToEpochMs } from "@/lib/time";
 
@@ -86,7 +87,14 @@ export async function saveRaceAction(
       const labels = missing.map((id) => race.checkpoints.find((c) => c.id === id)?.label ?? id);
       return { error: `${labels.join(", ")} already has recorded times and can't be removed.` };
     }
-    const next = COLLECTIONS.races.schema.parse({ ...race, finishedAt: race.finishedAt ?? null, ...fields, updatedAt: now, updatedBy: actor });
+    const next = COLLECTIONS.races.schema.parse({
+      ...race,
+      finishedAt: race.finishedAt ?? null,
+      officialImportId: race.officialImportId ?? null,
+      ...fields,
+      updatedAt: now,
+      updatedBy: actor,
+    });
     await races.replaceOne({ _id: race._id }, next);
   } else {
     const order = await races.countDocuments({ meetId: meet._id, deletedAt: null });
@@ -101,6 +109,7 @@ export async function saveRaceAction(
       gunTimeMs: null,
       gunTimeSource: null,
       finishedAt: null,
+      officialImportId: null,
       sections: [],
       teamScoring: [],
       exclusions: {
@@ -220,4 +229,49 @@ export async function setRaceFinishedAction(raceId: string, finished: boolean): 
     { $set: { finishedAt: finished ? new Date() : null, updatedAt: new Date(), updatedBy: sessionActor(session!) } },
   );
   return {};
+}
+
+/** Preview what "set the gun from official results" would do. */
+export async function gunFromOfficialPreviewAction(raceId: string): Promise<{ error?: string; gunTimeMs?: number; samples?: number; spreadMs?: number; currentMs?: number | null }> {
+  const session = await getSession();
+  const race = await getRace(raceId);
+  const meet = race && (await getMeet(race.meetId));
+  if (!race || !meet || !can(session, "gun", meet)) return { error: "Not allowed" };
+  const est = await gunFromOfficial(race);
+  if (!est) return { error: "Needs at least one runner with both an app finish tap and an official finish." };
+  return { ...est, currentMs: race.gunTimeMs };
+}
+
+/** Set the gun so app splits line up with the official finishes. Logged as a gun tap from official results. */
+export async function setGunFromOfficialAction(raceId: string): Promise<FormState & { gunTimeMs?: number }> {
+  const session = await getSession();
+  const race = await getRace(raceId);
+  const meet = race && (await getMeet(race.meetId));
+  if (!race || !meet || !can(session, "gun", meet)) return { error: "Not allowed" };
+  const est = await gunFromOfficial(race);
+  if (!est) return { error: "Needs at least one runner with both an app finish tap and an official finish." };
+  const now = Date.now();
+  try {
+    const result = await recordTaps(session, race, meet, [
+      {
+        clientTapId: `srv-${newId()}`,
+        type: "gun",
+        raceId: race._id,
+        checkpointId: null,
+        athleteId: null,
+        targetTapId: null,
+        deviceTimeMs: now,
+        clockOffsetMs: 0,
+        timeMs: est.gunTimeMs,
+        estimate: false,
+        missed: false,
+        note: `from official results: median of ${est.samples} finishers`,
+      },
+    ]);
+    await collection(await getDb(), "races").updateOne({ _id: race._id }, { $set: { gunTimeSource: "official_results" } });
+    return { gunTimeMs: result.race.gunTimeMs ?? undefined };
+  } catch (err) {
+    if (err instanceof TapError) return { error: err.message };
+    throw err;
+  }
 }

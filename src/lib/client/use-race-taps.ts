@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getClockSync } from "@/lib/client/clock";
 import { outboxAdd, outboxAll, outboxRemove, type OutboxTap } from "@/lib/client/outbox";
 import type { TapLike } from "@/lib/replay";
+import type { OfficialTimes } from "@/lib/results/import";
 import type { TapInput } from "@/lib/taps";
 
 type ServerTap = TapLike & { raceId: string; createdAt: string };
@@ -30,6 +31,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
   const [online, setOnline] = useState(true);
   const [signedOut, setSignedOut] = useState(false);
   const [rejected, setRejected] = useState(0);
+  const [official, setOfficial] = useState<OfficialTimes>({});
   const [loaded, setLoaded] = useState(false);
   const since = useRef(0);
   const flushing = useRef(false);
@@ -42,9 +44,10 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
     try {
       const res = await fetch(`/api/races/${raceId}/taps?since=${since.current}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const body = (await res.json()) as { taps: ServerTap[]; gunTimeMs: number | null; serverTimeMs: number };
+      const body = (await res.json()) as { taps: ServerTap[]; gunTimeMs: number | null; serverTimeMs: number; official?: OfficialTimes };
       since.current = body.serverTimeMs;
       setGunTimeMs(body.gunTimeMs);
+      if (body.official) setOfficial(body.official);
       if (body.taps.length > 0) {
         setServerTaps((prev) => {
           const next = new Map(prev);
@@ -202,5 +205,5 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
 
   const unsent = useMemo(() => [...outbox.values()].filter((t) => t.raceId === raceId).length, [outbox, raceId]);
 
-  return { taps, gunTimeMs, send, online, signedOut, rejected, loaded, unsent, refresh: poll };
+  return { taps, gunTimeMs, official, send, online, signedOut, rejected, loaded, unsent, refresh: poll };
 }

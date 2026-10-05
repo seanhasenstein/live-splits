@@ -73,7 +73,8 @@ without touching results.
 
 ### schools
 Tenant: `name`, `shortName`, `mascot`, `state`, `settings.timeZone` (default
-zone for new meets).
+zone for new meets), `settings.teamAliases` (how timing companies spell the
+team, e.g. "Sheboygan Area Lutheran"; used to find our rows in results).
 
 ### programs
 School × sport (`xc` | `track_outdoor` | `track_indoor`); unique per school.
@@ -141,6 +142,9 @@ An event within a meet.
 - `finishedAt` (added Oct 2, 2026): set when a coach marks the race finished.
   Display only: the clock stops ticking and the board becomes the review
   screen. Times are never affected.
+- `officialImportId` (added Oct 5, 2026): the import that supplied official
+  results. When set, official times take precedence over app taps on the
+  board, tiles and CSV, and those cells can't be edited.
 - `checkpoints[]`: `{ id, label, distance, kind: "split" | "finish" }`. Splits
   and taps reference `id`.
 - `lineup[]`: `{ athleteId, levelId }` — which of our athletes run in this
@@ -184,6 +188,15 @@ race's previous entries and inserts new ones; results are not touched (their
 ### imports
 Raw pasted/uploaded source stored as-is (`raw`), with `source`, `fileName`,
 `contentType`, and the meet/race it belongs to.
+
+**Import flow** (`src/lib/results/`): a vendor adapter (RACE RESULT JSON by
+URL, Badger State Timing meet pages, pasted text, PDF) produces
+`ParsedContest[]`; our rows are found by `teamAliases` and matched to athletes
+by name/alias (confirmed spellings are added to `athletes.aliases`); the coach
+maps contests to races; `commitImport` writes `imports`, replaces the race's
+`raceEntries`, upserts our `results` (official mark/place/status + `mat` splits
+per checkpoint, with the app's splits snapshotted beside them), and sets
+`races.officialImportId`. Lineup athletes with no row become `status: dns`.
 
 ### taps
 Append-only log; never updated or deleted. Types: `gun`, `capture`, `assign`,

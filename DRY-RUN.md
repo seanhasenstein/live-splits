@@ -50,7 +50,7 @@
    with the DNF/DNS count beneath; the board moves them to the bottom with a
    label; the CSV writes DNF/DNS in the Finish column. Results get
    `status: dnf | dns | dnr`.
-2. **Results / mat import** (plan step 6): paste or upload the official
-   results, store the full field as race entries, match our athletes by
-   name/alias, and the app-vs-mat comparison report.
+2. ~~Results / mat import~~ — done Oct 5: meet page → Import results (link,
+   text or PDF), official times on every screen, Adjust → gun from official
+   results, and the App vs official report.
 3. Field-test fixes from tonight's notes.

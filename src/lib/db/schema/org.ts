@@ -12,6 +12,8 @@ export const School = tenantDoc({
   settings: z.object({
     /** Default zone for new meets. */
     timeZone: TimeZone,
+    /** How timing companies spell the team, e.g. "Sheboygan Area Lutheran". Used to find our rows in results. */
+    teamAliases: z.array(z.string().min(1)),
   }),
 });
 export type School = z.infer<typeof School>;

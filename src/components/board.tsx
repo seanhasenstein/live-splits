@@ -16,7 +16,7 @@ type RaceInfo = {
   name: string;
   gunTimeMs: number | null;
   finished: boolean;
-  checkpoints: { id: string; label: string; meters: number }[];
+  checkpoints: { id: string; label: string; meters: number; kind: "split" | "finish" }[];
   athleteIds: string[];
 };
 
@@ -88,7 +88,9 @@ export function Board({ meetId, meetName, session, initialRaceId, timeZone, race
   );
 }
 
-type Row = { athleteId: string; marks: (Mark | undefined)[]; reached: number };
+/** One board cell: official time if imported, else the app's mark. `elapsedMs` is from the gun (null without one). */
+type Cell = { mark: Mark | undefined; official: number | null; elapsedMs: number | null; absoluteMs: number | null; missed: boolean };
+type Row = { athleteId: string; marks: (Mark | undefined)[]; cells: Cell[]; reached: number; officialStatus: string | null; officialPlace: number | null };
 
 function RaceBoard({
   meetId,
@@ -106,7 +108,8 @@ function RaceBoard({
   canTap: boolean;
 }) {
   const clock = useClock();
-  const { taps, gunTimeMs, send, online, loaded } = useRaceTaps(race.id, race.gunTimeMs);
+  const { taps, gunTimeMs, official, send, online, loaded } = useRaceTaps(race.id, race.gunTimeMs);
+  const hasOfficial = Object.keys(official).length > 0;
   const state = useMemo(
     () => replay({ checkpoints: race.checkpoints.map((c) => ({ ...c, distance: { value: 0, unit: "mi", meters: 0 }, kind: "split" })) }, taps),
     [race, taps],
@@ -129,34 +132,47 @@ function RaceBoard({
 
   const rows = useMemo<Row[]>(() => {
     const cps = race.checkpoints.map((c) => state.get(c.id));
-    const rows = race.athleteIds.map((athleteId) => {
+    const rows = race.athleteIds.map((athleteId): Row => {
       const marks = cps.map((cp) => cp?.byAthlete.get(athleteId));
-      let reached = -1;
-      marks.forEach((m, i) => {
-        if (m && !m.missed) reached = i;
+      const off = official[athleteId];
+      const cells = race.checkpoints.map((c, i): Cell => {
+        const m = marks[i];
+        const o = off?.byCheckpoint[c.id] ?? (c.kind === "finish" ? (off?.finishMs ?? null) : null);
+        if (o !== null && o !== undefined) return { mark: m, official: o, elapsedMs: o, absoluteMs: null, missed: false };
+        const abs = m && !m.missed && m.timeMs !== null ? m.timeMs : null;
+        return { mark: m, official: null, elapsedMs: abs !== null && gunTimeMs ? abs - gunTimeMs : null, absoluteMs: abs, missed: !!m?.missed };
       });
-      return { athleteId, marks, reached };
+      let reached = -1;
+      cells.forEach((cell, i) => {
+        if (cell.official !== null || cell.absoluteMs !== null) reached = i;
+      });
+      return { athleteId, marks, cells, reached, officialStatus: off?.status ?? null, officialPlace: off?.place ?? null };
     });
+    const key = (r: Row) => {
+      const c = r.cells[r.reached];
+      return c.official ?? c.absoluteMs ?? 0;
+    };
     return rows.sort((a, b) => {
       if (a.reached !== b.reached) return b.reached - a.reached;
-      if (a.reached >= 0) return (a.marks[a.reached]!.timeMs ?? 0) - (b.marks[b.reached]!.timeMs ?? 0);
+      if (a.reached >= 0) return key(a) - key(b);
       return (athletes[a.athleteId] ?? "").localeCompare(athletes[b.athleteId] ?? "");
     });
-  }, [race, state, athletes]);
+  }, [race, state, athletes, official, gunTimeMs]);
 
   const pendingTotal = race.checkpoints.reduce((n, c) => n + (state.get(c.id)?.pending.length ?? 0), 0);
 
-  const counts = race.checkpoints.map((c) => ({
+  const counts = race.checkpoints.map((c, i) => ({
     id: c.id,
     label: c.label,
-    n: [...(state.get(c.id)?.byAthlete.values() ?? [])].filter((m) => !m.missed).length,
+    n: rows.filter((r) => r.cells[i].official !== null || r.cells[i].absoluteMs !== null).length,
   }));
 
   return (
     <>
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3 sm:flex-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-1">
           <RaceStatusBar finished={race.finished} gunTimeMs={gunTimeMs} now={clock.now} />
+          {hasOfficial && <Badge tone="brand">Official results</Badge>}
           {!online && (
             <Badge tone="danger" dot>
               Offline
@@ -235,21 +251,27 @@ function RaceBoard({
             {rows.map((row) => (
               <tr key={row.athleteId} className={row.reached < 0 ? "text-ink-3" : ""}>
                 <td className={`px-3 py-2 align-top font-medium sm:px-4 ${row.reached < 0 ? "" : "text-ink"}`}>{athletes[row.athleteId]}</td>
-                {row.marks.map((m, i) => {
-                  const prevTime = i > 0 ? (row.marks[i - 1]?.timeMs ?? null) : gunTimeMs;
-                  const split = m?.timeMs != null && prevTime != null ? m.timeMs - prevTime : null;
+                {row.cells.map((cell, i) => {
+                  const m = cell.mark;
+                  // Everything relative to the gun (official times already are). Without a gun, only clock times exist.
+                  const t = (c: Cell | undefined) => (c ? (c.official ?? c.elapsedMs) : null);
+                  const here = t(cell);
+                  const prev = i > 0 ? t(row.cells[i - 1]) : here !== null ? 0 : null;
+                  const split = here !== null && prev !== null ? here - prev : null;
                   const segMeters = race.checkpoints[i].meters - (i > 0 ? race.checkpoints[i - 1].meters : 0);
-                  // Previous segment's pace, for the vs-prev delta.
-                  const prevPrevTime = i > 1 ? (row.marks[i - 2]?.timeMs ?? null) : i === 1 ? gunTimeMs : null;
-                  const prevSplit = i > 0 && row.marks[i - 1]?.timeMs != null && prevPrevTime != null ? row.marks[i - 1]!.timeMs! - prevPrevTime : null;
+                  const prevHere = i > 0 ? t(row.cells[i - 1]) : null;
+                  const prevPrev = i > 1 ? t(row.cells[i - 2]) : i === 1 ? 0 : null;
+                  const prevSplit = prevHere !== null && prevPrev !== null ? prevHere - prevPrev : null;
                   const prevPace = prevSplit !== null ? paceMsPerMile(prevSplit, race.checkpoints[i - 1].meters - (i > 1 ? race.checkpoints[i - 2].meters : 0)) : null;
-                  const last = i === row.marks.length - 1;
-                  const shown = m ? (m.missed ? "missed" : view === "splits" && i > 0 ? (split === null ? "—" : formatElapsed(split)) : fmt(m.timeMs)) : "—";
-                  const cell = (
+                  const last = i === row.cells.length - 1;
+                  const cumulative = cell.official !== null ? formatElapsed(cell.official) : cell.absoluteMs !== null ? fmt(cell.absoluteMs) : "—";
+                  const shown = cell.missed ? "missed" : view === "splits" && i > 0 ? (split === null ? "—" : formatElapsed(split)) : cumulative;
+                  const flag = cell.official !== null ? "" : m && !cell.missed && shown !== "—" ? (m.estimate ? "~" : m.edited ? "*" : "") : "";
+                  const cellNode = (
                     <>
-                      <Time className={`block ${m?.missed ? "italic" : last && m && view !== "splits" ? "font-semibold" : ""}`}>
+                      <Time className={`block ${cell.missed ? "italic" : last && here !== null && view !== "splits" ? "font-semibold" : ""}`}>
                         {shown}
-                        {m && !m.missed && shown !== "—" && (m.estimate ? "~" : m.edited ? "*" : "")}
+                        {flag}
                       </Time>
                       {view === "both" && i > 0 && split !== null && <Time className="block text-[11px] text-ink-3">{formatElapsed(split)}</Time>}
                       {view === "splits" && split !== null && (
@@ -267,16 +289,18 @@ function RaceBoard({
                   );
                   return (
                     <td key={race.checkpoints[i].id} className="px-1 py-1 text-right align-top last:pr-2 sm:last:pr-3">
-                      {editing ? (
+                      {editing && cell.official === null ? (
                         <button
                           type="button"
                           onClick={() => setFix({ athleteId: row.athleteId, cpIndex: i })}
                           className="w-full rounded-md border border-dashed border-line-strong px-1.5 py-1 text-right hover:bg-surface-2 active:bg-brand-soft"
                         >
-                          {cell}
+                          {cellNode}
                         </button>
                       ) : (
-                        <span className="block px-1.5 py-1.5">{cell}</span>
+                        <span className="block px-1.5 py-1.5" title={cell.official !== null ? "Official time" : undefined}>
+                          {cellNode}
+                        </span>
                       )}
                     </td>
                   );
@@ -304,7 +328,7 @@ function RaceBoard({
       )}
 
       <p className="mt-3 text-xs text-ink-3">
-        * edited &nbsp; ~ estimate &nbsp;{" "}
+        * edited &nbsp; ~ estimate &nbsp;{hasOfficial && "Official times replace app taps where imported. "}{" "}
         {view === "splits"
           ? "Splits are the time since the previous checkpoint; beneath each, the pace per mile and the change from the previous segment (+ slower, − faster)."
           : "Cumulative time from the gun, with the split beneath."}{" "}

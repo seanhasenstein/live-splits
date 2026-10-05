@@ -112,7 +112,7 @@ async function main() {
     shortName: "Sheboygan Lutheran",
     mascot: "Crusaders",
     state: "WI",
-    settings: { timeZone: "America/Chicago" },
+    settings: { timeZone: "America/Chicago", teamAliases: ["Sheboygan Lutheran", "Sheboygan Area Lutheran", "Sheboygan Area Lutheran HS"] },
   }));
   const schoolId = school._id;
 

@@ -3,7 +3,7 @@
 import { CircleCheck, Flag, MoreHorizontal, Timer } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { clearGunTimeAction, setGunTimeAction, setRaceFinishedAction } from "@/app/actions/races";
+import { clearGunTimeAction, gunFromOfficialPreviewAction, setGunFromOfficialAction, setGunTimeAction, setRaceFinishedAction } from "@/app/actions/races";
 import { Alert, Badge, Button, Field, Input, Sheet, Time, RaceStateBadge } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { formatClock, formatElapsed } from "@/lib/time";
@@ -24,6 +24,8 @@ type Props = {
   firedBy: string | null;
   timeZone: string;
   canGun: boolean;
+  /** True once official results were imported for this race. */
+  hasOfficial: boolean;
   /** Record splits / Live board, rendered inside the card; one version per race state so it can match. */
   actions?: Record<RaceState, React.ReactNode>;
 };
@@ -33,7 +35,7 @@ type Props = {
  * Start race…), in progress (big elapsed time; changes live behind "Adjust"),
  * finished (frozen). Nothing destructive is a single tap.
  */
-export function RaceCard({ raceId, name, startLabel, details, headerActions, gunTimeMs: initialGun, finishedAt: initialFinished, firedBy, timeZone, canGun, actions }: Props) {
+export function RaceCard({ raceId, name, startLabel, details, headerActions, gunTimeMs: initialGun, finishedAt: initialFinished, firedBy, timeZone, canGun, hasOfficial, actions }: Props) {
   const router = useRouter();
   const clock = useClock();
   const [gunTimeMs, setGunTimeMs] = useState(initialGun);
@@ -123,18 +125,19 @@ export function RaceCard({ raceId, name, startLabel, details, headerActions, gun
         running ? "border-danger/40 bg-danger-soft/70" : finished ? "border-brand/40 bg-brand-soft/70" : "border-line bg-surface"
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+        <div className="min-w-0 flex-1 basis-56">
           <div className="flex flex-wrap items-center gap-2">
             {running ? <Timer className="size-4 text-danger" /> : finished ? <CircleCheck className="size-4 text-brand-text" /> : <Flag className="size-4 text-ink-2" />}
             <span className="text-base font-semibold text-ink">{name}</span>
             {startLabel && <Time className="text-sm text-ink-2">{startLabel}</Time>}
             <RaceStateBadge state={running ? "in_progress" : finished ? "finished" : "not_started"} />
+            {hasOfficial && <Badge tone="brand">Official results</Badge>}
             <ClockWarning sync={clock.sync} error={clock.error} />
           </div>
           <div className="mt-0.5 text-[13px] text-ink-2">{details}</div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1 self-start">
           {headerActions}
           {canGun && !armed && (
             <Button variant="subtle" size="sm" onClick={() => setAdjusting(true)} aria-label={gunTimeMs !== null ? "Adjust the race clock" : "Set the gun time by hand"}>
@@ -200,6 +203,7 @@ export function RaceCard({ raceId, name, startLabel, details, headerActions, gun
           raceId={raceId}
           gunTimeMs={gunTimeMs}
           finished={finished}
+          hasOfficial={hasOfficial}
           timeZone={timeZone}
           onClose={() => setAdjusting(false)}
           onChanged={(next) => {
@@ -218,6 +222,7 @@ function AdjustSheet({
   raceId,
   gunTimeMs,
   finished,
+  hasOfficial,
   timeZone,
   onClose,
   onChanged,
@@ -225,11 +230,13 @@ function AdjustSheet({
   raceId: string;
   gunTimeMs: number | null;
   finished: boolean;
+  hasOfficial: boolean;
   timeZone: string;
   onClose: () => void;
   onChanged: (next: { gunTimeMs?: number | null; finishedAt?: string | null }) => void;
 }) {
   const [typed, setTyped] = useState("");
+  const [preview, setPreview] = useState<{ gunTimeMs: number; samples: number; spreadMs: number; currentMs: number | null } | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -249,6 +256,20 @@ function AdjustSheet({
       const result = await clearGunTimeAction(raceId);
       if (result.error) setError(result.error);
       else onChanged({ gunTimeMs: null, finishedAt: null });
+    });
+
+  const previewOfficial = () =>
+    start(async () => {
+      const r = await gunFromOfficialPreviewAction(raceId);
+      if (r.error) setError(r.error);
+      else setPreview({ gunTimeMs: r.gunTimeMs!, samples: r.samples!, spreadMs: r.spreadMs!, currentMs: r.currentMs ?? null });
+    });
+
+  const applyOfficial = () =>
+    start(async () => {
+      const r = await setGunFromOfficialAction(raceId);
+      if (r.error) setError(r.error);
+      else onChanged({ gunTimeMs: r.gunTimeMs ?? null });
     });
 
   const setFinished = (value: boolean) =>
@@ -300,6 +321,41 @@ function AdjustSheet({
               ) : (
                 <Button variant="secondary" onClick={() => setConfirmFinish(true)} disabled={pending}>
                   Mark finished…
+                </Button>
+              )
+            }
+          />
+        )}
+
+        {hasOfficial && (
+          <Option
+            title="Set the gun from official results"
+            description="Lines the app's splits up with the mats: gun = app finish tap − official finish, median across runners."
+            action={
+              preview ? (
+                <div className="space-y-2">
+                  <p className="tnum text-[13px] text-ink">
+                    Gun <Time>{formatClock(preview.gunTimeMs, timeZone)}</Time> from {preview.samples} runner{preview.samples === 1 ? "" : "s"} (spread {formatElapsed(preview.spreadMs)})
+                    {preview.currentMs !== null && (
+                      <>
+                        {" · "}
+                        {preview.gunTimeMs - preview.currentMs >= 0 ? "+" : "−"}
+                        {formatElapsed(Math.abs(preview.gunTimeMs - preview.currentMs))} vs now
+                      </>
+                    )}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button onClick={applyOfficial} disabled={pending}>
+                      Use this gun time
+                    </Button>
+                    <Button variant="secondary" onClick={() => setPreview(null)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button variant="secondary" onClick={previewOfficial} disabled={pending}>
+                  Calculate…
                 </Button>
               )
             }

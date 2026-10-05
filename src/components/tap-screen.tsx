@@ -18,7 +18,7 @@ type RaceInfo = {
   name: string;
   gunTimeMs: number | null;
   finished: boolean;
-  checkpoints: { id: string; label: string }[];
+  checkpoints: { id: string; label: string; kind: "split" | "finish" }[];
   athleteIds: string[];
 };
 
@@ -248,7 +248,12 @@ function RaceTapper({
 }) {
   const clock = useClock();
   const checkpoint = race.checkpoints[cpIndex];
-  const { taps, gunTimeMs, send, online, signedOut, rejected, loaded, unsent } = useRaceTaps(race.id, race.gunTimeMs);
+  const { taps, gunTimeMs, official, send, online, signedOut, rejected, loaded, unsent } = useRaceTaps(race.id, race.gunTimeMs);
+  const officialAt = (athleteId: string): number | null => {
+    const o = official[athleteId];
+    if (!o) return null;
+    return o.byCheckpoint[checkpoint.id] ?? (checkpoint.kind === "finish" ? o.finishMs : null);
+  };
   const state = useMemo(
     () => replay({ checkpoints: race.checkpoints.map((c) => ({ ...c, distance: { value: 0, unit: "mi", meters: 0 }, kind: "split" })) }, taps),
     [race, taps],
@@ -258,7 +263,12 @@ function RaceTapper({
   const counts = race.checkpoints.map((c) => ({
     id: c.id,
     label: c.label,
-    n: [...(state.get(c.id)?.byAthlete.values() ?? [])].filter((m) => !m.missed).length,
+    n: race.athleteIds.filter((id) => {
+      const o = official[id];
+      const hasOfficial = o ? (o.byCheckpoint[c.id] ?? (c.kind === "finish" ? o.finishMs : null)) !== null : false;
+      const m = state.get(c.id)?.byAthlete.get(id);
+      return hasOfficial || (!!m && !m.missed);
+    }).length,
   }));
 
   // Grid order: by the previous checkpoint's order; athletes not yet seen there go last, by name.
@@ -432,6 +442,19 @@ function RaceTapper({
           const mark = cp?.byAthlete.get(id);
           const name = athletes[id] ?? "?";
           const [first, ...rest] = name.split(" ");
+          const off = officialAt(id);
+          if (off !== null) {
+            return (
+              <div key={id} className="min-h-20 rounded-lg border border-line bg-surface-2 px-3 py-2 text-left text-ink-3">
+                <span className="block truncate text-xl leading-tight font-semibold">{first}</span>
+                <span className="block truncate text-sm">{rest.join(" ")}</span>
+                <span className="mt-0.5 flex items-center gap-1.5 text-sm">
+                  <Time className="font-semibold text-ink-2">{formatElapsed(off)}</Time>
+                  <Badge tone="brand">official</Badge>
+                </span>
+              </div>
+            );
+          }
           const done = !!mark && !mark.missed;
           if (confirmId === id) {
             return (

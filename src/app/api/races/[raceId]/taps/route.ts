@@ -2,6 +2,7 @@ import { can, getSession } from "@/lib/auth/session";
 import { getMeet, getRace } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
+import { getOfficialTimes } from "@/lib/results/import";
 
 /**
  * A race's tap log, for the tap screen and live board (polled every few
@@ -25,8 +26,11 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
     .project({ _id: 0, schoolId: 0, schemaVersion: 0, meetId: 0 })
     .toArray();
 
+  // Official (imported) times ride along; they're small and change rarely.
+  const official = since > 0 ? undefined : await getOfficialTimes(race);
+
   return Response.json(
-    { taps, gunTimeMs: race.gunTimeMs, serverTimeMs },
+    { taps, gunTimeMs: race.gunTimeMs, serverTimeMs, official, finished: !!race.finishedAt },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

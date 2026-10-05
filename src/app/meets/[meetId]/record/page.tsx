@@ -30,7 +30,7 @@ export default async function RecordPage({ params, searchParams }: PageProps<"/m
         name: r.name,
         gunTimeMs: r.gunTimeMs,
         finished: !!r.finishedAt,
-        checkpoints: r.checkpoints.map((c) => ({ id: c.id, label: c.label })),
+        checkpoints: r.checkpoints.map((c) => ({ id: c.id, label: c.label, kind: c.kind })),
         athleteIds: r.lineup.map((l) => l.athleteId),
       }))}
       athletes={Object.fromEntries(athletes.map((a) => [a._id, a.displayName]))}
