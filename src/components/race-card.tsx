@@ -1,9 +1,9 @@
 "use client";
 
-import { CircleCheck, Flag, MoreHorizontal, Timer } from "lucide-react";
+import { CircleCheck, Flag, MoreHorizontal, Radio, Timer } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { clearGunTimeAction, gunFromOfficialPreviewAction, setGunFromOfficialAction, setGunTimeAction, setRaceFinishedAction } from "@/app/actions/races";
+import { clearGunTimeAction, findLiveFeedsAction, gunFromOfficialPreviewAction, type LiveFeedOption, setGunFromOfficialAction, setGunTimeAction, setLiveFeedAction, setRaceFinishedAction } from "@/app/actions/races";
 import { Alert, Badge, Button, Field, Input, Sheet, Time, RaceStateBadge } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { formatClock, formatElapsed } from "@/lib/time";
@@ -26,6 +26,8 @@ type Props = {
   canGun: boolean;
   /** True once official results were imported for this race. */
   hasOfficial: boolean;
+  /** The timing company's live feed, polled while the race runs. */
+  liveFeed: { url: string; contestName: string | null } | null;
   /** Record splits / Live board, rendered inside the card; one version per race state so it can match. */
   actions?: Record<RaceState, React.ReactNode>;
 };
@@ -35,7 +37,7 @@ type Props = {
  * Start race…), in progress (big elapsed time; changes live behind "Adjust"),
  * finished (frozen). Nothing destructive is a single tap.
  */
-export function RaceCard({ raceId, name, startLabel, details, headerActions, gunTimeMs: initialGun, finishedAt: initialFinished, firedBy, timeZone, canGun, hasOfficial, actions }: Props) {
+export function RaceCard({ raceId, name, startLabel, details, headerActions, gunTimeMs: initialGun, finishedAt: initialFinished, firedBy, timeZone, canGun, hasOfficial, liveFeed, actions }: Props) {
   const router = useRouter();
   const clock = useClock();
   const [gunTimeMs, setGunTimeMs] = useState(initialGun);
@@ -132,7 +134,15 @@ export function RaceCard({ raceId, name, startLabel, details, headerActions, gun
             <span className="text-base font-semibold text-ink">{name}</span>
             {startLabel && <Time className="text-sm text-ink-2">{startLabel}</Time>}
             <RaceStateBadge state={running ? "in_progress" : finished ? "finished" : "not_started"} />
-            {hasOfficial && <Badge tone="brand">Official results</Badge>}
+            {hasOfficial ? (
+              <Badge tone="brand">Official results</Badge>
+            ) : (
+              liveFeed && (
+                <Badge tone="brand" dot={running} pulse={running}>
+                  Live results
+                </Badge>
+              )
+            )}
             <ClockWarning sync={clock.sync} error={clock.error} />
           </div>
           <div className="mt-0.5 text-[13px] text-ink-2">{details}</div>
@@ -204,6 +214,7 @@ export function RaceCard({ raceId, name, startLabel, details, headerActions, gun
           gunTimeMs={gunTimeMs}
           finished={finished}
           hasOfficial={hasOfficial}
+          liveFeed={liveFeed}
           timeZone={timeZone}
           onClose={() => setAdjusting(false)}
           onChanged={(next) => {
@@ -223,6 +234,7 @@ function AdjustSheet({
   gunTimeMs,
   finished,
   hasOfficial,
+  liveFeed,
   timeZone,
   onClose,
   onChanged,
@@ -231,6 +243,7 @@ function AdjustSheet({
   gunTimeMs: number | null;
   finished: boolean;
   hasOfficial: boolean;
+  liveFeed: { url: string; contestName: string | null } | null;
   timeZone: string;
   onClose: () => void;
   onChanged: (next: { gunTimeMs?: number | null; finishedAt?: string | null }) => void;
@@ -362,6 +375,14 @@ function AdjustSheet({
           />
         )}
 
+        {!hasOfficial && !finished && (
+          <Option
+            title="Live official results"
+            description="Paste the timing company's results link. While the race runs, the board polls it (at most every 15 s) and shows official finishes as they post. Import the results after the race as usual."
+            action={<LiveFeedControl raceId={raceId} liveFeed={liveFeed} onSaved={() => onChanged({})} />}
+          />
+        )}
+
         <Option
           title={gunTimeMs !== null ? "Change the gun time" : "Set the gun time by hand"}
           description="Enter the clock time the gun went off. Every recorded time is re-based on it; nothing is deleted."
@@ -410,6 +431,81 @@ function AdjustSheet({
         )}
       </div>
     </Sheet>
+  );
+}
+
+/** Link / unlink the live feed: paste a link, pick the contest, save. */
+function LiveFeedControl({ raceId, liveFeed, onSaved }: { raceId: string; liveFeed: { url: string; contestName: string | null } | null; onSaved: () => void }) {
+  const [url, setUrl] = useState("");
+  const [options, setOptions] = useState<LiveFeedOption[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  const find = (e: React.FormEvent) => {
+    e.preventDefault();
+    start(async () => {
+      const r = await findLiveFeedsAction(raceId, url);
+      if (r.error) return setError(r.error);
+      setError(null);
+      setOptions(r.options!);
+    });
+  };
+  const save = (feed: { url: string; contestName: string | null } | null) =>
+    start(async () => {
+      const r = await setLiveFeedAction(raceId, feed);
+      if (r.error) return setError(r.error);
+      onSaved();
+    });
+
+  if (liveFeed) {
+    return (
+      <div className="space-y-2">
+        <p className="flex items-center gap-1.5 text-[13px] text-ink">
+          <Radio className="size-3.5 text-brand-text" />
+          <span className="font-medium">{liveFeed.contestName ?? "Linked"}</span>
+          <span className="truncate text-ink-3">{new URL(liveFeed.url).host}</span>
+        </p>
+        <Button variant="secondary" size="sm" onClick={() => save(null)} disabled={pending}>
+          Remove link
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      {error && <Alert tone="danger">{error}</Alert>}
+      {options ? (
+        <div className="grid gap-1.5">
+          <p className="text-[13px] text-ink-2">Which contest is this race?</p>
+          {options.map((o) => (
+            <button
+              key={o.url}
+              type="button"
+              onClick={() => save({ url: o.url, contestName: o.name })}
+              disabled={pending}
+              className="flex h-11 items-center justify-between rounded-md border border-line bg-surface px-3 text-left text-sm text-ink hover:bg-surface-2"
+            >
+              <span>{o.name}</span>
+              <span className="text-xs text-ink-3">{o.entries} runners so far</span>
+            </button>
+          ))}
+          <Button variant="subtle" size="sm" onClick={() => setOptions(null)} className="justify-self-start">
+            Different link
+          </Button>
+        </div>
+      ) : (
+        <form onSubmit={find} className="flex items-end gap-2">
+          <div className="min-w-0 flex-1">
+            <Field label="Results link">
+              <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" inputMode="url" required />
+            </Field>
+          </div>
+          <Button type="submit" variant="secondary" disabled={pending}>
+            {pending ? "Reading…" : "Find"}
+          </Button>
+        </form>
+      )}
+    </div>
   );
 }
 

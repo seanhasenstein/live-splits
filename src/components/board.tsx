@@ -93,7 +93,7 @@ function RaceBoard({
   canTap: boolean;
 }) {
   const clock = useClock();
-  const { taps, gunTimeMs, official, finished, longRunning, staleMinutes, send, online, loaded } = useRaceTaps(race.id, race.gunTimeMs);
+  const { taps, gunTimeMs, official, officialLive, finished, longRunning, staleMinutes, send, online, loaded } = useRaceTaps(race.id, race.gunTimeMs);
   const isFinished = race.finished || finished;
   const hasOfficial = Object.keys(official).length > 0;
   const state = useMemo(
@@ -167,7 +167,11 @@ function RaceBoard({
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-1">
           <RaceStatusBar finished={isFinished} gunTimeMs={gunTimeMs} now={clock.now} />
-          {hasOfficial && <Badge tone="brand">Official results</Badge>}
+          {hasOfficial && (
+            <Badge tone="brand" dot={officialLive} pulse={officialLive}>
+              {officialLive ? "Official results · live" : "Official results"}
+            </Badge>
+          )}
           {staleMinutes > 0 && <Badge tone="gold">updated {staleMinutes} min ago</Badge>}
           {!online && (
             <Badge tone="danger" dot>
@@ -357,7 +361,7 @@ function RaceBoard({
       )}
 
       <p className="mt-3 text-xs text-ink-3">
-        * edited &nbsp; ~ estimate &nbsp;{hasOfficial && "Official times replace app taps where imported. "}{" "}
+        * edited &nbsp; ~ estimate &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : "Official times replace app taps where imported. ")}{" "}
         {view === "splits"
           ? "Splits are the time since the previous checkpoint; beneath each, the pace per mile and the change from the previous segment (+ slower, − faster)."
           : "Cumulative time from the gun, with the split beneath."}{" "}

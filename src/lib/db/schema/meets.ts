@@ -114,6 +114,12 @@ export const Race = tenantDoc({
   finishedAt: z.date().nullable(),
   /** The import that supplied this race's official results, if any. Official times then take precedence over app taps. */
   officialImportId: Id.nullable(),
+  /**
+   * The timing company's live feed for this race (a RACE RESULT contest URL),
+   * polled while the race is in progress so official finishes show on the
+   * board as they post. Ignored once results are imported.
+   */
+  liveFeed: z.object({ url: z.url(), contestName: z.string().nullable() }).nullable().default(null),
   checkpoints: z.array(Checkpoint),
   /** Which of our athletes run in this race, and at which level. */
   lineup: z.array(z.object({ athleteId: Id, levelId: z.string().min(1) })),

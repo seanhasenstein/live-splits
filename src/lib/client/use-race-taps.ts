@@ -35,6 +35,8 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
   const [signedOut, setSignedOut] = useState(false);
   const [rejected, setRejected] = useState(0);
   const [official, setOfficial] = useState<OfficialTimes>({});
+  /** The official times are coming from the timing company's live feed, not an import. */
+  const [officialLive, setOfficialLive] = useState(false);
   const [finished, setFinished] = useState(false);
   const [loaded, setLoaded] = useState(false);
   /** Derived in the poll loop (not during render): is the race overdue, and how old is our data. */
@@ -51,12 +53,15 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
     try {
       const res = await fetch(`/api/races/${raceId}/taps?since=${since.current}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const body = (await res.json()) as { taps: ServerTap[]; gunTimeMs: number | null; serverTimeMs: number; official?: OfficialTimes; finished?: boolean };
+      const body = (await res.json()) as { taps: ServerTap[]; gunTimeMs: number | null; serverTimeMs: number; official?: OfficialTimes; officialLive?: boolean; finished?: boolean };
       since.current = body.serverTimeMs;
       setGunTimeMs(body.gunTimeMs);
       setFinished(!!body.finished);
       stateRef.current = { gunTimeMs: body.gunTimeMs, finished: !!body.finished, lastUpdatedAt: Date.now() };
-      if (body.official) setOfficial(body.official);
+      if (body.official) {
+        setOfficial(body.official);
+        setOfficialLive(!!body.officialLive);
+      }
       if (body.taps.length > 0) {
         setServerTaps((prev) => {
           const next = new Map(prev);
@@ -248,6 +253,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
     taps,
     gunTimeMs,
     official,
+    officialLive,
     finished,
     longRunning: health.longRunning,
     staleMinutes: health.staleMinutes,

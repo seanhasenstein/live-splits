@@ -3,6 +3,7 @@ import { getMeet, getRace } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
 import { getOfficialTimes } from "@/lib/results/import";
+import { getLiveOfficial, liveFeedActive } from "@/lib/results/live";
 
 /**
  * A race's tap log, for the tap screen and live board (polled every few
@@ -26,11 +27,13 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
     .project({ _id: 0, schoolId: 0, schemaVersion: 0, meetId: 0 })
     .toArray();
 
-  // Official (imported) times ride along; they're small and change rarely.
-  const official = since > 0 ? undefined : await getOfficialTimes(race);
+  // Official times ride along: imported ones on the first fetch only (they're small and
+  // change rarely); a live feed's on every poll while the race runs (throttled upstream).
+  const live = liveFeedActive(race);
+  const official = live ? await getLiveOfficial(meet, race) : since > 0 ? undefined : await getOfficialTimes(race);
 
   return Response.json(
-    { taps, gunTimeMs: race.gunTimeMs, serverTimeMs, official, finished: !!race.finishedAt },
+    { taps, gunTimeMs: race.gunTimeMs, serverTimeMs, official, officialLive: live, finished: !!race.finishedAt },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

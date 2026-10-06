@@ -12,6 +12,7 @@ import { Id } from "@/lib/db/schema";
 import { RacePayload } from "@/lib/race-form";
 import { distanceValue } from "@/lib/distance";
 import { gunFromOfficial } from "@/lib/results/import";
+import { fromUrl, SourceError } from "@/lib/results/sources";
 import { recordTaps, TapError } from "@/lib/taps";
 import { zonedTimeToEpochMs } from "@/lib/time";
 
@@ -274,4 +275,33 @@ export async function setGunFromOfficialAction(raceId: string): Promise<FormStat
     if (err instanceof TapError) return { error: err.message };
     throw err;
   }
+}
+
+export type LiveFeedOption = { name: string; url: string; entries: number };
+
+/** Read a results link and list the contests it offers, so the coach can pick this race's. */
+export async function findLiveFeedsAction(raceId: string, url: string): Promise<{ error?: string; options?: LiveFeedOption[] }> {
+  const session = await getSession();
+  const race = await getRace(raceId);
+  const meet = race && (await getMeet(race.meetId));
+  if (!race || !meet || !can(session, "gun", meet)) return { error: "Not allowed" };
+  try {
+    const contests = await fromUrl(url);
+    const options = contests.flatMap((c) => (c.source.url ? [{ name: c.name, url: c.source.url, entries: c.entries.length }] : []));
+    if (options.length === 0) return { error: "That link has no live feed the app can poll. Use the timing company's results page or a RACE RESULT contest link." };
+    return { options };
+  } catch (err) {
+    return { error: err instanceof SourceError ? err.message : "Couldn't read that link." };
+  }
+}
+
+export async function setLiveFeedAction(raceId: string, feed: { url: string; contestName: string | null } | null): Promise<FormState> {
+  const session = await getSession();
+  const race = await getRace(raceId);
+  const meet = race && (await getMeet(race.meetId));
+  if (!race || !meet || !can(session, "gun", meet)) return { error: "Not allowed" };
+  const parsed = z.object({ url: z.url(), contestName: z.string().max(200).nullable() }).nullable().safeParse(feed);
+  if (!parsed.success) return { error: "That isn't a valid link." };
+  await collection(await getDb(), "races").updateOne({ _id: race._id }, { $set: { liveFeed: parsed.data, updatedAt: new Date(), updatedBy: sessionActor(session!) } });
+  return {};
 }

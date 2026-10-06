@@ -116,6 +116,7 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
                     </>
                   }
                   gunTimeMs={race.gunTimeMs}
+                  liveFeed={race.liveFeed ?? null}
                   finishedAt={race.finishedAt?.toISOString() ?? null}
                   firedBy={firedBy[race._id] ?? null}
                   timeZone={meet.timeZone}
