@@ -1,5 +1,5 @@
 import type { Athlete, Race } from "@/lib/db/schema";
-import type { Mark, RaceState } from "@/lib/replay";
+import { type AthleteStatus, type Mark, type RaceState, STATUS_LABEL } from "@/lib/replay";
 import type { OfficialTimes } from "./results/import";
 import { formatElapsed } from "./time";
 
@@ -36,8 +36,10 @@ export function buildExportRows(input: {
   levelLabel: (id: string) => string;
   /** Imported results: fills Place and Official Finish, and replaces app mile times where mats exist. */
   official?: OfficialTimes;
+  /** App-side DNS / DNR / DNF, used when there is no official result. */
+  statuses?: ReadonlyMap<string, AthleteStatus>;
 }): string[][] {
-  const { race, state, athletes, levelLabel, official = {} } = input;
+  const { race, state, athletes, levelLabel, official = {}, statuses = new Map<string, AthleteStatus>() } = input;
   const splits = race.checkpoints.filter((c) => c.kind === "split");
   const finish = race.checkpoints.find((c) => c.kind === "finish");
   const gun = race.gunTimeMs;
@@ -62,6 +64,8 @@ export function buildExportRows(input: {
     const reached = progress.reduce<number>((best, t, i) => (t === null ? best : i), -1);
     const o = official[a._id];
     const officialSplit = (c: (typeof splits)[number]) => o?.byCheckpoint[c.id] ?? null;
+    const appStatus = statuses.get(a._id);
+    const statusLabel = o ? (o.status !== "finished" ? o.status.toUpperCase() : "") : appStatus ? STATUS_LABEL[appStatus.status] : "";
     return {
       level: levelOrder.get(a.levelId) ?? 99,
       reached: o?.finishMs != null ? progress.length : reached,
@@ -69,11 +73,11 @@ export function buildExportRows(input: {
       name: a.displayName,
       cells: [
         levelLabel(a.levelId),
-        o?.place != null ? String(o.place) : o && o.status !== "finished" ? o.status.toUpperCase() : "",
+        o?.place != null ? String(o.place) : statusLabel,
         a.displayName,
         a.grade === null ? "" : String(a.grade),
         o?.finishMs != null ? formatElapsed(o.finishMs) : "",
-        elapsed(finishMark) === null ? "" : formatWorkbookTime(elapsed(finishMark)!),
+        elapsed(finishMark) === null ? statusLabel : formatWorkbookTime(elapsed(finishMark)!),
         ...splits.map((c, i) => {
           const off = officialSplit(c);
           const app = elapsed(splitMarks[i]);

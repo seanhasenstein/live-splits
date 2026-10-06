@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import { buildExportRows, formatWorkbookTime, toCsv } from "./export";
 import type { Race } from "./db/schema";
-import { replay, type TapLike } from "./replay";
+import { replay, replayStatuses, type TapLike } from "./replay";
 
 const race: Pick<Race, "levelIds" | "gunTimeMs" | "checkpoints"> = {
   levelIds: ["varsity", "jv"],
@@ -64,4 +64,17 @@ test("no gun: times blank but rows still present", () => {
 test("csv quoting", () => {
   expect(toCsv([["a", 'b "q"', "c,d"]])).toBe('a,"b ""q""","c,d"\r\n');
   expect(formatWorkbookTime(61_999)).toBe("1:01");
+});
+
+test("app DNS / DNF land in the Place and Finish columns when there is no official result", () => {
+  const taps = [
+    tap("1", { type: "name_tap", athleteId: "A", serverTimeMs: 1_000_000 + 5 * 60_000 }),
+    tap("2", { type: "status", athleteId: "A", status: "dnf", checkpointId: "m1", serverTimeMs: 1_000_000 + 9 * 60_000 }),
+    tap("3", { type: "status", athleteId: "B", status: "dns", checkpointId: null, serverTimeMs: 1_000_000 }),
+  ];
+  const rows = buildExportRows({ race, state: replay(race, taps), statuses: replayStatuses(taps), athletes, levelLabel: (id) => id });
+  const byName = Object.fromEntries(rows.slice(1).map((r) => [r[2], r]));
+  expect(byName["Eddy Giebler"].slice(1, 7)).toEqual(["DNF", "Eddy Giebler", "11", "", "DNF", "5:00"]);
+  expect(byName["Nate Vanic"].slice(1, 6)).toEqual(["DNS", "Nate Vanic", "10", "", "DNS"]);
+  expect(byName["Titus Gottschalk"][5]).toBe("");
 });

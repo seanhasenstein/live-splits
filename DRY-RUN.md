@@ -44,12 +44,12 @@
 
 ## After the meet (in order)
 
-1. **Athlete race status (DNS / DNR / DNF):** a status on each lineup entry,
-   set from the board's Fix sheet or the race edit page and logged as a tap
-   event (`dnf` after a given checkpoint). Counters become "accounted for"
-   with the DNF/DNS count beneath; the board moves them to the bottom with a
-   label; the CSV writes DNF/DNS in the Finish column. Results get
-   `status: dnf | dns | dnr`.
+1. ~~Athlete race status (DNS / DNR / DNF)~~ — done Oct 6: board → Fix times
+   → tap a name → DNS / DNR / DNF (with the last checkpoint passed). Logged as
+   a `status` tap; counters show "n out" and count them as accounted for; the
+   board moves them to the bottom with a label; the record screen tiles show
+   the label; the CSV writes DNS/DNR/DNF in the Place and Finish columns.
+   Official results still take precedence once imported.
 2. ~~Results / mat import~~ — done Oct 5: meet page → Import results (link,
    text or PDF), official times on every screen, Adjust → gun from official
    results, and the App vs official report.

@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
-import { replay, type TapLike } from "./replay";
+import { expectedAt, replay, replayStatuses, type TapLike } from "./replay";
 
-const race = { checkpoints: [{ id: "m1" }, { id: "m2" }] } as never;
+const race = { checkpoints: [{ id: "m1" }, { id: "m2" }] } as unknown as Parameters<typeof replay>[0];
 
 /** Taps with increasing server times, all at Mile 1 unless overridden. */
 function log() {
@@ -151,4 +151,23 @@ test("a pack shares one capture: the slot keeps its names and leaves pending", (
   const cp2 = m1([...taps, tap({ type: "void", targetTapId: "t1003" })]);
   expect(cp2.slots[0].athleteIds.sort()).toEqual(["A", "B"]);
   expect(cp2.pending).toHaveLength(0);
+});
+
+test("statuses: newest wins, void clears, DNF keeps the last checkpoint passed", () => {
+  const tap = log();
+  const taps = [tap({ type: "status", athleteId: "A", status: "dns", checkpointId: null })];
+  expect(replayStatuses(taps).get("A")?.status).toBe("dns");
+
+  taps.push(tap({ type: "status", athleteId: "A", status: "dnf", checkpointId: "m1" }));
+  const dnf = replayStatuses(taps).get("A")!;
+  expect(dnf.status).toBe("dnf");
+  expect(dnf.afterCheckpointId).toBe("m1");
+  expect(expectedAt(dnf, 0, race.checkpoints)).toBe(true);
+  expect(expectedAt(dnf, 1, race.checkpoints)).toBe(false);
+  expect(expectedAt({ ...dnf, afterCheckpointId: null }, 0, race.checkpoints)).toBe(false);
+  expect(expectedAt({ ...dnf, status: "dnr" }, 0, race.checkpoints)).toBe(false);
+  expect(expectedAt(undefined, 1, race.checkpoints)).toBe(true);
+
+  taps.push(tap({ type: "void", targetTapId: dnf.tapId }));
+  expect(replayStatuses(taps).has("A")).toBe(false);
 });

@@ -4,7 +4,7 @@ import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
 import { buildExportRows, toCsv } from "@/lib/export";
 import { gradeForSeason } from "@/lib/grade";
-import { getRaceState } from "@/lib/race-state";
+import { getRaceStateWithStatuses } from "@/lib/race-state";
 import { getOfficialTimes } from "@/lib/results/import";
 
 /** `?race=<id>` → CSV of that race in the split-workbook layout. Coaches only. */
@@ -19,10 +19,10 @@ export async function GET(request: Request, { params }: RouteContext<"/api/meets
   if (!race || race.meetId !== meet._id) return new Response("Race not found", { status: 404 });
 
   const db = await getDb();
-  const [program, season, state, official, athletes] = await Promise.all([
+  const [program, season, { state, statuses }, official, athletes] = await Promise.all([
     getProgram(meet.schoolId, "xc"),
     collection(db, "seasons").findOne({ _id: meet.seasonId }),
-    getRaceState(race),
+    getRaceStateWithStatuses(race),
     getOfficialTimes(race),
     listAthletes(
       meet.schoolId,
@@ -35,6 +35,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/meets
   const rows = buildExportRows({
     race,
     state,
+    statuses,
     official,
     levelLabel,
     athletes: athletes.map((a) => ({

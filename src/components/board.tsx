@@ -8,7 +8,8 @@ import { SessionMenu } from "@/components/session-menu";
 import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
-import { type CheckpointState, type Mark, replay, type Slot } from "@/lib/replay";
+import { type AthleteStatus, type CheckpointState, expectedAt, type Mark, replay, replayStatuses, type Slot, STATUS_LABEL, STATUS_LONG } from "@/lib/replay";
+import type { AthleteRaceStatus } from "@/lib/db/schema";
 import { METERS_PER_MILE, paceMsPerMile } from "@/lib/pace";
 import { formatClock, formatElapsed, parseElapsed } from "@/lib/time";
 
@@ -74,7 +75,7 @@ export function Board({ meetId, meetName, session, initialRaceId, timeZone, race
 
 /** One board cell: official time if imported, else the app's mark. `elapsedMs` is from the gun (null without one). */
 type Cell = { mark: Mark | undefined; official: number | null; elapsedMs: number | null; absoluteMs: number | null; missed: boolean };
-type Row = { athleteId: string; marks: (Mark | undefined)[]; cells: Cell[]; reached: number; officialStatus: string | null; officialPlace: number | null };
+type Row = { athleteId: string; marks: (Mark | undefined)[]; cells: Cell[]; reached: number; officialStatus: string | null; officialPlace: number | null; status: AthleteStatus | undefined };
 
 function RaceBoard({
   meetId,
@@ -99,7 +100,9 @@ function RaceBoard({
     () => replay({ checkpoints: race.checkpoints.map((c) => ({ ...c, distance: { value: 0, unit: "mi", meters: 0 }, kind: "split" })) }, taps),
     [race, taps],
   );
+  const statuses = useMemo(() => replayStatuses(taps), [taps]);
   const [fix, setFix] = useState<{ athleteId: string; cpIndex: number } | null>(null);
+  const [statusFor, setStatusFor] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [view, setView] = useState<"splits" | "both">("both");
   const [toast, setToast] = useState<string | null>(null);
@@ -131,26 +134,33 @@ function RaceBoard({
       cells.forEach((cell, i) => {
         if (cell.official !== null || cell.absoluteMs !== null) reached = i;
       });
-      return { athleteId, marks, cells, reached, officialStatus: off?.status ?? null, officialPlace: off?.place ?? null };
+      return { athleteId, marks, cells, reached, officialStatus: off?.status ?? null, officialPlace: off?.place ?? null, status: statuses.get(athleteId) };
     });
     const key = (r: Row) => {
       const c = r.cells[r.reached];
       return c.official ?? c.absoluteMs ?? 0;
     };
+    // Anyone out of the race (app status, or official DNS/DNF) sits at the bottom.
+    const out = (r: Row) => (r.status || (r.officialStatus && r.officialStatus !== "finished") ? 1 : 0);
     return rows.sort((a, b) => {
+      if (out(a) !== out(b)) return out(a) - out(b);
       if (a.reached !== b.reached) return b.reached - a.reached;
       if (a.reached >= 0) return key(a) - key(b);
       return (athletes[a.athleteId] ?? "").localeCompare(athletes[b.athleteId] ?? "");
     });
-  }, [race, state, athletes, official, gunTimeMs]);
+  }, [race, state, athletes, official, gunTimeMs, statuses]);
 
   const pendingTotal = race.checkpoints.reduce((n, c) => n + (state.get(c.id)?.pending.length ?? 0), 0);
 
-  const counts = race.checkpoints.map((c, i) => ({
-    id: c.id,
-    label: c.label,
-    n: rows.filter((r) => r.cells[i].official !== null || r.cells[i].absoluteMs !== null).length,
-  }));
+  const counts = race.checkpoints.map((c, i) => {
+    const has = (r: Row) => r.cells[i].official !== null || r.cells[i].absoluteMs !== null;
+    return {
+      id: c.id,
+      label: c.label,
+      n: rows.filter(has).length,
+      out: rows.filter((r) => !has(r) && !expectedAt(r.status, i, race.checkpoints)).length,
+    };
+  });
 
   return (
     <>
@@ -242,8 +252,35 @@ function RaceBoard({
             )}
             {rows.map((row) => (
               <tr key={row.athleteId} className={row.reached < 0 ? "text-ink-3" : ""}>
-                <td className={`px-3 py-2 align-top font-medium sm:px-4 ${row.reached < 0 ? "" : "text-ink"}`}>{athletes[row.athleteId]}</td>
+                <td className={`px-3 py-2 align-top font-medium sm:px-4 ${row.reached < 0 ? "" : "text-ink"}`}>
+                  {editing ? (
+                    <button type="button" onClick={() => setStatusFor(row.athleteId)} className="rounded px-1.5 py-1 text-left hover:bg-gold-soft" title="Set DNS / DNR / DNF">
+                      {athletes[row.athleteId]}
+                    </button>
+                  ) : (
+                    athletes[row.athleteId]
+                  )}
+                  {row.status ? (
+                    <span className="mt-0.5 block">
+                      <Badge tone="neutral">{STATUS_LABEL[row.status.status]}</Badge>
+                    </span>
+                  ) : (
+                    row.officialStatus &&
+                    row.officialStatus !== "finished" && (
+                      <span className="mt-0.5 block">
+                        <Badge tone="neutral">{row.officialStatus.toUpperCase()}</Badge>
+                      </span>
+                    )
+                  )}
+                </td>
                 {row.cells.map((cell, i) => {
+                  if (row.status && !expectedAt(row.status, i, race.checkpoints) && cell.official === null && cell.absoluteMs === null && !cell.missed) {
+                    return (
+                      <td key={race.checkpoints[i].id} className="px-1 py-1 text-right align-top text-ink-3 last:pr-2 sm:last:pr-3">
+                        <span className="block px-1.5 py-1.5">—</span>
+                      </td>
+                    );
+                  }
                   const m = cell.mark;
                   // Everything relative to the gun (official times already are). Without a gun, only clock times exist.
                   const t = (c: Cell | undefined) => (c ? (c.official ?? c.elapsedMs) : null);
@@ -333,6 +370,22 @@ function RaceBoard({
         </div>
       )}
 
+      {statusFor && (
+        <StatusSheet
+          race={race}
+          athleteId={statusFor}
+          current={statuses.get(statusFor)}
+          marks={race.checkpoints.map((c) => state.get(c.id)?.byAthlete.get(statusFor))}
+          name={athletes[statusFor] ?? "?"}
+          send={send}
+          onClose={() => setStatusFor(null)}
+          onDone={(msg) => {
+            setStatusFor(null);
+            showToast(msg);
+          }}
+        />
+      )}
+
       {fix && (
         <FixSheet
           race={race}
@@ -355,6 +408,83 @@ function RaceBoard({
 }
 
 type Send = ReturnType<typeof useRaceTaps>["send"];
+
+/** DNS / DNR / DNF for one athlete. A DNF remembers the last checkpoint they passed. */
+function StatusSheet({
+  race,
+  athleteId,
+  current,
+  marks,
+  name,
+  send,
+  onClose,
+  onDone,
+}: {
+  race: RaceInfo;
+  athleteId: string;
+  current: AthleteStatus | undefined;
+  marks: (Mark | undefined)[];
+  name: string;
+  send: Send;
+  onClose: () => void;
+  onDone: (msg: string) => void;
+}) {
+  // Default the DNF point to the last checkpoint with a time.
+  const lastPassed = marks.reduce<number>((best, m, i) => (m && !m.missed ? i : best), -1);
+  const [after, setAfter] = useState<string | null>(current?.afterCheckpointId ?? (lastPassed >= 0 ? race.checkpoints[lastPassed].id : null));
+  const base = { checkpointId: null, athleteId, targetTapId: null, timeMs: null, estimate: false, missed: false, note: null };
+
+  const set = (e: SyntheticEvent, status: AthleteRaceStatus) => {
+    void send({ ...base, type: "status", status, checkpointId: status === "dnf" ? after : null, deviceTimeMs: eventTimeMs(e) });
+    const where = status === "dnf" && after ? ` after ${race.checkpoints.find((c) => c.id === after)?.label}` : "";
+    onDone(`${name}: ${STATUS_LABEL[status]}${where}`);
+  };
+  const clear = (e: SyntheticEvent) => {
+    if (!current) return;
+    void send({ ...base, athleteId: null, type: "void", targetTapId: current.tapId, deviceTimeMs: eventTimeMs(e) });
+    onDone(`${name}: back in the race`);
+  };
+
+  return (
+    <Sheet title={name} subtitle={current ? `${STATUS_LONG[current.status]}${current.by ? ` · set by ${current.by}` : ""}` : "In the race"} onClose={onClose}>
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <Btn onClick={(e) => set(e, "dns")}>
+            <span className="block">DNS</span>
+            <span className="block text-xs font-normal text-ink-2">Did not start</span>
+          </Btn>
+          <Btn onClick={(e) => set(e, "dnr")}>
+            <span className="block">DNR</span>
+            <span className="block text-xs font-normal text-ink-2">Did not run</span>
+          </Btn>
+        </div>
+        <div>
+          <SectionLabel className="mb-1.5">Did not finish · last checkpoint passed</SectionLabel>
+          <div className="flex flex-wrap gap-2">
+            <Btn onClick={() => setAfter(null)} active={after === null}>
+              Not sure
+            </Btn>
+            {race.checkpoints
+              .filter((c) => c.kind !== "finish")
+              .map((c) => (
+                <Btn key={c.id} onClick={() => setAfter(c.id)} active={after === c.id}>
+                  {c.label}
+                </Btn>
+              ))}
+          </div>
+          <Button onClick={(e) => set(e, "dnf")} className="mt-2 w-full">
+            Mark DNF
+          </Button>
+        </div>
+        {current && (
+          <Btn onClick={clear} danger>
+            Clear {STATUS_LABEL[current.status]} · back in the race
+          </Btn>
+        )}
+      </div>
+    </Sheet>
+  );
+}
 
 function FixSheet({
   race,
@@ -584,9 +714,9 @@ function FixSheet({
   );
 }
 
-function Btn({ onClick, children, danger }: { onClick: (e: SyntheticEvent) => void; children: ReactNode; danger?: boolean }) {
+function Btn({ onClick, children, danger, active }: { onClick: (e: SyntheticEvent) => void; children: ReactNode; danger?: boolean; active?: boolean }) {
   return (
-    <Button variant={danger ? "danger" : "secondary"} size="lg" onClick={onClick}>
+    <Button variant={danger ? "danger" : active ? "primary" : "secondary"} size="lg" onClick={onClick}>
       {children}
     </Button>
   );

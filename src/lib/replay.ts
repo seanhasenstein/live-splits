@@ -1,4 +1,4 @@
-import type { Race, TapType } from "@/lib/db/schema";
+import type { AthleteRaceStatus, Race, TapType } from "@/lib/db/schema";
 
 /**
  * Replays a race's tap log into the state the screens show. Pure: works on
@@ -16,7 +16,16 @@ export type TapLike = {
   timeMs: number | null;
   estimate: boolean;
   missed: boolean;
+  status?: AthleteRaceStatus | null;
   createdBy?: { name: string };
+};
+
+export type AthleteStatus = {
+  tapId: string;
+  status: AthleteRaceStatus;
+  /** dnf: the last checkpoint they passed, when known. */
+  afterCheckpointId: string | null;
+  by: string | null;
 };
 
 export type Mark = {
@@ -217,3 +226,35 @@ function collect(race: Pick<Race, "checkpoints">, marks: Map<string, Mark>, slot
   }
   return state;
 }
+
+/**
+ * Each athlete's race status (DNS / DNR / DNF) from the log: the newest status
+ * tap wins, and voiding it clears the status. Kept apart from the checkpoint
+ * replay because a status belongs to the athlete, not a checkpoint.
+ */
+export function replayStatuses(taps: TapLike[]): Map<string, AthleteStatus> {
+  const out = new Map<string, AthleteStatus>();
+  const athleteOf = new Map<string, string>();
+  for (const t of sortTaps(taps)) {
+    if (t.type === "status" && t.athleteId && t.status) {
+      athleteOf.set(t.clientTapId, t.athleteId);
+      out.set(t.athleteId, { tapId: t.clientTapId, status: t.status, afterCheckpointId: t.checkpointId, by: t.createdBy?.name ?? null });
+    } else if (t.type === "void" && t.targetTapId) {
+      // Clearing the current status puts them back in the race; an older one doesn't come back.
+      const athleteId = athleteOf.get(t.targetTapId);
+      if (athleteId && out.get(athleteId)?.tapId === t.targetTapId) out.delete(athleteId);
+    }
+  }
+  return out;
+}
+
+/** Whether an athlete with this status is still expected at checkpoint `cpIndex`. */
+export function expectedAt(status: AthleteStatus | undefined, cpIndex: number, checkpoints: { id: string }[]): boolean {
+  if (!status) return true;
+  if (status.status !== "dnf") return false;
+  const after = status.afterCheckpointId ? checkpoints.findIndex((c) => c.id === status.afterCheckpointId) : -1;
+  return cpIndex <= after;
+}
+
+export const STATUS_LABEL: Record<AthleteRaceStatus, string> = { dns: "DNS", dnr: "DNR", dnf: "DNF" };
+export const STATUS_LONG: Record<AthleteRaceStatus, string> = { dns: "Did not start", dnr: "Did not run", dnf: "Did not finish" };

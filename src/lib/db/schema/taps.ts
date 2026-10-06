@@ -8,9 +8,14 @@ export const TapType = z.enum([
   "name_tap", // athlete + time in one tap; also manual adds (timeMs + estimate)
   "edit", // correct an earlier tap (targetTapId): move athlete, change time, mark missed
   "void", // cancel an earlier tap (targetTapId): undo, delete
+  "status", // athlete didn't start / didn't run / dropped out (status; checkpointId = last one passed for dnf)
   "tick", // future place-counter mode
 ]);
 export type TapType = z.infer<typeof TapType>;
+
+/** Why an athlete has no finish: didn't start, didn't run (scratched), didn't finish. */
+export const AthleteRaceStatus = z.enum(["dns", "dnr", "dnf"]);
+export type AthleteRaceStatus = z.infer<typeof AthleteRaceStatus>;
 
 /**
  * Append-only raw log from the app. Never updated or deleted; corrections are
@@ -49,6 +54,8 @@ export const Tap = z.object({
   estimate: z.boolean(),
   /** edit only: the athlete passed this checkpoint but was not captured. */
   missed: z.boolean(),
+  /** status only. Older taps lack the field. */
+  status: AthleteRaceStatus.nullable().default(null),
   note: z.string().nullable(),
 
   /** When the server stored it (taps can arrive late from the local queue). */

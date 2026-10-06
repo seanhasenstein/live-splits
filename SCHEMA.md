@@ -200,7 +200,7 @@ per checkpoint, with the app's splits snapshotted beside them), and sets
 
 ### taps
 Append-only log; never updated or deleted. Types: `gun`, `capture`, `assign`,
-`name_tap`, `edit`, `void`, `tick`.
+`name_tap`, `edit`, `void`, `status`, `tick`.
 
 | Field | Meaning |
 | --- | --- |
@@ -210,6 +210,7 @@ Append-only log; never updated or deleted. Types: `gun`, `capture`, `assign`,
 | `deviceTimeMs`, `clockOffsetMs`, `serverTimeMs` | device clock, offset in effect, corrected time (`device + offset`) |
 | `timeMs` | the time this event asserts when it isn't the moment of tapping: nudged/typed times, manual adds, gun from official results. Null = use `serverTimeMs` |
 | `estimate`, `missed`, `note` | flags for manual adds and "mark missed" |
+| `status` | `status` taps only: `dns` / `dnr` / `dnf` for `athleteId`; for `dnf`, `checkpointId` is the last one passed (null = not sure). Voiding the current status tap puts them back in the race. Official results, once imported, take precedence |
 | `createdAt`, `createdBy` | when the server stored it, and who tapped |
 
 How the fix tools map to events (all new rows, nothing edited):

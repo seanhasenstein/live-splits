@@ -138,7 +138,7 @@ Mirrors Sean's post-meet PDFs.
 
 **imports** — raw pasted/uploaded source files stored as-is, with source type and timestamp.
 
-**taps** — append-only raw log from the app. Types: `gun`, `capture`, `assign`, `name_tap`, `edit`, `void`, `tick` (future counter mode). Fields: client tap ID (idempotency), race, checkpoint, athlete (nullable), device time, clock offset, server-corrected time, `createdBy`. **Never edited**; corrections are new events. Result splits are derived from taps.
+**taps** — append-only raw log from the app. Types: `gun`, `capture`, `assign`, `name_tap`, `edit`, `void`, `status` (DNS/DNR/DNF), `tick` (future counter mode). Fields: client tap ID (idempotency), race, checkpoint, athlete (nullable), device time, clock offset, server-corrected time, `createdBy`. **Never edited**; corrections are new events. Result splits are derived from taps.
 
 **users / sessions / pins** — for future email PIN auth; MVP uses join-code sessions.
 

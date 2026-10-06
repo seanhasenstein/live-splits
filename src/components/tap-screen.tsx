@@ -13,7 +13,7 @@ import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
 import { type OrderMode, lastFinished, orderAthletes, orderKey, parseOrderMode } from "@/lib/order";
 import { paceMsPerMile } from "@/lib/pace";
-import { type Mark, replay, type Slot, type SlotWithNames, type TapLike } from "@/lib/replay";
+import { expectedAt, type Mark, replay, replayStatuses, type Slot, type SlotWithNames, STATUS_LABEL, type TapLike } from "@/lib/replay";
 import type { LineupHistory, PriorResult } from "@/lib/results/history";
 import { formatClock, formatElapsed } from "@/lib/time";
 
@@ -286,19 +286,24 @@ function RaceTapper({
   );
   const cp = state.get(checkpoint.id);
   const prev = cpIndex > 0 ? state.get(race.checkpoints[cpIndex - 1].id) : undefined;
-  const counts = race.checkpoints.map((c) => ({
-    id: c.id,
-    label: c.label,
-    n: race.athleteIds.filter((id) => {
+  const statuses = useMemo(() => replayStatuses(taps), [taps]);
+  const counts = race.checkpoints.map((c, i) => {
+    const has = (id: string) => {
       const o = official[id];
       const hasOfficial = o ? (o.byCheckpoint[c.id] ?? (c.kind === "finish" ? o.finishMs : null)) !== null : false;
       const m = state.get(c.id)?.byAthlete.get(id);
       return hasOfficial || (!!m && !m.missed);
-    }).length,
-  }));
+    };
+    return {
+      id: c.id,
+      label: c.label,
+      n: race.athleteIds.filter(has).length,
+      out: race.athleteIds.filter((id) => !has(id) && !expectedAt(statuses.get(id), i, race.checkpoints)).length,
+    };
+  });
 
   const nextCp = race.checkpoints[cpIndex + 1];
-  const allThrough = !!nextCp && !isFinished && loaded && race.athleteIds.length > 0 && counts[cpIndex].n === race.athleteIds.length;
+  const allThrough = !!nextCp && !isFinished && loaded && race.athleteIds.length > 0 && counts[cpIndex].n + counts[cpIndex].out === race.athleteIds.length;
 
   // Grid order. A manager's pick is remembered on this device; otherwise the previous
   // checkpoint's order, or at the first checkpoint their last race (coach's order if none).
@@ -603,6 +608,8 @@ function RaceTapper({
             );
           }
           const done = !!mark && !mark.missed;
+          const status = statuses.get(id);
+          const out = !!status && !done && !expectedAt(status, cpIndex, race.checkpoints);
           if (confirmId === id) {
             return (
               <div key={id} className={`${tile} flex flex-col justify-center rounded-lg border-2 border-brand bg-surface text-center shadow-card`}>
@@ -630,12 +637,16 @@ function RaceTapper({
               type="button"
               onClick={(e) => onName(e, id)}
               className={`${tile} rounded-lg border text-left transition-colors select-none ${
-                flashing ? "border-brand bg-brand text-brand-ink" : done ? "border-line bg-surface-2 text-ink-3" : "border-line bg-surface text-ink shadow-card active:bg-brand-soft"
+                flashing ? "border-brand bg-brand text-brand-ink" : done || out ? "border-line bg-surface-2 text-ink-3" : "border-line bg-surface text-ink shadow-card active:bg-brand-soft"
               }`}
             >
               {nameNode}
               <span className={`block truncate text-sm ${muted}`}>{rest.join(" ")}</span>
-              {!mark ? (
+              {out ? (
+                <span className="mt-0.5 block">
+                  <Badge tone="neutral">{STATUS_LABEL[status.status]}</Badge>
+                </span>
+              ) : !mark ? (
                 (prevCum !== null || refHere !== null) && (
                   <span className={`mt-0.5 block truncate ${large ? "text-sm" : "text-xs"} ${muted}`}>
                     {prevCum !== null && prevCp && (

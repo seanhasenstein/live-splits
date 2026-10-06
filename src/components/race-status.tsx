@@ -72,7 +72,8 @@ export function CheckpointCounts({
   finished,
   activeId,
 }: {
-  counts: { id: string; label: string; n: number }[];
+  /** n = recorded here; out = not expected here (DNS/DNR/DNF), shown beneath and counted as accounted for. */
+  counts: { id: string; label: string; n: number; out?: number }[];
   total: number;
   loaded: boolean;
   finished: boolean;
@@ -82,15 +83,18 @@ export function CheckpointCounts({
   return (
     <div className="flex divide-x divide-line rounded-lg border border-line bg-surface shadow-card">
       {counts.map((c) => {
-        const complete = loaded && c.n === total && total > 0;
-        const short = loaded && finished && c.n < total;
+        const out = c.out ?? 0;
+        const accounted = c.n + out;
+        const complete = loaded && accounted === total && total > 0;
+        const short = loaded && finished && accounted < total;
         const active = c.id === activeId;
+        const label = short ? `${c.label} · ${total - accounted} missing` : out > 0 ? `${c.label} · ${out} out` : c.label;
         return (
           <div
             key={c.id}
             className={`flex-1 px-3 py-2.5 text-center sm:flex-none sm:px-5 sm:text-left ${active ? "bg-surface-2 first:rounded-l-lg last:rounded-r-lg" : ""}`}
           >
-            <Stat value={loaded ? `${c.n}/${total}` : "—"} label={short ? `${c.label} · ${total - c.n} missing` : c.label} tone={complete ? "brand" : short ? "gold" : "ink"} />
+            <Stat value={loaded ? `${accounted}/${total}` : "—"} label={label} tone={complete ? "brand" : short ? "gold" : "ink"} />
           </div>
         );
       })}

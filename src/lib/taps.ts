@@ -4,7 +4,7 @@ import { z } from "zod";
 import { can, sessionActor } from "@/lib/auth/session";
 import { getDb, newId } from "@/lib/db/client";
 import { collection, COLLECTIONS } from "@/lib/db/collections";
-import { EpochMs, Id, type Meet, type Race, type Session, type Tap, TapType } from "@/lib/db/schema";
+import { AthleteRaceStatus, EpochMs, Id, type Meet, type Race, type Session, type Tap, TapType } from "@/lib/db/schema";
 
 /** What a device sends. The server adds identity, meet, and serverTimeMs. */
 export const TapInput = z.object({
@@ -19,9 +19,11 @@ export const TapInput = z.object({
   timeMs: EpochMs.nullable(),
   estimate: z.boolean(),
   missed: z.boolean(),
+  status: AthleteRaceStatus.nullable().default(null),
   note: z.string().max(500).nullable(),
 });
-export type TapInput = z.infer<typeof TapInput>;
+/** Input shape: `status` may be left off (defaults to null). */
+export type TapInput = z.input<typeof TapInput>;
 
 export class TapError extends Error {
   constructor(
@@ -53,6 +55,7 @@ export async function recordTaps(
     if (t.checkpointId && !race.checkpoints.some((c) => c.id === t.checkpointId)) {
       throw new TapError(`Unknown checkpoint ${t.checkpointId}`, 400);
     }
+    if (t.type === "status" && (!t.athleteId || !t.status)) throw new TapError("A status tap needs an athlete and a status", 400);
   }
 
   const taps: Tap[] = inputs.map((t) =>
