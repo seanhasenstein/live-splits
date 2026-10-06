@@ -302,6 +302,8 @@ export async function setLiveFeedAction(raceId: string, feed: { url: string; con
   if (!race || !meet || !can(session, "gun", meet)) return { error: "Not allowed" };
   const parsed = z.object({ url: z.url(), contestName: z.string().max(200).nullable() }).nullable().safeParse(feed);
   if (!parsed.success) return { error: "That isn't a valid link." };
+  // Only feeds the server knows how to read get polled.
+  if (parsed.data && new URL(parsed.data.url).host !== "api.raceresult.com") return { error: "Only RACE RESULT contest feeds can be polled live." };
   await collection(await getDb(), "races").updateOne({ _id: race._id }, { $set: { liveFeed: parsed.data, updatedAt: new Date(), updatedBy: sessionActor(session!) } });
   return {};
 }
