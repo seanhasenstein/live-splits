@@ -97,3 +97,17 @@ export function CheckpointCounts({
     </div>
   );
 }
+
+/** "+0:12" / "−0:04": slower / faster. Green faster, red slower, as timing apps do. */
+export function DeltaText({ ms, suffix = "" }: { ms: number; suffix?: string }) {
+  const rounded = Math.round(ms / 1000) * 1000;
+  if (rounded === 0) return <span className="text-ink-3">±0:00{suffix}</span>;
+  const faster = rounded < 0;
+  return (
+    <span className={`font-medium ${faster ? "text-brand-bright" : "text-danger"}`}>
+      {faster ? "−" : "+"}
+      {formatElapsed(Math.abs(rounded)).replace(/\.\d$/, "")}
+      {suffix}
+    </span>
+  );
+}

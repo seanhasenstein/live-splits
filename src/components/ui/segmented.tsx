@@ -9,7 +9,7 @@ export function Segmented<T extends string>({
 }: {
   value: T;
   onChange: (value: T) => void;
-  options: { value: T; label: string }[];
+  options: { value: T; label: string; disabled?: boolean }[];
   className?: string;
 }) {
   return (
@@ -22,8 +22,9 @@ export function Segmented<T extends string>({
             role="tab"
             type="button"
             aria-selected={active}
+            disabled={o.disabled}
             onClick={() => onChange(o.value)}
-            className={`h-9 flex-1 rounded-md px-3 text-sm font-medium transition-colors ${
+            className={`h-9 flex-1 rounded-md px-3 text-sm font-medium transition-colors disabled:opacity-40 ${
               active ? "bg-surface-3 text-ink shadow-card" : "text-ink-2 hover:text-ink"
             }`}
           >

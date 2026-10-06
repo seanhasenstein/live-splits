@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pencil } from "lucide-react";
-import { CheckpointCounts, RaceStatusBar } from "@/components/race-status";
+import { CheckpointCounts, DeltaText, RaceStatusBar } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
 import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type CheckpointState, type Mark, replay, type Slot } from "@/lib/replay";
+import { METERS_PER_MILE, paceMsPerMile } from "@/lib/pace";
 import { formatClock, formatElapsed, parseElapsed } from "@/lib/time";
 
 type RaceInfo = {
@@ -35,23 +36,6 @@ type Props = {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const eventTimeMs = (_e: SyntheticEvent) => Date.now();
 
-const METERS_PER_MILE = 1609.344;
-
-/** Minutes-per-mile pace for a segment, as ms per mile. */
-const paceMsPerMile = (splitMs: number, segmentMeters: number) => (splitMs * METERS_PER_MILE) / segmentMeters;
-
-/** "+0:12" / "−0:04": slower / faster than the previous segment. Green faster, red slower, as timing apps do. */
-function DeltaText({ ms }: { ms: number }) {
-  const rounded = Math.round(ms / 1000) * 1000;
-  if (rounded === 0) return <span>±0:00</span>;
-  const faster = rounded < 0;
-  return (
-    <span className={`font-medium ${faster ? "text-brand-bright" : "text-danger"}`}>
-      {faster ? "−" : "+"}
-      {formatElapsed(Math.abs(rounded)).replace(/\.\d$/, "")}
-    </span>
-  );
-}
 
 export function Board({ meetId, meetName, session, initialRaceId, timeZone, races, athletes, canFix, canTap }: Props) {
   const [raceId, setRaceId] = useState(() => (races.some((r) => r.id === initialRaceId) ? initialRaceId! : (races[0]?.id ?? "")));

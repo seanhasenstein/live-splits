@@ -26,12 +26,13 @@ export default async function RecordPage({ params, searchParams }: PageProps<"/m
       session={{ name: session.name, role: isSchoolCoach(session) ? "coach" : session.role }}
       initial={{ raceId: typeof raceParam === "string" ? raceParam : null, checkpointId: typeof cpParam === "string" ? cpParam : null }}
       timeZone={meet.timeZone}
+      hasCourse={!!meet.courseId}
       races={races.map((r, i) => ({
         id: r._id,
         name: r.name,
         gunTimeMs: r.gunTimeMs,
         finished: !!r.finishedAt,
-        checkpoints: r.checkpoints.map((c) => ({ id: c.id, label: c.label, kind: c.kind })),
+        checkpoints: r.checkpoints.map((c) => ({ id: c.id, label: c.label, kind: c.kind, meters: c.distance.meters })),
         athleteIds: r.lineup.map((l) => l.athleteId),
         history: histories[i],
       }))}

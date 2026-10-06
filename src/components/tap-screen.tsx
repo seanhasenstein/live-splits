@@ -2,18 +2,19 @@
 
 import Link from "next/link";
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, ArrowUpDown, Check, Pencil, Undo2, X } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, ArrowUpDown, Check, Pencil, Undo2, X } from "lucide-react";
 import { ClockWarning } from "@/components/race-card";
-import { CheckpointCounts, RaceStatusBar } from "@/components/race-status";
+import { CheckpointCounts, DeltaText, RaceStatusBar } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
 import { AppHeader, Badge, Button, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast, RaceStateBadge } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useLocalValue } from "@/lib/client/use-local-value";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
-import { type OrderMode, orderAthletes, orderKey, parseOrderMode } from "@/lib/order";
+import { type OrderMode, lastFinished, orderAthletes, orderKey, parseOrderMode } from "@/lib/order";
+import { paceMsPerMile } from "@/lib/pace";
 import { type Mark, replay, type Slot, type SlotWithNames, type TapLike } from "@/lib/replay";
-import type { LineupHistory } from "@/lib/results/history";
+import type { LineupHistory, PriorResult } from "@/lib/results/history";
 import { formatClock, formatElapsed } from "@/lib/time";
 
 type RaceInfo = {
@@ -21,7 +22,7 @@ type RaceInfo = {
   name: string;
   gunTimeMs: number | null;
   finished: boolean;
-  checkpoints: { id: string; label: string; kind: "split" | "finish" }[];
+  checkpoints: { id: string; label: string; kind: "split" | "finish"; meters: number }[];
   /** The lineup in the coach's order. */
   athleteIds: string[];
   history: LineupHistory;
@@ -33,6 +34,8 @@ type Props = {
   session: { name: string; role: string };
   initial: { raceId: string | null; checkpointId: string | null };
   timeZone: string;
+  /** The meet has a course on file, so "vs this course" can mean something. */
+  hasCourse: boolean;
   races: RaceInfo[];
   athletes: Record<string, string>;
 };
@@ -44,6 +47,11 @@ const CAPTURE_OPEN_MS = 20_000;
 const CHIP_TTL_MS = 3 * 60_000;
 const INTRO_KEY = "ls_record_intro_seen";
 const ORDER_KEY = "ls_record_order_";
+const COMPARE_KEY = "ls_record_compare";
+const LARGE_KEY = "ls_record_large";
+/** How many of this device's latest taps the bottom strip shows. */
+const RECENT_N = 3;
+type CompareMode = "last" | "course" | "off";
 const TOAST_MS = 4000;
 const FLASH_MS = 400;
 
@@ -55,7 +63,7 @@ const FLASH_MS = 400;
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const eventTimeMs = (_e: SyntheticEvent) => Date.now();
 
-export function TapScreen({ meetId, meetName, session, initial, timeZone, races, athletes }: Props) {
+export function TapScreen({ meetId, meetName, session, initial, timeZone, hasCourse, races, athletes }: Props) {
   useWakeLock();
   // Selection lives in the URL (?race=&cp=) so a reload lands on the same checkpoint.
   const [sel, setSel] = useState(() => {
@@ -95,6 +103,8 @@ export function TapScreen({ meetId, meetName, session, initial, timeZone, races,
       race={race}
       cpIndex={cpIndex}
       athletes={athletes}
+      hasCourse={hasCourse}
+      onSwitch={setSel}
       pickerFor={(current) => <SwitchControl races={races} race={race} checkpointId={race.checkpoints[cpIndex].id} current={current} onSwitch={setSel} />}
     />
   );
@@ -246,6 +256,8 @@ function RaceTapper({
   race,
   cpIndex,
   athletes,
+  hasCourse,
+  onSwitch,
   pickerFor,
 }: {
   meetId: string;
@@ -255,6 +267,8 @@ function RaceTapper({
   race: RaceInfo;
   cpIndex: number;
   athletes: Record<string, string>;
+  hasCourse: boolean;
+  onSwitch: (sel: { raceId: string; checkpointId: string }) => void;
   pickerFor: (current: RaceSummary) => React.ReactNode;
 }) {
   const clock = useClock();
@@ -283,6 +297,9 @@ function RaceTapper({
     }).length,
   }));
 
+  const nextCp = race.checkpoints[cpIndex + 1];
+  const allThrough = !!nextCp && !isFinished && loaded && race.athleteIds.length > 0 && counts[cpIndex].n === race.athleteIds.length;
+
   // Grid order. A manager's pick is remembered on this device; otherwise the previous
   // checkpoint's order, or at the first checkpoint their last race (coach's order if none).
   const [orderPref, setOrderPref] = useLocalValue(`${ORDER_KEY}${race.id}`);
@@ -290,6 +307,54 @@ function RaceTapper({
   const hasHistory = Object.keys(race.history.byAthlete).length > 0;
   const orderMode = useMemo<OrderMode>(() => pickedOrder ?? (cpIndex > 0 ? { kind: "prev" } : hasHistory ? { kind: "last" } : { kind: "coach" }), [pickedOrder, cpIndex, hasHistory]);
   const pickOrder = (m: OrderMode | null) => setOrderPref(m ? orderKey(m) : null);
+  const [comparePref, setComparePref] = useLocalValue(COMPARE_KEY);
+  const compare: CompareMode = comparePref === "course" && hasCourse ? "course" : comparePref === "off" ? "off" : "last";
+  const [largePref, setLargePref] = useLocalValue(LARGE_KEY);
+  const large = largePref === "1";
+
+  // The prior result each tile compares against: the runner's last race, or their
+  // last race on this course. Times at this checkpoint are looked up by distance.
+  const reference = useCallback(
+    (id: string): PriorResult | undefined => {
+      const list = race.history.byAthlete[id];
+      if (compare === "off" || !list) return undefined;
+      if (compare === "course") {
+        const onCourse = new Set(race.history.races.filter((r) => r.sameCourse).map((r) => r.id));
+        return list.find((r) => onCourse.has(r.raceId) && r.finishMs !== null);
+      }
+      return lastFinished(list);
+    },
+    [race.history, compare],
+  );
+  const referenceAt = (r: PriorResult | undefined, cp: RaceInfo["checkpoints"][number]): number | null =>
+    r ? (cp.kind === "finish" ? r.finishMs : (r.splits[String(cp.meters)] ?? null)) : null;
+  const compareLabel = compare === "course" ? "this course" : "last meet";
+
+  // Elapsed times behind a tile: where they were at the previous checkpoint, and once
+  // they pass here, this segment and its pace against the previous segment.
+  const prevCp = cpIndex > 0 ? race.checkpoints[cpIndex - 1] : null;
+  const cumAt = (index: number, id: string): number | null => {
+    if (index < 0) return 0;
+    const m = state.get(race.checkpoints[index].id)?.byAthlete.get(id);
+    return m && !m.missed && m.timeMs !== null && gunTimeMs ? m.timeMs - gunTimeMs : null;
+  };
+  const tileTimes = (id: string) => {
+    const here = cumAt(cpIndex, id);
+    const prevCum = cumAt(cpIndex - 1, id);
+    const segment = here !== null && prevCum !== null ? here - prevCum : null;
+    const segMeters = checkpoint.meters - (prevCp?.meters ?? 0);
+    let paceDelta: number | null = null;
+    if (prevCp && segment !== null) {
+      const beforePrev = cumAt(cpIndex - 2, id);
+      const prevSegment = prevCum !== null && beforePrev !== null ? prevCum - beforePrev : null;
+      const prevSegMeters = prevCp.meters - (cpIndex > 1 ? race.checkpoints[cpIndex - 2].meters : 0);
+      if (prevSegment !== null && segMeters > 0 && prevSegMeters > 0) paceDelta = paceMsPerMile(segment, segMeters) - paceMsPerMile(prevSegment, prevSegMeters);
+    }
+    return { here, prevCum: cpIndex > 0 ? prevCum : null, segment, paceDelta };
+  };
+
+  // This device's latest taps here, newest first, for the strip above the buttons.
+  const [recent, setRecent] = useState<{ athleteId: string; timeMs: number }[]>([]);
   const ordered = useMemo(
     () =>
       orderAthletes(orderMode, {
@@ -336,6 +401,7 @@ function RaceTapper({
     setSeenCp(checkpoint.id);
     setLastAction(null);
     setConfirmId(null);
+    setRecent([]);
   }
 
   const showToast = useCallback((text: string) => {
@@ -383,6 +449,7 @@ function RaceTapper({
         ? { athleteId, timeMs: replacing.timeMs, estimate: replacing.estimate, fromSlotId: replacing.fromSlotId }
         : undefined;
     void promise.then((tapId) => setLastAction({ tapId, label: athletes[athleteId] ?? "tap", restore }));
+    setRecent((r) => [{ athleteId, timeMs: slot ? slot.timeMs : deviceTimeMs + offset }, ...r.filter((x) => x.athleteId !== athleteId)].slice(0, RECENT_N));
     flash(athleteId);
     showToast(`${replacing ? "Replaced" : "Recorded"} ${athletes[athleteId]} ${fmt(slot ? slot.timeMs : deviceTimeMs + offset)}`);
   };
@@ -411,6 +478,7 @@ function RaceTapper({
     } else {
       showToast(`Undid ${lastAction.label}`);
     }
+    setRecent((r) => (r[0] && lastAction.label === athletes[r[0].athleteId] ? r.slice(1) : r));
     setLastAction(null);
   };
 
@@ -485,19 +553,47 @@ function RaceTapper({
       )}
       <div className="flex items-center justify-between gap-2 px-3 pt-3">
         <span className="text-[13px] text-ink-2">Tap a runner as they pass.</span>
-        <OrderControl mode={orderMode} picked={pickedOrder !== null} cpIndex={cpIndex} checkpoints={race.checkpoints} history={race.history} onPick={pickOrder} />
+        <OrderControl
+          mode={orderMode}
+          picked={pickedOrder !== null}
+          cpIndex={cpIndex}
+          checkpoints={race.checkpoints}
+          history={race.history}
+          onPick={pickOrder}
+          compare={compare}
+          hasCourse={hasCourse}
+          onCompare={setComparePref}
+          large={large}
+          onLarge={(v) => setLargePref(v ? "1" : null)}
+        />
       </div>
-      <div className="grid flex-1 grid-cols-2 content-start gap-2 p-3 pb-44">
-        {!loaded && <p className="col-span-2 text-sm text-ink-3">Loading…</p>}
+      {allThrough && (
+        <div className="mx-3 mt-2 flex items-center justify-between gap-3 rounded-lg border border-brand/30 bg-brand-soft px-3 py-2 text-sm text-ink">
+          <span>
+            Everyone&rsquo;s through <b>{checkpoint.label}</b>.
+          </span>
+          <Button size="sm" onClick={() => onSwitch({ raceId: race.id, checkpointId: nextCp!.id })}>
+            Go to {nextCp!.label}
+            <ArrowRight className="size-3.5" />
+          </Button>
+        </div>
+      )}
+      <div className={`grid flex-1 content-start gap-2 p-3 pb-48 ${large ? "grid-cols-1" : "grid-cols-2"}`}>
+        {!loaded && <p className="col-span-full text-sm text-ink-3">Loading…</p>}
         {ordered.map((id) => {
           const mark = cp?.byAthlete.get(id);
           const name = athletes[id] ?? "?";
           const [first, ...rest] = name.split(" ");
           const off = officialAt(id);
+          const ref = reference(id);
+          const refHere = referenceAt(ref, checkpoint);
+          const tile = large ? "min-h-24 px-4 py-3" : "min-h-20 px-3 py-2";
+          const nameCls = large ? "text-2xl" : "text-xl";
+          const nameNode = <span className={`block truncate ${nameCls} leading-tight font-semibold`}>{first}</span>;
           if (off !== null) {
             return (
-              <div key={id} className="min-h-20 rounded-lg border border-line bg-surface-2 px-3 py-2 text-left text-ink-3">
-                <span className="block truncate text-xl leading-tight font-semibold">{first}</span>
+              <div key={id} className={`${tile} rounded-lg border border-line bg-surface-2 text-left text-ink-3`}>
+                {nameNode}
                 <span className="block truncate text-sm">{rest.join(" ")}</span>
                 <span className="mt-0.5 flex items-center gap-1.5 text-sm">
                   <Time className="font-semibold text-ink-2">{formatElapsed(off)}</Time>
@@ -509,7 +605,7 @@ function RaceTapper({
           const done = !!mark && !mark.missed;
           if (confirmId === id) {
             return (
-              <div key={id} className="flex min-h-20 flex-col justify-center rounded-lg border-2 border-brand bg-surface p-2 text-center shadow-card">
+              <div key={id} className={`${tile} flex flex-col justify-center rounded-lg border-2 border-brand bg-surface text-center shadow-card`}>
                 <span className="text-sm text-ink">
                   Replace <Time className="font-semibold">{fmt(mark?.timeMs ?? null)}</Time>?
                 </span>
@@ -524,29 +620,58 @@ function RaceTapper({
               </div>
             );
           }
+          const flashing = flashId === id;
+          const muted = flashing ? "text-brand-ink/80" : done ? "text-ink-3" : "text-ink-2";
+          const { prevCum, segment, paceDelta, here } = tileTimes(id);
+          const vsRef = here !== null && refHere !== null ? here - refHere : null;
           return (
             <button
               key={id}
               type="button"
               onClick={(e) => onName(e, id)}
-              className={`min-h-20 rounded-lg border px-3 py-2 text-left transition-colors select-none ${
-                flashId === id
-                  ? "border-brand bg-brand text-brand-ink"
-                  : done
-                    ? "border-line bg-surface-2 text-ink-3"
-                    : "border-line bg-surface text-ink shadow-card active:bg-brand-soft"
+              className={`${tile} rounded-lg border text-left transition-colors select-none ${
+                flashing ? "border-brand bg-brand text-brand-ink" : done ? "border-line bg-surface-2 text-ink-3" : "border-line bg-surface text-ink shadow-card active:bg-brand-soft"
               }`}
             >
-              <span className="block truncate text-xl leading-tight font-semibold">{first}</span>
-              <span className={`block truncate text-sm ${done || flashId === id ? "" : "text-ink-2"}`}>{rest.join(" ")}</span>
-              {mark && (
-                <span className="mt-0.5 flex items-center gap-1 text-sm">
-                  <Time className={mark.missed ? "italic" : "font-semibold text-ink-2"}>
-                    {mark.missed ? "missed" : fmt(mark.timeMs)}
-                    {mark.estimate && !mark.missed && " ~"}
-                  </Time>
-                  <Pencil className="size-3 text-ink-3" aria-hidden />
-                </span>
+              {nameNode}
+              <span className={`block truncate text-sm ${muted}`}>{rest.join(" ")}</span>
+              {!mark ? (
+                (prevCum !== null || refHere !== null) && (
+                  <span className={`mt-0.5 block truncate ${large ? "text-sm" : "text-xs"} ${muted}`}>
+                    {prevCum !== null && prevCp && (
+                      <>
+                        {prevCp.label} <Time className="font-medium">{formatElapsed(prevCum)}</Time>
+                      </>
+                    )}
+                    {prevCum !== null && refHere !== null && " · "}
+                    {refHere !== null && (
+                      <>
+                        {compareLabel} <Time className="font-medium">{formatElapsed(refHere)}</Time>
+                      </>
+                    )}
+                  </span>
+                )
+              ) : (
+                <>
+                  <span className={`mt-0.5 flex items-center gap-1.5 ${large ? "text-base" : "text-sm"}`}>
+                    <Time className={mark.missed ? "italic" : `font-semibold ${flashing ? "" : "text-ink-2"}`}>
+                      {mark.missed ? "missed" : fmt(mark.timeMs)}
+                      {mark.estimate && !mark.missed && " ~"}
+                    </Time>
+                    {segment !== null && cpIndex > 0 && <Time className={`text-xs ${muted}`}>{formatElapsed(segment)}</Time>}
+                    {paceDelta !== null && !flashing && (
+                      <Time className="text-xs">
+                        <DeltaText ms={paceDelta} suffix="/mi" />
+                      </Time>
+                    )}
+                    <Pencil className="size-3 text-ink-3" aria-hidden />
+                  </span>
+                  {vsRef !== null && !flashing && (
+                    <span className={`block text-xs ${muted}`}>
+                      vs {compareLabel} <DeltaText ms={vsRef} />
+                    </span>
+                  )}
+                </>
               )}
             </button>
           );
@@ -569,6 +694,17 @@ function RaceTapper({
       )}
 
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-bg/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
+        {recent.length > 0 && (
+          <p className="truncate px-3 pt-1.5 text-xs text-ink-2">
+            <span className="text-ink-3">Last </span>
+            {recent.map((r, i) => (
+              <span key={r.athleteId}>
+                {i > 0 && <span className="text-ink-3"> · </span>}
+                {(athletes[r.athleteId] ?? "?").split(" ")[0]} <Time className="font-medium text-ink">{fmt(r.timeMs)}</Time>
+              </span>
+            ))}
+          </p>
+        )}
         <CaptureChips
           slots={cp?.slots ?? []}
           selectedId={selectedSlotId}
@@ -628,6 +764,11 @@ function OrderControl({
   checkpoints,
   history,
   onPick,
+  compare,
+  hasCourse,
+  onCompare,
+  large,
+  onLarge,
 }: {
   mode: OrderMode;
   picked: boolean;
@@ -635,6 +776,11 @@ function OrderControl({
   checkpoints: RaceInfo["checkpoints"];
   history: LineupHistory;
   onPick: (m: OrderMode | null) => void;
+  compare: CompareMode;
+  hasCourse: boolean;
+  onCompare: (m: CompareMode) => void;
+  large: boolean;
+  onLarge: (v: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [showRaces, setShowRaces] = useState(mode.kind === "race");
@@ -674,7 +820,9 @@ function OrderControl({
         {describe(mode)}
       </Button>
       {open && (
-        <Sheet title="Order the names" subtitle="Runners with nothing to sort by go last, A–Z. Remembered on this phone." onClose={() => setOpen(false)}>
+        <Sheet title="Names and tiles" subtitle="Remembered on this phone." onClose={() => setOpen(false)}>
+          <SectionLabel className="mb-1.5">Order</SectionLabel>
+          <p className="mb-2 text-xs text-ink-2">Runners with nothing to sort by go last, A–Z.</p>
           <div className="grid gap-2">
             {options.map((o) => (
               <OrderRow key={o.mode.kind} active={mode.kind === o.mode.kind} label={o.label} hint={o.hint} disabled={o.disabled} onClick={() => choose(o.mode)} />
@@ -726,6 +874,32 @@ function OrderControl({
               </Button>
             )}
           </div>
+          <SectionLabel className="mt-5 mb-1.5">Compare with</SectionLabel>
+          <p className="mb-2 text-xs text-ink-2">
+            Each tile shows the runner&rsquo;s time here from that race, and the difference once they pass.
+            {!hasCourse && " This meet has no course on file."}
+          </p>
+          <Segmented
+            value={compare}
+            onChange={(v) => onCompare(v as CompareMode)}
+            options={[
+              { value: "last", label: "Last meet" },
+              { value: "course", label: "This course", disabled: !hasCourse },
+              { value: "off", label: "Off" },
+            ]}
+          />
+          <SectionLabel className="mt-5 mb-1.5">Tiles</SectionLabel>
+          <button
+            type="button"
+            onClick={() => onLarge(!large)}
+            className={`flex h-14 w-full items-center justify-between rounded-lg border px-4 text-left ${large ? "border-brand bg-brand-soft" : "border-line bg-surface hover:bg-surface-2"}`}
+          >
+            <span>
+              <span className="block text-base font-medium text-ink">Large tiles</span>
+              <span className="block text-xs text-ink-2">One name per row, bigger text.</span>
+            </span>
+            {large && <Check className="size-4 shrink-0 text-brand-text" />}
+          </button>
         </Sheet>
       )}
     </>
