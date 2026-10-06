@@ -44,9 +44,16 @@ export type Slot = {
   by: string | null;
 };
 
+export type SlotWithNames = Slot & {
+  /** Athletes currently assigned to this capture (a pack can share one). */
+  athleteIds: string[];
+};
+
 export type CheckpointState = {
   /** Unassigned capture slots, oldest first. */
   pending: Slot[];
+  /** Every live capture slot at this checkpoint, oldest first, with who's on it. */
+  slots: SlotWithNames[];
   /** Each athlete's current mark at this checkpoint. */
   byAthlete: Map<string, Mark>;
 };
@@ -181,20 +188,32 @@ export function replay(race: Pick<Race, "checkpoints">, taps: TapLike[]): RaceSt
 }
 
 function collect(race: Pick<Race, "checkpoints">, marks: Map<string, Mark>, slots: Map<string, Slot>): RaceState {
-  const state: RaceState = new Map(race.checkpoints.map((c) => [c.id, { pending: [], byAthlete: new Map() }]));
-  const assignedSlots = new Set<string>();
+  const state: RaceState = new Map(race.checkpoints.map((c) => [c.id, { pending: [], slots: [], byAthlete: new Map() }]));
   for (const m of marks.values()) {
     if (m.voided) continue;
-    if (m.fromSlotId) assignedSlots.add(m.fromSlotId);
     const cp = state.get(m.checkpointId);
     if (!cp) continue;
     const current = cp.byAthlete.get(m.athleteId);
     if (!current || m.assignedAt > current.assignedAt) cp.byAthlete.set(m.athleteId, m);
   }
-  for (const s of slots.values()) {
-    if (s.voided || assignedSlots.has(s.tapId)) continue;
-    state.get(s.checkpointId)?.pending.push(s);
+  // A slot's names are the athletes whose *current* mark came from it.
+  const namesBySlot = new Map<string, string[]>();
+  for (const cp of state.values()) {
+    for (const m of cp.byAthlete.values()) {
+      if (m.fromSlotId) namesBySlot.set(m.fromSlotId, [...(namesBySlot.get(m.fromSlotId) ?? []), m.athleteId]);
+    }
   }
-  for (const cp of state.values()) cp.pending.sort((a, b) => a.timeMs - b.timeMs);
+  for (const s of slots.values()) {
+    if (s.voided) continue;
+    const cp = state.get(s.checkpointId);
+    if (!cp) continue;
+    const athleteIds = namesBySlot.get(s.tapId) ?? [];
+    cp.slots.push({ ...s, athleteIds });
+    if (athleteIds.length === 0) cp.pending.push(s);
+  }
+  for (const cp of state.values()) {
+    cp.pending.sort((a, b) => a.timeMs - b.timeMs);
+    cp.slots.sort((a, b) => a.timeMs - b.timeMs);
+  }
   return state;
 }

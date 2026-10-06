@@ -133,3 +133,22 @@ test("replace a captured time, then undo: the capture goes back to the athlete, 
   expect(cp.byAthlete.get("X")!.timeMs).toBe(1000);
   expect(cp.pending).toHaveLength(0);
 });
+
+test("a pack shares one capture: the slot keeps its names and leaves pending", () => {
+  const tap = log();
+  const taps = [
+    tap({ type: "capture" }), // t1000
+    tap({ type: "assign", athleteId: "A", targetTapId: "t1000" }),
+    tap({ type: "assign", athleteId: "B", targetTapId: "t1000" }),
+    tap({ type: "assign", athleteId: "C", targetTapId: "t1000" }),
+  ];
+  const cp = m1(taps);
+  expect(cp.pending).toHaveLength(0);
+  expect(cp.slots).toHaveLength(1);
+  expect(cp.slots[0].athleteIds.sort()).toEqual(["A", "B", "C"]);
+  expect(cp.byAthlete.get("C")!.timeMs).toBe(1000);
+  // Undo one of them: the slot stays, with two names.
+  const cp2 = m1([...taps, tap({ type: "void", targetTapId: "t1003" })]);
+  expect(cp2.slots[0].athleteIds.sort()).toEqual(["A", "B"]);
+  expect(cp2.pending).toHaveLength(0);
+});

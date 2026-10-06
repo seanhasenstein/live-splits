@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowLeftRight, Check, Pencil, Undo2, X } from "lucide-react";
 import { ClockWarning } from "@/components/race-card";
 import { CheckpointCounts, RaceStatusBar } from "@/components/race-status";
@@ -10,7 +10,7 @@ import { AppHeader, Badge, Button, LinkButton, SectionLabel, Segmented, Sheet, T
 import { useClock } from "@/lib/client/clock";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
-import { type Mark, replay, type Slot, type TapLike } from "@/lib/replay";
+import { type Mark, replay, type Slot, type SlotWithNames, type TapLike } from "@/lib/replay";
 import { formatClock, formatElapsed } from "@/lib/time";
 
 type RaceInfo = {
@@ -33,6 +33,25 @@ type Props = {
 };
 
 const DOUBLE_TAP_MS = 1000;
+/** A capture stays open for more names this long after it was taken (a pack crossing together). */
+const CAPTURE_OPEN_MS = 20_000;
+/** How long a capture chip stays in the bottom bar after it was taken. */
+const CHIP_TTL_MS = 3 * 60_000;
+const INTRO_KEY = "ls_record_intro_seen";
+const introListeners = new Set<() => void>();
+const subscribeIntro = (l: () => void) => {
+  introListeners.add(l);
+  return () => {
+    introListeners.delete(l);
+  };
+};
+const readIntroSeen = () => {
+  try {
+    return localStorage.getItem(INTRO_KEY) === "1";
+  } catch {
+    return true;
+  }
+};
 const TOAST_MS = 4000;
 const FLASH_MS = 400;
 
@@ -282,6 +301,23 @@ function RaceTapper({
   const [toast, setToast] = useState<string | null>(null);
   const [flashId, setFlashId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  // Coarse clock for chip expiry; ticks every few seconds rather than reading the clock during render.
+  const [nowMs, setNowMs] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 5000);
+    return () => clearInterval(t);
+  }, []);
+  // First-use card: read from localStorage after hydration (the server never shows it).
+  const introSeen = useSyncExternalStore(subscribeIntro, readIntroSeen, () => true);
+  const dismissIntro = () => {
+    try {
+      localStorage.setItem(INTRO_KEY, "1");
+    } catch {
+      // ignore
+    }
+    introListeners.forEach((l) => l());
+  };
   const lastTapAt = useRef(new Map<string, number>());
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -314,6 +350,7 @@ function RaceTapper({
 
   const capture = (e: SyntheticEvent) => {
     const deviceTimeMs = eventTimeMs(e);
+    setSelectedSlotId(null);
     void send({ ...base, type: "capture", deviceTimeMs }).then((tapId) => setLastAction({ tapId, label: "capture" }));
     flash("capture");
     showToast(`Captured ${fmt(deviceTimeMs + offset)}`);
@@ -323,7 +360,12 @@ function RaceTapper({
     const deviceTimeMs = eventTimeMs(e);
     setConfirmId(null);
     if (replacing) void send({ ...base, type: "void", targetTapId: replacing.tapId, deviceTimeMs });
-    const slot: Slot | undefined = cp?.pending[0];
+    // Which capture (if any) this name belongs to: a chip the manager picked, else the
+    // oldest empty one, else a recent one a pack is still filling, else none (record now).
+    const selected = selectedSlotId ? cp?.slots.find((x) => x.tapId === selectedSlotId) : undefined;
+    const newest = cp?.slots.at(-1);
+    const slot: Slot | undefined =
+      selected ?? cp?.pending[0] ?? (newest && deviceTimeMs + offset - newest.timeMs < CAPTURE_OPEN_MS ? newest : undefined);
     const promise = slot
       ? send({ ...base, type: "assign", athleteId, targetTapId: slot.tapId, deviceTimeMs })
       : send({ ...base, type: "name_tap", athleteId, deviceTimeMs });
@@ -419,26 +461,21 @@ function RaceTapper({
         <CheckpointCounts counts={counts} total={race.athleteIds.length} loaded={loaded} finished={isFinished} activeId={checkpoint.id} />
       </div>
 
-      {cp && cp.pending.length > 0 && (
-        <div className="border-b border-brand/20 bg-brand-soft px-3 py-2">
-          <div className="flex items-center gap-2">
-            <Badge tone="brand">{cp.pending.length} unassigned</Badge>
-            <span className="text-xs text-brand-text">tap a name to fill the oldest</span>
-          </div>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {cp.pending.map((s, i) => (
-              <span key={s.tapId} className={`flex items-center gap-0.5 rounded-md bg-surface py-0.5 pl-2 text-sm ${i === 0 ? "ring-2 ring-brand" : "border border-line"}`}>
-                <Time className="font-semibold text-ink">{fmt(s.timeMs)}</Time>
-                <button type="button" onClick={(e) => deleteSlot(e, s)} aria-label="Delete this capture" className="rounded p-1 text-ink-3 hover:text-danger">
-                  <X className="size-3.5" />
-                </button>
-              </span>
-            ))}
-          </div>
+      {!introSeen && (
+        <div className="mx-3 mt-3 rounded-lg border border-brand/30 bg-brand-soft p-3 text-sm text-ink">
+          <p className="font-semibold">How to record splits</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[13px] text-ink-2">
+            <li>Tap a runner&rsquo;s name the moment they pass. That records their time.</li>
+            <li>Can&rsquo;t name them fast enough? Tap <b>Capture time</b> as they pass, then tap the names after. One capture can take a whole pack.</li>
+            <li>Wrong name? <b>Undo</b> takes back the last tap.</li>
+          </ul>
+          <Button size="sm" onClick={dismissIntro} className="mt-2">
+            Got it
+          </Button>
         </div>
       )}
-
-      <div className="grid flex-1 grid-cols-2 content-start gap-2 p-3 pb-40">
+      <p className="px-3 pt-3 text-center text-[13px] text-ink-2">Tap a runner as they pass.</p>
+      <div className="grid flex-1 grid-cols-2 content-start gap-2 p-3 pb-44">
         {!loaded && <p className="col-span-2 text-sm text-ink-3">Loading…</p>}
         {ordered.map((id) => {
           const mark = cp?.byAthlete.get(id);
@@ -505,7 +542,7 @@ function RaceTapper({
       </div>
 
       {toast && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-24 z-20 flex justify-center px-3">
+        <div className="pointer-events-none fixed inset-x-0 bottom-36 z-20 flex justify-center px-3">
           <Toast
             title={toast}
             action={
@@ -519,21 +556,89 @@ function RaceTapper({
         </div>
       )}
 
-      <div className="fixed inset-x-0 bottom-0 z-10 flex gap-2 border-t border-line bg-bg/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
-        <Button variant="secondary" size="lg" onClick={undo} disabled={!lastAction} className="h-16 w-20 flex-col gap-0.5 px-0">
-          <Undo2 className="size-6 shrink-0" />
-          <span className="text-xs">Undo</span>
-        </Button>
-        <button
-          type="button"
-          onClick={capture}
-          className={`h-16 flex-1 rounded-lg text-2xl font-semibold tracking-wide shadow-card select-none ${
-            flashId === "capture" ? "bg-brand text-brand-ink" : "bg-ink text-bg active:bg-ink/80"
-          }`}
-        >
-          Capture
-        </button>
+      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-bg/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
+        <CaptureChips
+          slots={cp?.slots ?? []}
+          selectedId={selectedSlotId}
+          now={nowMs}
+          athletes={athletes}
+          fmt={fmt}
+          onSelect={(id) => setSelectedSlotId((cur) => (cur === id ? null : id))}
+          onDelete={deleteSlot}
+        />
+        <div className="flex gap-2 px-3 pt-2">
+          <Button variant="secondary" size="lg" onClick={undo} disabled={!lastAction} className="h-16 w-20 flex-col gap-0.5 px-0">
+            <Undo2 className="size-6 shrink-0" />
+            <span className="text-xs">Undo</span>
+          </Button>
+          <button
+            type="button"
+            onClick={capture}
+            className={`flex h-16 flex-1 flex-col items-center justify-center rounded-lg shadow-card select-none ${
+              flashId === "capture" ? "bg-brand text-brand-ink" : "bg-ink text-bg active:bg-ink/80"
+            }`}
+          >
+            <span className="text-xl leading-tight font-semibold tracking-wide">
+              Capture time{cp && cp.pending.length > 0 ? ` · ${cp.pending.length} waiting` : ""}
+            </span>
+            <span className="text-xs opacity-70">then tap the names</span>
+          </button>
+        </div>
       </div>
     </main>
+  );
+}
+
+/**
+ * Recent captures, in the bottom bar where the thumb is. Empty ones are the
+ * ones waiting for a name; tapping a chip makes it the target for the next names.
+ */
+function CaptureChips({
+  slots,
+  selectedId,
+  now,
+  athletes,
+  fmt,
+  onSelect,
+  onDelete,
+}: {
+  slots: SlotWithNames[];
+  selectedId: string | null;
+  now: number;
+  athletes: Record<string, string>;
+  fmt: (ms: number | null) => string;
+  onSelect: (id: string) => void;
+  onDelete: (e: SyntheticEvent, slot: Slot) => void;
+}) {
+  const shown = slots.filter((s) => s.athleteIds.length === 0 || now === 0 || now - s.timeMs < CHIP_TTL_MS);
+  if (shown.length === 0) return null;
+  const firstName = (id: string) => (athletes[id] ?? "?").split(" ")[0];
+  return (
+    <div className="flex gap-1.5 overflow-x-auto px-3 pt-2 pb-0.5">
+      {shown.map((s) => {
+        const empty = s.athleteIds.length === 0;
+        const selected = s.tapId === selectedId;
+        return (
+          <span
+            key={s.tapId}
+            className={`flex shrink-0 items-center gap-1 rounded-md py-1 pl-2 text-sm ${
+              selected ? "bg-brand text-brand-ink" : empty ? "bg-brand-soft text-ink ring-2 ring-brand" : "border border-line bg-surface text-ink-2"
+            }`}
+          >
+            <button type="button" onClick={() => onSelect(s.tapId)} className="flex items-center gap-1.5">
+              <Time className="font-semibold">{fmt(s.timeMs)}</Time>
+              <span className="text-xs">{empty ? "waiting" : s.athleteIds.map(firstName).join(", ")}</span>
+            </button>
+            {empty ? (
+              <button type="button" onClick={(e) => onDelete(e, s)} aria-label="Delete this capture" className="rounded p-1 text-ink-3 hover:text-danger">
+                <X className="size-3.5" />
+              </button>
+            ) : (
+              <span className="w-1.5" />
+            )}
+          </span>
+        );
+      })}
+    </div>
   );
 }
