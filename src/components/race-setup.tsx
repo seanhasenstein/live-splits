@@ -4,6 +4,8 @@ import { RaceForm } from "@/components/race-form";
 import { AppHeader, Button, Page, PageTitle } from "@/components/ui";
 import { can, getSession } from "@/lib/auth/session";
 import { getMeet, getProgram, getRace, listDistances, listRoster } from "@/lib/data";
+import { lastFinished } from "@/lib/order";
+import { getLineupHistory } from "@/lib/results/history";
 
 /** Server side of the race form, shared by the new and edit pages. */
 export async function RaceSetup({ meetId, raceId }: { meetId: string; raceId: string | null }) {
@@ -17,6 +19,12 @@ export async function RaceSetup({ meetId, raceId }: { meetId: string; raceId: st
   const program = await getProgram(meet.schoolId, "xc");
   if (!program) notFound();
   const [distances, roster] = await Promise.all([listDistances("xc"), listRoster(meet.seasonId)]);
+  // Each athlete's most recent finish this season, so the coach can seed the running order from it.
+  const history = await getLineupHistory(meet, { lineup: roster.map((a) => ({ athleteId: a._id, levelId: a.defaultLevelId })) });
+  const lastFinishMs = Object.fromEntries(roster.flatMap((a) => {
+    const ms = lastFinished(history.byAthlete[a._id])?.finishMs;
+    return ms == null ? [] : [[a._id, ms]];
+  }));
 
   return (
     <>
@@ -32,6 +40,7 @@ export async function RaceSetup({ meetId, raceId }: { meetId: string; raceId: st
           program={program.settings}
           distances={distances.map((d) => ({ id: d._id, label: d.label, value: d.value, unit: d.unit }))}
           roster={roster.map((a) => ({ id: a._id, name: a.displayName, gender: a.gender, defaultLevelId: a.defaultLevelId }))}
+          lastFinishMs={lastFinishMs}
           race={
             race && {
               name: race.name,

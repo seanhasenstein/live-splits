@@ -1,11 +1,12 @@
 "use client";
 
-import { Plus, X } from "lucide-react";
-import { useActionState, useState } from "react";
+import { ChevronDown, ChevronUp, GripVertical, Plus, X } from "lucide-react";
+import { useActionState, useRef, useState } from "react";
 import type { FormState } from "@/app/actions/races";
 import { Alert, Button, Card, CardBody, CardHeader, Checkbox, Field, Input, LinkButton, Select } from "@/components/ui";
 import type { DistanceUnit, Gender, Program } from "@/lib/db/schema";
 import type { RacePayload } from "@/lib/race-form";
+import { formatElapsed } from "@/lib/time";
 
 type DistanceOption = { id: string; label: string; value: number; unit: DistanceUnit };
 type RosterEntry = { id: string; name: string; gender: Gender; defaultLevelId: string };
@@ -17,6 +18,8 @@ type Props = {
   program: Program["settings"];
   distances: DistanceOption[];
   roster: RosterEntry[];
+  /** Most recent finish this season, by athlete; seeds the running order. */
+  lastFinishMs: Record<string, number>;
   race: RacePayload | null;
 };
 
@@ -30,7 +33,7 @@ function defaultCheckpoints(distance: DistanceOption | undefined): Checkpoint[] 
   ];
 }
 
-export function RaceForm({ action, cancelHref, program, distances, roster, race }: Props) {
+export function RaceForm({ action, cancelHref, program, distances, roster, lastFinishMs, race }: Props) {
   const [state, formAction, pending] = useActionState(action, {});
   const defaultDistance = distances.find((d) => d.id === "xc-5000m") ?? distances[0];
   const firstCategory = program.raceCategories[0];
@@ -98,6 +101,29 @@ export function RaceForm({ action, cancelHref, program, distances, roster, race 
     });
 
   const splitCount = checkpoints.filter((c) => c.kind === "split").length;
+
+  // The lineup's insertion order is the coach's order on the record screen.
+  const rosterById = new Map(roster.map((a) => [a.id, a]));
+  const running = [...lineup.keys()];
+  const reorder = (ids: string[]) => setLineup((m) => new Map(ids.map((id) => [id, m.get(id)!])));
+  const move = (from: number, to: number) => {
+    if (to < 0 || to >= running.length || from === to) return;
+    const next = [...running];
+    const [id] = next.splice(from, 1);
+    next.splice(to, 0, id);
+    reorder(next);
+  };
+  const nameOf = (id: string) => rosterById.get(id)?.name ?? "";
+  const seedAz = () => reorder([...running].sort((a, b) => nameOf(a).localeCompare(nameOf(b))));
+  const seedLast = () =>
+    reorder(
+      [...running].sort((a, b) => {
+        const ta = lastFinishMs[a] ?? Number.POSITIVE_INFINITY;
+        const tb = lastFinishMs[b] ?? Number.POSITIVE_INFINITY;
+        return ta - tb || nameOf(a).localeCompare(nameOf(b));
+      }),
+    );
+  const hasLast = running.some((id) => lastFinishMs[id] !== undefined);
 
   return (
     <form action={formAction} className="space-y-4">
@@ -240,6 +266,38 @@ export function RaceForm({ action, cancelHref, program, distances, roster, race 
         </div>
       </Card>
 
+      {running.length > 1 && (
+        <Card>
+          <CardHeader
+            title="Running order"
+            description="How managers see the names before anyone has passed. Drag, or use the arrows."
+            action={
+              <div className="flex gap-1">
+                {hasLast && (
+                  <Button variant="ghost" size="sm" onClick={seedLast}>
+                    By last race
+                  </Button>
+                )}
+                <Button variant="ghost" size="sm" onClick={seedAz}>
+                  A–Z
+                </Button>
+              </div>
+            }
+          />
+          <ReorderList
+            ids={running}
+            onMove={move}
+            render={(id, i) => (
+              <>
+                <span className="w-6 text-right text-[13px] tabular-nums text-ink-3">{i + 1}</span>
+                <span className="flex-1 truncate text-sm font-medium text-ink">{nameOf(id)}</span>
+                {lastFinishMs[id] !== undefined && <span className="tnum text-xs text-ink-3">{formatElapsed(lastFinishMs[id])}</span>}
+              </>
+            )}
+          />
+        </Card>
+      )}
+
       {state.error && <Alert tone="danger">{state.error}</Alert>}
       <div className="flex justify-end gap-2">
         <LinkButton href={cancelHref} variant="secondary">
@@ -250,5 +308,65 @@ export function RaceForm({ action, cancelHref, program, distances, roster, race 
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * A list you can drag into order. The grip starts a pointer drag (touch-action
+ * none, so the page doesn't scroll); the arrows do the same one step at a time.
+ */
+function ReorderList({ ids, onMove, render }: { ids: string[]; onMove: (from: number, to: number) => void; render: (id: string, index: number) => React.ReactNode }) {
+  const [dragging, setDragging] = useState<string | null>(null);
+  const rows = useRef(new Map<string, HTMLDivElement>());
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragging) return;
+    const from = ids.indexOf(dragging);
+    // Which row the pointer is over, by vertical midpoint.
+    let to = from;
+    ids.forEach((id, i) => {
+      const r = rows.current.get(id)?.getBoundingClientRect();
+      if (!r) return;
+      if (i < from && e.clientY < r.top + r.height / 2) to = Math.min(to, i);
+      if (i > from && e.clientY > r.top + r.height / 2) to = Math.max(to, i);
+    });
+    if (to !== from) onMove(from, to);
+  };
+
+  return (
+    <div className="divide-y divide-line border-t border-line" onPointerMove={onPointerMove} onPointerUp={() => setDragging(null)} onPointerCancel={() => setDragging(null)}>
+      {ids.map((id, i) => (
+        <div
+          key={id}
+          ref={(el) => {
+            if (el) rows.current.set(id, el);
+            else rows.current.delete(id);
+          }}
+          className={`flex items-center gap-2 px-2 py-1.5 ${dragging === id ? "bg-brand-soft" : ""}`}
+        >
+          <button
+            type="button"
+            aria-label="Drag to reorder"
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId);
+              setDragging(id);
+            }}
+            onPointerUp={() => setDragging(null)}
+            className="cursor-grab touch-none rounded p-1.5 text-ink-3 active:cursor-grabbing"
+          >
+            <GripVertical className="size-4" />
+          </button>
+          {render(id, i)}
+          <div className="flex">
+            <Button variant="ghost" size="sm" onClick={() => onMove(i, i - 1)} disabled={i === 0} aria-label="Move up" className="px-1.5">
+              <ChevronUp className="size-4" />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => onMove(i, i + 1)} disabled={i === ids.length - 1} aria-label="Move down" className="px-1.5">
+              <ChevronDown className="size-4" />
+            </Button>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

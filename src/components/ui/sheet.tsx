@@ -19,7 +19,7 @@ export function Sheet({ title, subtitle, onClose, children }: { title: ReactNode
       <div
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-lg rounded-t-xl bg-surface pb-[max(1rem,env(safe-area-inset-bottom))] shadow-sheet sm:rounded-xl sm:pb-0"
+        className="flex max-h-[90dvh] w-full max-w-lg flex-col rounded-t-xl bg-surface pb-[max(1rem,env(safe-area-inset-bottom))] shadow-sheet sm:rounded-xl sm:pb-0"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
@@ -31,7 +31,7 @@ export function Sheet({ title, subtitle, onClose, children }: { title: ReactNode
             <X className="size-5" />
           </button>
         </div>
-        <div className="px-4 pb-4">{children}</div>
+        <div className="min-h-0 overflow-y-auto px-4 pb-4">{children}</div>
       </div>
     </div>,
     document.body,

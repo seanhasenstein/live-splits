@@ -1,16 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowLeftRight, Check, Pencil, Undo2, X } from "lucide-react";
+import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeftRight, ArrowUpDown, Check, Pencil, Undo2, X } from "lucide-react";
 import { ClockWarning } from "@/components/race-card";
 import { CheckpointCounts, RaceStatusBar } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
 import { AppHeader, Badge, Button, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast, RaceStateBadge } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
+import { useLocalValue } from "@/lib/client/use-local-value";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
+import { type OrderMode, orderAthletes, orderKey, parseOrderMode } from "@/lib/order";
 import { type Mark, replay, type Slot, type SlotWithNames, type TapLike } from "@/lib/replay";
+import type { LineupHistory } from "@/lib/results/history";
 import { formatClock, formatElapsed } from "@/lib/time";
 
 type RaceInfo = {
@@ -19,7 +22,9 @@ type RaceInfo = {
   gunTimeMs: number | null;
   finished: boolean;
   checkpoints: { id: string; label: string; kind: "split" | "finish" }[];
+  /** The lineup in the coach's order. */
   athleteIds: string[];
+  history: LineupHistory;
 };
 
 type Props = {
@@ -38,20 +43,7 @@ const CAPTURE_OPEN_MS = 20_000;
 /** How long a capture chip stays in the bottom bar after it was taken. */
 const CHIP_TTL_MS = 3 * 60_000;
 const INTRO_KEY = "ls_record_intro_seen";
-const introListeners = new Set<() => void>();
-const subscribeIntro = (l: () => void) => {
-  introListeners.add(l);
-  return () => {
-    introListeners.delete(l);
-  };
-};
-const readIntroSeen = () => {
-  try {
-    return localStorage.getItem(INTRO_KEY) === "1";
-  } catch {
-    return true;
-  }
-};
+const ORDER_KEY = "ls_record_order_";
 const TOAST_MS = 4000;
 const FLASH_MS = 400;
 
@@ -291,11 +283,26 @@ function RaceTapper({
     }).length,
   }));
 
-  // Grid order: by the previous checkpoint's order; athletes not yet seen there go last, by name.
-  const ordered = useMemo(() => {
-    const prevTime = (id: string) => prev?.byAthlete.get(id)?.timeMs ?? Number.POSITIVE_INFINITY;
-    return [...race.athleteIds].sort((a, b) => prevTime(a) - prevTime(b) || (athletes[a] ?? "").localeCompare(athletes[b] ?? ""));
-  }, [race, prev, athletes]);
+  // Grid order. A manager's pick is remembered on this device; otherwise the previous
+  // checkpoint's order, or at the first checkpoint their last race (coach's order if none).
+  const [orderPref, setOrderPref] = useLocalValue(`${ORDER_KEY}${race.id}`);
+  const pickedOrder = useMemo(() => parseOrderMode(orderPref), [orderPref]);
+  const hasHistory = Object.keys(race.history.byAthlete).length > 0;
+  const orderMode = useMemo<OrderMode>(() => pickedOrder ?? (cpIndex > 0 ? { kind: "prev" } : hasHistory ? { kind: "last" } : { kind: "coach" }), [pickedOrder, cpIndex, hasHistory]);
+  const pickOrder = (m: OrderMode | null) => setOrderPref(m ? orderKey(m) : null);
+  const ordered = useMemo(
+    () =>
+      orderAthletes(orderMode, {
+        lineup: race.athleteIds,
+        names: athletes,
+        history: race.history,
+        prevTime: (id) => {
+          const m = prev?.byAthlete.get(id);
+          return m && !m.missed ? m.timeMs : null;
+        },
+      }),
+    [orderMode, race, prev, athletes],
+  );
 
   const [lastAction, setLastAction] = useState<LastAction | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -308,16 +315,18 @@ function RaceTapper({
     const t = setInterval(() => setNowMs(Date.now()), 5000);
     return () => clearInterval(t);
   }, []);
-  // First-use card: read from localStorage after hydration (the server never shows it).
-  const introSeen = useSyncExternalStore(subscribeIntro, readIntroSeen, () => true);
-  const dismissIntro = () => {
+  // First-use card. Until hydration the flag reads null, so the card waits a beat rather than flashing.
+  const [introFlag, setIntroFlag] = useLocalValue(INTRO_KEY);
+  const introSeen = introFlag !== "0";
+  const dismissIntro = () => setIntroFlag("1");
+  useEffect(() => {
+    // Read storage directly: the hook's value during hydration is the server's null.
     try {
-      localStorage.setItem(INTRO_KEY, "1");
+      if (localStorage.getItem(INTRO_KEY) === null) setIntroFlag("0");
     } catch {
       // ignore
     }
-    introListeners.forEach((l) => l());
-  };
+  }, [setIntroFlag]);
   const lastTapAt = useRef(new Map<string, number>());
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -474,7 +483,10 @@ function RaceTapper({
           </Button>
         </div>
       )}
-      <p className="px-3 pt-3 text-center text-[13px] text-ink-2">Tap a runner as they pass.</p>
+      <div className="flex items-center justify-between gap-2 px-3 pt-3">
+        <span className="text-[13px] text-ink-2">Tap a runner as they pass.</span>
+        <OrderControl mode={orderMode} picked={pickedOrder !== null} cpIndex={cpIndex} checkpoints={race.checkpoints} history={race.history} onPick={pickOrder} />
+      </div>
       <div className="grid flex-1 grid-cols-2 content-start gap-2 p-3 pb-44">
         {!loaded && <p className="col-span-2 text-sm text-ink-3">Loading…</p>}
         {ordered.map((id) => {
@@ -586,6 +598,137 @@ function RaceTapper({
         </div>
       </div>
     </main>
+  );
+}
+
+function OrderRow({ active, label, hint, disabled, onClick }: { active: boolean; label: string; hint: string; disabled?: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`flex h-14 w-full items-center justify-between rounded-lg border px-4 text-left disabled:opacity-50 ${
+        active ? "border-brand bg-brand-soft" : "border-line bg-surface hover:bg-surface-2"
+      }`}
+    >
+      <span>
+        <span className="block text-base font-medium text-ink">{label}</span>
+        <span className="block text-xs text-ink-2">{hint}</span>
+      </span>
+      {active && <Check className="size-4 shrink-0 text-brand-text" />}
+    </button>
+  );
+}
+
+/** Which way the tiles are laid out; remembered on this device for this race. */
+function OrderControl({
+  mode,
+  picked,
+  cpIndex,
+  checkpoints,
+  history,
+  onPick,
+}: {
+  mode: OrderMode;
+  picked: boolean;
+  cpIndex: number;
+  checkpoints: RaceInfo["checkpoints"];
+  history: LineupHistory;
+  onPick: (m: OrderMode | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [showRaces, setShowRaces] = useState(mode.kind === "race");
+  const prevLabel = cpIndex > 0 ? checkpoints[cpIndex - 1].label : null;
+  const raceLabel = (id: string) => history.races.find((r) => r.id === id)?.label ?? "a race";
+  const describe = (m: OrderMode) => {
+    switch (m.kind) {
+      case "prev":
+        return prevLabel ?? "Previous checkpoint";
+      case "last":
+        return "Last race";
+      case "race":
+        return raceLabel(m.raceId);
+      case "best":
+        return "Season best";
+      case "coach":
+        return "Coach's order";
+      case "az":
+        return "A–Z";
+    }
+  };
+  const options: { mode: OrderMode; label: string; hint: string; disabled?: boolean }[] = [
+    { mode: { kind: "prev" }, label: "Previous checkpoint", hint: prevLabel ? `Order they passed ${prevLabel}.` : "First checkpoint · nothing before it.", disabled: !prevLabel },
+    { mode: { kind: "last" }, label: "Last race", hint: history.races.length ? "Each runner's most recent finish." : "No results imported yet.", disabled: history.races.length === 0 },
+    { mode: { kind: "best" }, label: "Season best", hint: history.races.length ? "Fastest finish this season." : "No results imported yet.", disabled: history.races.length === 0 },
+    { mode: { kind: "coach" }, label: "Coach's order", hint: "The lineup as set on the race." },
+    { mode: { kind: "az" }, label: "A–Z", hint: "By first name." },
+  ];
+  const choose = (m: OrderMode) => {
+    onPick(m);
+    setOpen(false);
+  };
+  return (
+    <>
+      <Button variant="ghost" size="sm" onClick={() => setOpen(true)} className="-mr-2 text-ink-2">
+        <ArrowUpDown className="size-3.5" />
+        {describe(mode)}
+      </Button>
+      {open && (
+        <Sheet title="Order the names" subtitle="Runners with nothing to sort by go last, A–Z. Remembered on this phone." onClose={() => setOpen(false)}>
+          <div className="grid gap-2">
+            {options.map((o) => (
+              <OrderRow key={o.mode.kind} active={mode.kind === o.mode.kind} label={o.label} hint={o.hint} disabled={o.disabled} onClick={() => choose(o.mode)} />
+            ))}
+            {history.races.length > 0 && (
+              <>
+                <OrderRow
+                  active={mode.kind === "race"}
+                  label={mode.kind === "race" ? raceLabel(mode.raceId) : "A race…"}
+                  hint="Finish order from one earlier race."
+                  onClick={() => setShowRaces((v) => !v)}
+                />
+                {showRaces && (
+                  <div className="ml-4 grid gap-1.5 border-l-2 border-line pl-3">
+                    {history.races.map((r) => {
+                      const active = mode.kind === "race" && mode.raceId === r.id;
+                      return (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => choose({ kind: "race", raceId: r.id })}
+                          className={`flex h-11 items-center justify-between rounded-md border px-3 text-left text-sm ${
+                            active ? "border-brand bg-brand-soft text-ink" : "border-line bg-surface text-ink hover:bg-surface-2"
+                          }`}
+                        >
+                          <span>
+                            {r.label}
+                            {r.sameCourse && <span className="ml-2 text-xs text-brand-text">same course</span>}
+                          </span>
+                          <span className="text-xs text-ink-3">{r.date}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+            {picked && (
+              <Button
+                variant="subtle"
+                size="sm"
+                onClick={() => {
+                  onPick(null);
+                  setOpen(false);
+                }}
+                className="mt-1 justify-self-start"
+              >
+                Back to automatic
+              </Button>
+            )}
+          </div>
+        </Sheet>
+      )}
+    </>
   );
 }
 
