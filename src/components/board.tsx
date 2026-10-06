@@ -108,7 +108,8 @@ function RaceBoard({
   canTap: boolean;
 }) {
   const clock = useClock();
-  const { taps, gunTimeMs, official, send, online, loaded } = useRaceTaps(race.id, race.gunTimeMs);
+  const { taps, gunTimeMs, official, finished, longRunning, staleMinutes, send, online, loaded } = useRaceTaps(race.id, race.gunTimeMs);
+  const isFinished = race.finished || finished;
   const hasOfficial = Object.keys(official).length > 0;
   const state = useMemo(
     () => replay({ checkpoints: race.checkpoints.map((c) => ({ ...c, distance: { value: 0, unit: "mi", meters: 0 }, kind: "split" })) }, taps),
@@ -171,8 +172,9 @@ function RaceBoard({
     <>
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-1">
-          <RaceStatusBar finished={race.finished} gunTimeMs={gunTimeMs} now={clock.now} />
+          <RaceStatusBar finished={isFinished} gunTimeMs={gunTimeMs} now={clock.now} />
           {hasOfficial && <Badge tone="brand">Official results</Badge>}
+          {staleMinutes > 0 && <Badge tone="gold">updated {staleMinutes} min ago</Badge>}
           {!online && (
             <Badge tone="danger" dot>
               Offline
@@ -200,7 +202,7 @@ function RaceBoard({
       </div>
 
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <CheckpointCounts counts={counts} total={race.athleteIds.length} loaded={loaded} finished={race.finished} />
+        <CheckpointCounts counts={counts} total={race.athleteIds.length} loaded={loaded} finished={isFinished} />
         <Segmented
           value={view}
           onChange={setView}
@@ -211,6 +213,12 @@ function RaceBoard({
           className="w-full sm:w-80"
         />
       </div>
+
+      {longRunning && (
+        <div className="mb-3">
+          <Alert tone="gold">This race has been running for over 90 minutes. Mark it finished (meet page → Adjust) to stop live updates.</Alert>
+        </div>
+      )}
 
       {editing && (
         <div className="mb-3">

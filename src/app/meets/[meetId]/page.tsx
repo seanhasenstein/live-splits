@@ -53,7 +53,7 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
         right={<SessionMenu name={session.name} role={isSchoolCoach(session) ? "coach" : session.role} />}
       />
       <Page>
-        <AutoRefresh />
+        <AutoRefresh everyMs={races.some((r) => r.gunTimeMs !== null && !r.finishedAt) ? 5000 : 30000} />
         <PageTitle title={meet.name} description={`${formatLocalDate(meet.date)}${venue ? ` · ${venue.name}${venue.city ? `, ${venue.city}` : ""}` : ""}`} />
 
         <Card className="mb-5">

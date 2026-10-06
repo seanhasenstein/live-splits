@@ -31,6 +31,11 @@ pnpm dev
 - The **viewer link** (`/v/<token>`) opens a read-only session.
 - Sessions live in an httpOnly cookie for a year.
 
+Polling follows the race state: 10 s before the start, 2.5 s while in progress
+(15 s after 90 minutes, with a nudge to mark the race finished), 30 s once
+finished, and paused while the page is hidden. The meet page refreshes at 5 s
+while any race is in progress, otherwise 30 s.
+
 Clock sync: devices sample `GET /api/time` five times and keep the shortest
 round trip (`src/lib/client/clock.ts`). Every tap sends device time + offset;
 the server stores both plus the corrected time. `POST /api/taps` is idempotent

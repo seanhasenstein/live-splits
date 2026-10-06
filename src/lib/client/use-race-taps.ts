@@ -9,7 +9,10 @@ import type { TapInput } from "@/lib/taps";
 
 type ServerTap = TapLike & { raceId: string; createdAt: string };
 
-const POLL_MS = 2500;
+/** Poll intervals by race state. Live during the race; relaxed before and after; paused when hidden. */
+const POLL = { notStarted: 10_000, inProgress: 2_500, longRunning: 15_000, finished: 30_000 };
+const LONG_RUNNING_MS = 90 * 60 * 1000;
+const STALE_MS = 2 * 60 * 1000;
 
 const postTaps = (taps: OutboxTap[]) =>
   fetch("/api/taps", {
@@ -32,7 +35,11 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
   const [signedOut, setSignedOut] = useState(false);
   const [rejected, setRejected] = useState(0);
   const [official, setOfficial] = useState<OfficialTimes>({});
+  const [finished, setFinished] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  /** Derived in the poll loop (not during render): is the race overdue, and how old is our data. */
+  const [health, setHealth] = useState({ longRunning: false, staleMinutes: 0 });
+  const stateRef = useRef({ gunTimeMs: initialGunTimeMs, finished: false, lastUpdatedAt: null as number | null });
   const since = useRef(0);
   const flushing = useRef(false);
   const failures = useRef(0);
@@ -44,9 +51,11 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
     try {
       const res = await fetch(`/api/races/${raceId}/taps?since=${since.current}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const body = (await res.json()) as { taps: ServerTap[]; gunTimeMs: number | null; serverTimeMs: number; official?: OfficialTimes };
+      const body = (await res.json()) as { taps: ServerTap[]; gunTimeMs: number | null; serverTimeMs: number; official?: OfficialTimes; finished?: boolean };
       since.current = body.serverTimeMs;
       setGunTimeMs(body.gunTimeMs);
+      setFinished(!!body.finished);
+      stateRef.current = { gunTimeMs: body.gunTimeMs, finished: !!body.finished, lastUpdatedAt: Date.now() };
       if (body.official) setOfficial(body.official);
       if (body.taps.length > 0) {
         setServerTaps((prev) => {
@@ -63,11 +72,41 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
   }, [raceId]);
 
   // Callers remount this hook per race (key={race.id}), so state starts fresh for each race.
+  // The loop re-reads the race state each tick so the interval follows it, and it sleeps
+  // while the page is hidden (an immediate fetch runs when it comes back).
   useEffect(() => {
-    void poll();
-    const interval = setInterval(poll, POLL_MS);
-    return () => clearInterval(interval);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
+    const intervalFor = () => {
+      const { gunTimeMs: gun, finished: done } = stateRef.current;
+      if (done) return POLL.finished;
+      if (!gun) return POLL.notStarted;
+      return Date.now() - gun > LONG_RUNNING_MS ? POLL.longRunning : POLL.inProgress;
+    };
+    const tick = async () => {
+      if (stopped) return;
+      if (document.visibilityState === "visible") await poll();
+      if (stopped) return;
+      const { gunTimeMs: gun, finished: done, lastUpdatedAt } = stateRef.current;
+      const age = lastUpdatedAt === null ? 0 : Date.now() - lastUpdatedAt;
+      setHealth({ longRunning: !done && gun !== null && Date.now() - gun > LONG_RUNNING_MS, staleMinutes: age > STALE_MS ? Math.round(age / 60000) : 0 });
+      timer = setTimeout(tick, intervalFor());
+    };
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (timer) clearTimeout(timer);
+      void tick();
+    };
+    void tick();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [poll]);
+
+
 
   // --- outbox --------------------------------------------------------------
   const flushAgain = useRef(false);
@@ -205,5 +244,19 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
 
   const unsent = useMemo(() => [...outbox.values()].filter((t) => t.raceId === raceId).length, [outbox, raceId]);
 
-  return { taps, gunTimeMs, official, send, online, signedOut, rejected, loaded, unsent, refresh: poll };
+  return {
+    taps,
+    gunTimeMs,
+    official,
+    finished,
+    longRunning: health.longRunning,
+    staleMinutes: health.staleMinutes,
+    send,
+    online,
+    signedOut,
+    rejected,
+    loaded,
+    unsent,
+    refresh: poll,
+  };
 }

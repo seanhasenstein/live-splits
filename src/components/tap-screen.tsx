@@ -248,7 +248,8 @@ function RaceTapper({
 }) {
   const clock = useClock();
   const checkpoint = race.checkpoints[cpIndex];
-  const { taps, gunTimeMs, official, send, online, signedOut, rejected, loaded, unsent } = useRaceTaps(race.id, race.gunTimeMs);
+  const { taps, gunTimeMs, official, finished, staleMinutes, send, online, signedOut, rejected, loaded, unsent } = useRaceTaps(race.id, race.gunTimeMs);
+  const isFinished = race.finished || finished;
   const officialAt = (athleteId: string): number | null => {
     const o = official[athleteId];
     if (!o) return null;
@@ -385,7 +386,7 @@ function RaceTapper({
       />
       <div className="sticky top-14 z-10 space-y-2 border-b border-line bg-bg/95 px-3 py-2.5 backdrop-blur">
         <div className="flex items-center gap-2">
-          <RaceStatusBar name={race.name} finished={race.finished} gunTimeMs={gunTimeMs} now={clock.now} />
+          <RaceStatusBar name={race.name} finished={isFinished} gunTimeMs={gunTimeMs} now={clock.now} />
           <ClockWarning sync={clock.sync} error={clock.error} />
           {signedOut ? (
             <Link href="/join">
@@ -401,6 +402,7 @@ function RaceTapper({
             )
           )}
           {unsent > 0 && <Badge tone="gold">{unsent} unsent</Badge>}
+          {staleMinutes > 0 && <Badge tone="gold">updated {staleMinutes} min ago</Badge>}
           {rejected > 0 && (
             <Badge tone="danger" dot>
               {rejected} rejected
@@ -414,7 +416,7 @@ function RaceTapper({
             counts: Object.fromEntries(counts.map((c) => [c.id, c.n])),
           })}
         </div>
-        <CheckpointCounts counts={counts} total={race.athleteIds.length} loaded={loaded} finished={race.finished} activeId={checkpoint.id} />
+        <CheckpointCounts counts={counts} total={race.athleteIds.length} loaded={loaded} finished={isFinished} activeId={checkpoint.id} />
       </div>
 
       {cp && cp.pending.length > 0 && (
