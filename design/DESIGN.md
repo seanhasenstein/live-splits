@@ -94,3 +94,19 @@ Errors say what went wrong and what to do. Empty states invite the next action.
   for destructive actions).
 - Sheets render through a portal (sticky bars with backdrop blur would
   otherwise trap them).
+
+## Round 4 (Oct 6, 2026) — after the first meet
+
+- Record screen tiles carry context: before a runner passes, where they were
+  at the previous checkpoint and what they ran here last meet; after, the
+  cumulative time (bold), the segment, the pace change (green faster, red
+  slower, same as the board) and the difference vs last meet. Everything
+  under the name stays small and muted so the name is still the target.
+- Captures moved to the bottom bar as chips, next to the thumb; the top of
+  the list stays for names. An empty capture is outlined green ("waiting"),
+  a selected one is filled green. The toast sits above the bar.
+- "Names and tiles" sheet (order, compare with, large tiles) uses the same
+  tall option rows as the Change sheet; a disabled row explains why.
+- DNS / DNR / DNF are neutral pills: an absence, not an alarm.
+- "Live results" on a race card is a brand pill with the pulsing dot while
+  the race runs; the board says "Official results · live".

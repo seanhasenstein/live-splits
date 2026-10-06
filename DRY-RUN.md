@@ -53,4 +53,20 @@
 2. ~~Results / mat import~~ — done Oct 5: meet page → Import results (link,
    text or PDF), official times on every screen, Adjust → gun from official
    results, and the App vs official report.
-3. Field-test fixes from tonight's notes.
+3. ~~Record-screen round from the Nightfall notes~~ — done Oct 6:
+   - Packs: one Capture time can take several names (tapped within 20 s, or
+     after selecting its chip); capture chips live in the bottom bar.
+   - Order the names: previous checkpoint (default after the first), last
+     race, season best, one earlier race, coach's order (drag on the race
+     edit page), A–Z. Remembered per phone and race.
+   - Tiles: previous checkpoint + last meet's time here before they pass;
+     cumulative, segment, pace change and "vs last meet / this course" after.
+     "Everyone's through" banner offers the next checkpoint. Large tiles.
+     Last three taps in the bottom bar. First-use intro card.
+4. ~~Live official results~~ — done Oct 6: Adjust → Live official results
+   (link the race to the timing company's feed; polled at most every 15 s
+   while in progress). Tell Badger State Timing before using it at a meet.
+5. Import the season's earlier meets (links or files from the other timing
+   companies) so "last race" / "season best" ordering has data.
+6. Prod: `MONGODB_URI=… MONGODB_DB=live_splits_prod pnpm db:migrate`, deploy,
+   then import the Nightfall results on prod.
