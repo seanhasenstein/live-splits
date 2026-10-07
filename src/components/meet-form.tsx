@@ -1,5 +1,6 @@
 "use client";
 
+import { Check } from "lucide-react";
 import { useActionState, useState } from "react";
 import { type MeetFormState } from "@/app/actions/meets";
 import { CodesPanel } from "@/components/codes-panel";
@@ -52,9 +53,6 @@ export function MeetForm({ action, venues, defaultTimeZone, defaultState, meet, 
       </Card>
     );
   }
-
-  const courseLabel = (c: VenueWithCourses["courses"][number]) =>
-    `${c.name}${c.activeFromYear ? ` · ${c.activeToYear ? `${c.activeFromYear}–${c.activeToYear}` : `since ${c.activeFromYear}`}` : ""}`;
 
   return (
     <form action={formAction}>
@@ -121,10 +119,16 @@ export function MeetForm({ action, venues, defaultTimeZone, defaultState, meet, 
                         key={c._id}
                         type="button"
                         onClick={() => setCourseId(c._id)}
-                        className={`flex h-11 items-center justify-between rounded-md border px-3 text-left text-sm ${active ? "border-brand bg-brand-soft text-ink" : "border-line bg-surface text-ink hover:bg-surface-2"}`}
+                        className={`flex min-h-11 items-center gap-3 rounded-md border px-3 py-2 text-left text-sm ${active ? "border-brand bg-brand-soft text-ink" : "border-line bg-surface text-ink hover:bg-surface-2"}`}
                       >
-                        <span>{courseLabel(c)}</span>
-                        {c._id === current?._id && <span className="text-xs text-ink-3">current layout</span>}
+                        <span className="min-w-0 flex-1">
+                          <span className="block">{c.name}</span>
+                          <span className="block text-xs text-ink-3">
+                            {c.activeFromYear ? (c.activeToYear ? `${c.activeFromYear}–${c.activeToYear}` : `since ${c.activeFromYear}`) : ""}
+                            {c._id === current?._id && `${c.activeFromYear ? " · " : ""}current layout`}
+                          </span>
+                        </span>
+                        {active && <Check className="size-4 shrink-0 text-brand-text" />}
                       </button>
                     );
                   })}

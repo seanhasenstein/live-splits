@@ -62,7 +62,7 @@ export function Board({ meetId, meetName, session, initialRaceId, timeZone, race
 
   return (
     <>
-      <AppHeader title={meetName} titleHref={`/meets/${meetId}`} subtitle="Live board" right={<SessionMenu name={session.name} role={session.role} />} />
+      <AppHeader title={meetName} titleHref={`/meets/${meetId}`} subtitle="Live results" right={<SessionMenu name={session.name} role={session.role} />} />
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-4">
         {races.length > 1 && (
           <Segmented value={race.id} onChange={setRaceId} options={races.map((r) => ({ value: r.id, label: r.name }))} className="mb-3 lg:max-w-md" />
@@ -214,7 +214,7 @@ function RaceBoard({
 
       {longRunning && (
         <div className="mb-3">
-          <Alert tone="gold">This race has been running for over 90 minutes. Mark it finished (meet page → Adjust) to stop live updates.</Alert>
+          <Alert tone="gold">This race has been running for over 90 minutes. Mark it finished (meet page → Options → Adjust) to stop live updates.</Alert>
         </div>
       )}
 
@@ -306,7 +306,17 @@ function RaceBoard({
                         {shown}
                         {flag}
                       </Time>
-                      {view === "both" && i > 0 && split !== null && <Time className="block text-[11px] text-ink-3">{formatElapsed(split)}</Time>}
+                      {view === "both" && i > 0 && split !== null && (
+                        <Time className="block text-[11px] text-ink-3">
+                          {formatElapsed(split)}
+                          {prevPace !== null && segMeters > 0 && (
+                            <>
+                              {" "}
+                              <DeltaText ms={paceMsPerMile(split, segMeters) - prevPace} suffix="/mi" />
+                            </>
+                          )}
+                        </Time>
+                      )}
                       {view === "splits" && split !== null && (
                         <Time className="block text-[11px] text-ink-3">
                           {formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}/mi
@@ -316,6 +326,12 @@ function RaceBoard({
                               <DeltaText ms={paceMsPerMile(split, segMeters) - prevPace} />
                             </>
                           )}
+                        </Time>
+                      )}
+                      {view === "splits" && last && i > 0 && here !== null && !cell.missed && (
+                        <Time className="block text-[11px] font-semibold text-ink">
+                          {cumulative}
+                          {flag}
                         </Time>
                       )}
                     </>
@@ -363,8 +379,8 @@ function RaceBoard({
       <p className="mt-3 text-xs text-ink-3">
         * edited &nbsp; ~ estimate &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : "Official times replace app taps where imported. ")}{" "}
         {view === "splits"
-          ? "Splits are the time since the previous checkpoint; beneath each, the pace per mile and the change from the previous segment (+ slower, − faster)."
-          : "Cumulative time from the gun, with the split beneath."}{" "}
+          ? "Splits are the time since the previous checkpoint; beneath each, the pace per mile and the change from the previous segment (+ slower, − faster). The finish column also shows the finish time."
+          : "Cumulative time from the gun, with the split beneath and the pace change from the previous segment (+ slower, − faster)."}{" "}
         Updates every few seconds.
       </p>
 

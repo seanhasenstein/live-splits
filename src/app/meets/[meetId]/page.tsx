@@ -135,9 +135,9 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
                             Record splits
                           </LinkButton>
                         )}
-                        <LinkButton href={`/meets/${meet._id}/board?race=${race._id}`} size="lg" variant="subtle" className={can(session, "tap", meet) ? "" : "col-span-2"}>
+                        <LinkButton href={`/meets/${meet._id}/results?race=${race._id}`} size="lg" variant="subtle" className={can(session, "tap", meet) ? "" : "col-span-2"}>
                           <TableProperties className="size-4" />
-                          Live board
+                          Live results
                         </LinkButton>
                       </div>,
                     ]),

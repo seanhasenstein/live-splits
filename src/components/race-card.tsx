@@ -30,7 +30,7 @@ type Props = {
   hasOfficial: boolean;
   /** The timing company's live feed, polled while the race runs. */
   liveFeed: { url: string; contestName: string | null } | null;
-  /** Record splits / Live board, rendered inside the card; one version per race state so it can match. */
+  /** Record splits / Live results, rendered inside the card; one version per race state so it can match. */
   actions?: Record<RaceState, React.ReactNode>;
 };
 

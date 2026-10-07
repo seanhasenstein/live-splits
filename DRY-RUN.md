@@ -26,7 +26,7 @@
 3. Phone A at "Mile 1": tap names as they pass; try CAPTURE twice then tap two
    names; try Undo; tap a name twice (second tap within 1s is ignored; later tap
    asks to replace).
-4. Phone B on the live board: times appear within ~3s; tap a time → nudge,
+4. Phone B on the live results: times appear within ~3s; tap a time → nudge,
    move, swap, mark missed.
 5. Put phone A in airplane mode, record two taps (shows "offline · 2 unsent"),
    turn it back on, confirm they arrive on phone B.
@@ -40,7 +40,7 @@
   on while the Record splits screen is open.
 - Whoever is at the start starts the race clock for each race; if missed,
   the gun can be typed from the clock time or set later from official results.
-- After each race, the live board is the review screen; fix there, then export.
+- After each race, the live results is the review screen; fix there, then export.
 
 ## After the meet (in order)
 

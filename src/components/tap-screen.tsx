@@ -530,8 +530,8 @@ function RaceTapper({
         subtitle="Record splits"
         right={
           <>
-            <LinkButton href={`/meets/${meetId}/board?race=${race.id}`} variant="secondary" size="sm">
-              Live board
+            <LinkButton href={`/meets/${meetId}/results?race=${race.id}`} variant="secondary" size="sm">
+              Live results
             </LinkButton>
             <SessionMenu name={session.name} role={session.role} />
           </>
@@ -613,8 +613,8 @@ function RaceTapper({
               <ArrowRight className="size-3.5" />
             </Button>
           ) : (
-            <LinkButton href={`/meets/${meetId}/board?race=${race.id}`} size="sm">
-              Live board
+            <LinkButton href={`/meets/${meetId}/results?race=${race.id}`} size="sm">
+              Live results
               <ArrowRight className="size-3.5" />
             </LinkButton>
           )}
