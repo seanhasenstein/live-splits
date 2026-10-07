@@ -198,3 +198,18 @@ export async function updateMeetAction(meetId: string, _prev: MeetFormState, for
   );
   redirect(`/meets/${meet._id}`);
 }
+
+/** Create (or replace) the season-wide viewer link. Replacing signs out everyone using the old one. */
+export async function regenerateSeasonLinkAction(): Promise<{ error?: string; viewerPath?: string }> {
+  const session = await getSession();
+  if (!isSchoolCoach(session)) return { error: "Not allowed" };
+  const token = generateToken();
+  const db = await getDb();
+  await collection(db, "schools").updateOne(
+    { _id: session!.schoolId },
+    { $set: { viewerLink: { tokenHash: hashToken(token), tokenEnc: encrypt(token) }, updatedAt: new Date(), updatedBy: sessionActor(session!) } },
+  );
+  // Sessions opened with the old link stop here.
+  await collection(db, "sessions").updateMany({ schoolId: session!.schoolId, meetId: null, role: "viewer", revokedAt: null }, { $set: { revokedAt: new Date() } });
+  return { viewerPath: `/v/${token}` };
+}

@@ -15,6 +15,8 @@ export const School = tenantDoc({
     /** How timing companies spell the team, e.g. "Sheboygan Area Lutheran". Used to find our rows in results. */
     teamAliases: z.array(z.string().min(1)),
   }),
+  /** Season-wide read-only link (/v/<token>): one link for parents that opens every meet. Hash for lookup, encrypted copy to show. */
+  viewerLink: z.object({ tokenHash: z.string().min(1), tokenEnc: z.string().min(1) }).nullable().default(null),
 });
 export type School = z.infer<typeof School>;
 

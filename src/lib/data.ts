@@ -108,3 +108,9 @@ export async function listVenuesWithCourses(schoolId: string): Promise<VenueWith
     courses: courses.filter((c) => c.venueId === v._id).map((c) => ({ _id: c._id, name: c.name, activeFromYear: c.activeFromYear, activeToYear: c.activeToYear })),
   }));
 }
+
+/** The school's season-wide viewer link path, if one has been created. */
+export function readSeasonViewerPath(school: School): string | null {
+  const token = school.viewerLink ? decrypt(school.viewerLink.tokenEnc) : null;
+  return token ? `/v/${token}` : null;
+}

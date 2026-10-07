@@ -85,14 +85,28 @@ const ROLE_PERMISSIONS: Record<SessionRole, Permission[]> = {
   viewer: ["view"],
 };
 
-/** Whether a session may do `permission` on `meet`. Setup needs a school-level coach session. */
+/**
+ * Whether a session may do `permission` on `meet`. School-level sessions
+ * (meetId null) span every meet: a coach may do anything, a viewer may look.
+ * Meet sessions are limited to their meet and role.
+ */
 export function can(session: Session | null, permission: Permission, meet: Meet): boolean {
   if (!session || session.schoolId !== meet.schoolId) return false;
-  if (session.meetId === null) return session.role === "coach";
+  if (session.meetId === null) return session.role === "coach" || (session.role === "viewer" && permission === "view");
   if (session.meetId !== meet._id) return false;
   return ROLE_PERMISSIONS[session.role].includes(permission);
 }
 
 export function isSchoolCoach(session: Session | null): boolean {
   return session?.role === "coach" && session.meetId === null;
+}
+
+/** A season-wide viewer (from the school's viewer link): sees every meet, read-only. */
+export function isSchoolViewer(session: Session | null): boolean {
+  return session?.role === "viewer" && session.meetId === null;
+}
+
+/** Can browse the meets list: school-level coach or viewer. */
+export function isSchoolWide(session: Session | null): boolean {
+  return !!session && session.meetId === null;
 }

@@ -15,7 +15,7 @@ import {
   Page,
   PageTitle,
 } from "@/components/ui";
-import { can, getSession, isSchoolCoach } from "@/lib/auth/session";
+import { can, getSession, isSchoolCoach, isSchoolWide } from "@/lib/auth/session";
 import { getMeet, getProgram, gunFiredBy, listRaces, readJoinCodes } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
@@ -48,7 +48,7 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
   return (
     <>
       <AppHeader
-        back={isSchoolCoach(session) ? { href: "/meets", label: "Meets" } : undefined}
+        back={isSchoolWide(session) ? { href: "/meets", label: "Meets" } : undefined}
         right={<SessionMenu name={session.name} role={isSchoolCoach(session) ? "coach" : session.role} />}
       />
       <Page>

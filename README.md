@@ -32,7 +32,11 @@ pnpm dev
 - Each meet has a **manager code** (tap, fix, gun) and a **coach code** (same
   plus export). Coaches see them on the meet page any time (stored encrypted)
   and can share `/join?code=…` links; Regenerate replaces them.
-- The **viewer link** (`/v/<token>`) opens a read-only session.
+- The **viewer link** (`/v/<token>`) opens a read-only session for one meet.
+- The **season link** (Meets → Season link; also `/v/<token>`) opens a
+  read-only session for every meet: the meets list (happening now / upcoming /
+  past) and each meet's live results. Share it once with parents; replacing it
+  signs those viewers out.
 - Sessions live in an httpOnly cookie for a year.
 
 Polling follows the race state: 10 s before the start, 2.5 s while in progress
@@ -70,4 +74,4 @@ course" tag both key off `meets.courseId`.
   Only exact and alias name matches are shown live; do the real import after.
   Be a good neighbour: let the timing company know before leaning on their feed.
 - `pnpm db:migrate` backfills fields added since a database was seeded
-  (`races.liveFeed` is the latest).
+  (`races.liveFeed`, `meets.resultsUrl`, `schools.viewerLink` are the latest).
