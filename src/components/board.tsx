@@ -254,9 +254,9 @@ function RaceBoard({
               {race.checkpoints.map((c, i) => (
                 <th key={c.id} className="px-2 py-2 text-right font-semibold last:px-3 sm:last:px-4">
                   {c.label}
-                  {view === "both" && <span className="block text-[10px] font-normal tracking-normal normal-case text-ink-3">cumulative · split</span>}
+                  {view === "both" && <span className="hidden text-[10px] font-normal tracking-normal normal-case text-ink-3 min-[420px]:block">cumulative · split</span>}
                   {view === "splits" && (
-                    <span className="block text-[10px] font-normal tracking-normal normal-case text-ink-3">
+                    <span className="hidden text-[10px] font-normal tracking-normal normal-case text-ink-3 min-[420px]:block">
                       {(() => {
                         const prev = i > 0 ? race.checkpoints[i - 1].meters : 0;
                         const mi = (c.meters - prev) / METERS_PER_MILE;
