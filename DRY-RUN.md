@@ -71,3 +71,12 @@
 6. ~~Prod migrate~~ — done Oct 6. Still to do: deploy, import the Nightfall
    results on prod, and open the Nightfall meet → Edit → Save once so it
    gets its course record (courses were added Oct 6).
+
+## Backlog (not yet scheduled)
+
+- **Course maps from GPX** (idea, Oct 7): attach a watch's GPX (file, or pull
+  from Strava) to a course; scale the track to the course's measured distance
+  so markers land on the real mile marks; show route + checkpoint pins +
+  elevation profile / gain per segment on a branded web page and a printable
+  version for the post-meet packet. Elevation gain per course also explains
+  "vs this course" vs "vs last meet" deltas. After the historical import.
