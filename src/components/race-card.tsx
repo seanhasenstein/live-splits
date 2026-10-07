@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleCheck, Flag, MoreHorizontal, Radio, Timer } from "lucide-react";
+import { ChevronRight, CircleCheck, Download, Flag, GitCompare, MoreHorizontal, Pencil, Radio, Timer } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { clearGunTimeAction, findLiveFeedsAction, gunFromOfficialPreviewAction, type LiveFeedOption, setGunFromOfficialAction, setGunTimeAction, setLiveFeedAction, setRaceFinishedAction } from "@/app/actions/races";
@@ -17,8 +17,10 @@ type Props = {
   startLabel: string | null;
   /** "Girls · Varsity + JV · 5K · 10 athletes · Mile 1, Mile 2, Finish" */
   details: string;
-  /** CSV / Edit, shown on the title row for coaches. */
-  headerActions?: React.ReactNode;
+  /** Links offered in the "…" options sheet; null when this session can't use them. */
+  editHref: string | null;
+  csvHref: string | null;
+  compareHref: string | null;
   gunTimeMs: number | null;
   finishedAt: string | null;
   firedBy: string | null;
@@ -37,7 +39,7 @@ type Props = {
  * Start race…), in progress (big elapsed time; changes live behind "Adjust"),
  * finished (frozen). Nothing destructive is a single tap.
  */
-export function RaceCard({ raceId, name, startLabel, details, headerActions, gunTimeMs: initialGun, finishedAt: initialFinished, firedBy, timeZone, canGun, hasOfficial, liveFeed, actions }: Props) {
+export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref, compareHref, gunTimeMs: initialGun, finishedAt: initialFinished, firedBy, timeZone, canGun, hasOfficial, liveFeed, actions }: Props) {
   const router = useRouter();
   const clock = useClock();
   const [gunTimeMs, setGunTimeMs] = useState(initialGun);
@@ -47,6 +49,7 @@ export function RaceCard({ raceId, name, startLabel, details, headerActions, gun
   const [error, setError] = useState<string | null>(null);
   const [sending, startSend] = useTransition();
   const [adjusting, setAdjusting] = useState(false);
+  const [options, setOptions] = useState(false);
 
   // Server data changed underneath us (someone else set the gun): adopt it.
   if (initialGun !== seen.initialGun || initialFinished !== seen.initialFinished) {
@@ -128,7 +131,7 @@ export function RaceCard({ raceId, name, startLabel, details, headerActions, gun
       }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-        <div className="min-w-0 flex-1 basis-56">
+        <div className="min-w-0 flex-1 basis-40">
           <div className="flex flex-wrap items-center gap-2">
             {running ? <Timer className="size-4 text-danger" /> : finished ? <CircleCheck className="size-4 text-brand-text" /> : <Flag className="size-4 text-ink-2" />}
             <span className="text-base font-semibold text-ink">{name}</span>
@@ -147,15 +150,14 @@ export function RaceCard({ raceId, name, startLabel, details, headerActions, gun
           </div>
           <div className="mt-0.5 text-[13px] text-ink-2">{details}</div>
         </div>
-        <div className="flex shrink-0 items-center gap-1 self-start">
-          {headerActions}
-          {canGun && !armed && (
-            <Button variant="subtle" size="sm" onClick={() => setAdjusting(true)} aria-label={gunTimeMs !== null ? "Adjust the race clock" : "Set the gun time by hand"}>
+        {(canGun || editHref || csvHref || compareHref) && !armed && (
+          <div className="shrink-0 self-start">
+            <Button variant="subtle" size="sm" onClick={() => setOptions(true)} aria-label={`Options for ${name}`}>
               <MoreHorizontal className="size-4" />
-              {gunTimeMs !== null && "Adjust"}
+              Options
             </Button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {gunTimeMs !== null ? (
@@ -207,6 +209,27 @@ export function RaceCard({ raceId, name, startLabel, details, headerActions, gun
       )}
 
       {actions && <div className="mt-3">{actions[running ? "in_progress" : finished ? "finished" : "not_started"]}</div>}
+
+      {options && (
+        <Sheet title={name} subtitle="Race options" onClose={() => setOptions(false)}>
+          <div className="grid gap-1.5">
+            {canGun && (
+              <OptionRow
+                icon={<Timer className="size-4" />}
+                label={gunTimeMs !== null ? "Adjust the race clock…" : "Set the gun time by hand…"}
+                hint={gunTimeMs !== null ? "Mark finished, change or remove the gun, link live results." : "Type the clock time the gun went off."}
+                onClick={() => {
+                  setOptions(false);
+                  setAdjusting(true);
+                }}
+              />
+            )}
+            {editHref && <OptionRow icon={<Pencil className="size-4" />} label="Edit race" hint="Name, checkpoints, lineup and running order." href={editHref} />}
+            {csvHref && <OptionRow icon={<Download className="size-4" />} label="Download CSV" hint="Split-workbook layout, one row per athlete." href={csvHref} download />}
+            {compareHref && <OptionRow icon={<GitCompare className="size-4" />} label="App vs official" hint="How close the taps were to the mats." href={compareHref} />}
+          </div>
+        </Sheet>
+      )}
 
       {adjusting && (
         <AdjustSheet
@@ -506,6 +529,32 @@ function LiveFeedControl({ raceId, liveFeed, onSaved }: { raceId: string; liveFe
         </form>
       )}
     </div>
+  );
+}
+
+/** A labelled row in the options sheet: a link, or a button. */
+function OptionRow({ icon, label, hint, href, download, onClick }: { icon: React.ReactNode; label: string; hint: string; href?: string; download?: boolean; onClick?: () => void }) {
+  const inner = (
+    <>
+      <span className="text-ink-2">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-base font-medium text-ink">{label}</span>
+        <span className="block text-xs text-ink-2">{hint}</span>
+      </span>
+      <ChevronRight className="size-4 text-ink-3" />
+    </>
+  );
+  const cls = "flex h-14 w-full items-center gap-3 rounded-lg border border-line bg-surface px-4 text-left hover:bg-surface-2";
+  if (href)
+    return (
+      <a href={href} download={download} className={cls}>
+        {inner}
+      </a>
+    );
+  return (
+    <button type="button" onClick={onClick} className={cls}>
+      {inner}
+    </button>
   );
 }
 

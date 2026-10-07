@@ -1,15 +1,13 @@
 import type { Metadata } from "next";
-import { Download, GitCompare, Pencil, Plus, Upload, Users } from "lucide-react";
+import { Pencil, Plus, TableProperties, Timer, Upload, Users } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { AutoRefresh } from "@/components/auto-refresh";
-import { CodesPanel } from "@/components/codes-panel";
+import { ShareMeet } from "@/components/share-meet";
 import { RaceCard, type RaceState } from "@/components/race-card";
 import { SessionMenu } from "@/components/session-menu";
 import {
-  AnchorButton,
   AppHeader,
   Card,
-  CardBody,
   CardHeader,
   EmptyState,
   LinkButton,
@@ -61,12 +59,15 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
             course && venue && course.name !== venue.name ? ` · ${course.name}` : ""
           }`}
           action={
-            setup ? (
-              <LinkButton href={`/meets/${meet._id}/edit`} variant="subtle" size="sm" title="Edit meet" aria-label="Edit meet">
-                <Pencil className="size-4" />
-                Edit
-              </LinkButton>
-            ) : undefined
+            <div className="flex gap-1">
+              {can(session, "export", meet) && <ShareMeet meetId={meet._id} codes={readJoinCodes(meet)} canRegenerate={setup} />}
+              {setup && (
+                <LinkButton href={`/meets/${meet._id}/edit`} variant="secondary" size="sm" title="Edit meet" aria-label="Edit meet">
+                  <Pencil className="size-4" />
+                  Edit
+                </LinkButton>
+              )}
+            </div>
           }
         />
 
@@ -110,25 +111,9 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
                   details={`${label(program?.settings.raceCategories, race.raceCategoryId)} · ${race.levelIds.map((l) => label(program?.settings.levels, l)).join(" + ")} · ${
                     distances.find((d) => d._id === race.distanceId)?.label ?? race.distanceId
                   } · ${race.lineup.length} athletes · ${race.checkpoints.map((c) => c.label).join(", ") || "no checkpoints"}`}
-                  headerActions={
-                    <>
-                      {race.officialImportId && can(session, "export", meet) && (
-                        <LinkButton href={`/meets/${meet._id}/compare?race=${race._id}`} variant="subtle" size="sm" title="App vs official">
-                          <GitCompare className="size-4" />
-                        </LinkButton>
-                      )}
-                      {can(session, "export", meet) && (
-                        <AnchorButton href={`/api/meets/${meet._id}/export?race=${race._id}`} variant="subtle" size="sm" title="Download CSV" aria-label="Download CSV">
-                          <Download className="size-4" />
-                        </AnchorButton>
-                      )}
-                      {setup && (
-                        <LinkButton href={`/meets/${meet._id}/races/${race._id}`} variant="subtle" size="sm" title="Edit race" aria-label="Edit race">
-                          <Pencil className="size-4" />
-                        </LinkButton>
-                      )}
-                    </>
-                  }
+                  editHref={setup ? `/meets/${meet._id}/races/${race._id}` : null}
+                  csvHref={can(session, "export", meet) ? `/api/meets/${meet._id}/export?race=${race._id}` : null}
+                  compareHref={race.officialImportId && can(session, "export", meet) ? `/meets/${meet._id}/compare?race=${race._id}` : null}
                   gunTimeMs={race.gunTimeMs}
                   liveFeed={race.liveFeed ?? null}
                   finishedAt={race.finishedAt?.toISOString() ?? null}
@@ -146,11 +131,12 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
                             size="lg"
                             variant={state === "in_progress" ? "danger-solid" : state === "finished" ? "primary" : "ink"}
                           >
-                            {state === "in_progress" && <LiveDot className="bg-white" />}
+                            {state === "in_progress" ? <LiveDot className="bg-white" /> : <Timer className="size-4" />}
                             Record splits
                           </LinkButton>
                         )}
                         <LinkButton href={`/meets/${meet._id}/board?race=${race._id}`} size="lg" variant="subtle" className={can(session, "tap", meet) ? "" : "col-span-2"}>
+                          <TableProperties className="size-4" />
                           Live board
                         </LinkButton>
                       </div>,
@@ -162,14 +148,6 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
           )}
         </Card>
 
-        {can(session, "export", meet) && (
-          <Card>
-            <CardHeader title="Join codes" description="Managers join with the manager code; the viewer link is read-only." />
-            <CardBody>
-              <CodesPanel meetId={meet._id} initialCodes={readJoinCodes(meet)} canRegenerate={setup} />
-            </CardBody>
-          </Card>
-        )}
       </Page>
     </>
   );

@@ -66,7 +66,7 @@ export function ThemeControl({ className = "" }: { className?: string }) {
             aria-checked={active}
             title={label}
             onClick={() => setThemePreference(value)}
-            className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded text-xs font-medium transition-colors ${
+            className={`flex h-9 flex-1 items-center justify-center gap-1.5 rounded px-2 text-xs font-medium transition-colors ${
               active ? "bg-surface-3 text-ink shadow-card" : "text-ink-2 hover:text-ink"
             }`}
           >

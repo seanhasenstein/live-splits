@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Share } from "lucide-react";
+import { Check, Copy, Share } from "lucide-react";
 import { useState, useSyncExternalStore, useTransition } from "react";
 import { type JoinCodes, regenerateCodesAction } from "@/app/actions/meets";
 import { Alert, Button } from "@/components/ui";
@@ -41,29 +41,49 @@ export function CodesPanel({ meetId, initialCodes, canRegenerate }: { meetId: st
         <Alert tone="gold">This meet&rsquo;s codes were created before codes were stored. Regenerate to get ones that stay visible.</Alert>
       )}
       {error && <Alert tone="danger">{error}</Alert>}
-      {canRegenerate &&
-        (confirming ? (
-          <div className="flex flex-wrap items-center gap-2 text-[13px] text-ink-2">
-            <span>Current codes stop working immediately.</span>
-            <Button variant="danger" size="sm" onClick={regenerate}>
-              Regenerate
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => setConfirming(false)}>
-              Cancel
-            </Button>
-          </div>
-        ) : (
-          <Button variant="ghost" size="sm" onClick={() => setConfirming(true)} disabled={pending}>
-            {pending ? "Working…" : "Regenerate codes"}
-          </Button>
-        ))}
+      {canRegenerate && (
+        <div className="border-t border-line pt-3">
+          {confirming ? (
+            <div className="flex flex-wrap items-center gap-2 text-[13px] text-ink-2">
+              <span>Everyone who joined with the current codes is signed out.</span>
+              <Button variant="danger" size="sm" onClick={regenerate}>
+                Regenerate
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setConfirming(false)}>
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <p className="text-[13px] text-ink-3">
+              If a code gets out,{" "}
+              <button type="button" onClick={() => setConfirming(true)} disabled={pending} className="text-ink-2 underline hover:text-ink">
+                {pending ? "working…" : "regenerate the codes"}
+              </button>
+              .
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 function CodeRow({ label, value, note, link, small }: { label: string; value: string; note: string; link: string; small?: boolean }) {
   const [copied, setCopied] = useState(false);
+  const flashCopied = () => {
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
+  // Tap the code to copy it; Share opens the phone's share sheet (or copies the link).
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      flashCopied();
+    } catch {
+      // clipboard blocked; the text is still selectable
+    }
+  };
   const share = async () => {
     const text = small ? link : `${label} for live splits: ${value}\n${link}`;
     try {
@@ -72,8 +92,7 @@ function CodeRow({ label, value, note, link, small }: { label: string; value: st
         return;
       }
       await navigator.clipboard.writeText(link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      flashCopied();
     } catch {
       // share sheet dismissed, or clipboard blocked; nothing to do
     }
@@ -81,15 +100,18 @@ function CodeRow({ label, value, note, link, small }: { label: string; value: st
 
   return (
     <div className="flex items-center gap-3 px-3 py-2.5">
-      <div className="min-w-0 flex-1">
-        <div className="text-[13px] font-medium text-ink">
+      <button type="button" onClick={copy} title="Tap to copy" className="min-w-0 flex-1 rounded-md text-left active:bg-surface-2">
+        <span className="block text-[13px] font-medium text-ink">
           {label} <span className="font-normal text-ink-3">· {note}</span>
-        </div>
-        <div className={`mt-0.5 font-mono select-all ${small ? "truncate text-xs text-ink-2" : "text-xl tracking-[0.15em] text-ink"}`}>{value}</div>
-      </div>
+        </span>
+        <span className={`mt-0.5 flex items-center gap-2 font-mono ${small ? "text-xs text-ink-2" : "text-xl tracking-[0.15em] text-ink"}`}>
+          <span className="truncate">{value}</span>
+          {copied ? <Check className="size-4 shrink-0 text-brand-text" /> : <Copy className="size-3.5 shrink-0 text-ink-3" />}
+        </span>
+      </button>
       <Button variant="secondary" size="sm" onClick={share} className="shrink-0">
-        {copied ? <Check className="size-3.5" /> : <Share className="size-3.5" />}
-        {copied ? "Copied" : "Share"}
+        <Share className="size-3.5" />
+        Share
       </Button>
     </div>
   );
