@@ -20,6 +20,10 @@ pnpm dev
 - `pnpm dev` / `pnpm build` / `pnpm lint` / `pnpm typecheck`
 - `pnpm db:indexes` — create indexes
 - `pnpm db:seed` — create indexes and seed
+- `pnpm db:migrate` — backfill fields added since the database was seeded
+- `pnpm db:clear-taps "<meet>" --yes` — wipe a meet's taps and gun times (test data)
+- `pnpm db:delete-meet "<meet>" --yes` — hard-delete a test meet and everything tied to it; dry run without `--yes`. Deleting a meet in the UI only hides it (soft delete) and keeps its log.
+- Any of these runs against another database with `MONGODB_URI=… MONGODB_DB=… pnpm db:…`
 
 ## How access works (MVP, no accounts)
 
