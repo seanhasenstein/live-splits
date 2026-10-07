@@ -29,7 +29,7 @@ export function RaceStatusBar({
     return () => clearInterval(t);
   }, [finished, gunTimeMs]);
 
-  const prefix = name ? <span className="text-sm font-semibold">{name} ·</span> : null;
+  const prefix = name ? <span className="truncate text-sm font-semibold">{name} ·</span> : null;
 
   if (finished) {
     return (
@@ -38,7 +38,7 @@ export function RaceStatusBar({
           <Check className="size-3" strokeWidth={3} />
         </span>
         {prefix}
-        <span className="text-sm font-semibold">Race finished</span>
+        <span className="shrink-0 text-sm font-semibold">Race finished</span>
       </div>
     );
   }
@@ -49,8 +49,8 @@ export function RaceStatusBar({
           <Flag className="size-3" />
         </span>
         {prefix}
-        <span className="text-sm font-semibold">Not started</span>
-        <span className="text-sm opacity-80">· waiting for the gun</span>
+        <span className="shrink-0 text-sm font-semibold">Not started</span>
+        <span className="hidden truncate text-sm opacity-80 min-[400px]:inline">· waiting for the gun</span>
       </div>
     );
   const n = now();
@@ -58,8 +58,8 @@ export function RaceStatusBar({
     <div className="flex min-w-0 flex-1 items-center justify-center gap-2.5 rounded-lg border border-danger/40 bg-danger-soft px-3 py-1.5 text-danger sm:justify-start">
       <LiveDot className="bg-danger" />
       {prefix}
-      <span className="text-sm font-semibold">In progress</span>
-      <Time className="text-2xl font-semibold tracking-tight text-ink">{n === null ? "—" : formatElapsed(n - gunTimeMs)}</Time>
+      <span className="shrink-0 text-sm font-semibold">In progress</span>
+      <Time className="shrink-0 text-2xl font-semibold tracking-tight text-ink">{n === null ? "—" : formatElapsed(n - gunTimeMs)}</Time>
     </div>
   );
 }

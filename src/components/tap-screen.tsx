@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, ArrowRight, ArrowUpDown, Check, Pencil, Undo2, X } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Pencil, SlidersHorizontal, Undo2, X } from "lucide-react";
 import { ClockWarning } from "@/components/race-card";
 import { CheckpointCounts, DeltaText, RaceStatusBar } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
@@ -13,7 +13,7 @@ import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
 import { type OrderMode, lastFinished, orderAthletes, orderKey, parseOrderMode } from "@/lib/order";
 import { paceMsPerMile } from "@/lib/pace";
-import { expectedAt, type Mark, replay, replayStatuses, type Slot, type SlotWithNames, STATUS_LABEL, type TapLike } from "@/lib/replay";
+import { type AthleteStatus, expectedAt, type Mark, replay, replayStatuses, type Slot, type SlotWithNames, STATUS_LABEL, STATUS_LONG, type TapLike } from "@/lib/replay";
 import type { LineupHistory, PriorResult } from "@/lib/results/history";
 import { formatClock, formatElapsed } from "@/lib/time";
 
@@ -41,6 +41,8 @@ type Props = {
 };
 
 const DOUBLE_TAP_MS = 1000;
+/** Press-and-hold on a tile opens the DNS / DNF sheet. */
+const HOLD_MS = 550;
 /** A capture stays open for more names this long after it was taken (a pack crossing together). */
 const CAPTURE_OPEN_MS = 20_000;
 /** How long a capture chip stays in the bottom bar after it was taken. */
@@ -104,6 +106,7 @@ export function TapScreen({ meetId, meetName, session, initial, timeZone, hasCou
       cpIndex={cpIndex}
       athletes={athletes}
       hasCourse={hasCourse}
+      raceCount={races.length}
       onSwitch={setSel}
       pickerFor={(current) => <SwitchControl races={races} race={race} checkpointId={race.checkpoints[cpIndex].id} current={current} onSwitch={setSel} />}
     />
@@ -158,17 +161,18 @@ function SwitchControl({
 
   return (
     <>
-      <Button
-        variant="secondary"
-        size="sm"
+      <button
+        type="button"
         onClick={() => {
           setPick({ raceId: race.id, checkpointId });
           setOpen(true);
         }}
+        aria-label="Change race or checkpoint"
+        className="-ml-2 flex min-w-0 items-center gap-1 rounded-lg px-2 py-0.5 text-left hover:bg-surface-2 active:bg-surface-2"
       >
-        <ArrowLeftRight className="size-3.5" />
-        Change
-      </Button>
+        <span className="truncate text-2xl font-semibold tracking-tight text-ink">{race.checkpoints.find((c) => c.id === checkpointId)?.label}</span>
+        <ChevronDown className="size-5 shrink-0 text-ink-2" aria-hidden />
+      </button>
       {open && (
         <Sheet title="Where are you recording?" subtitle="Taps go to the race and checkpoint you pick here." onClose={() => setOpen(false)}>
           <div className="space-y-4">
@@ -257,6 +261,7 @@ function RaceTapper({
   cpIndex,
   athletes,
   hasCourse,
+  raceCount,
   onSwitch,
   pickerFor,
 }: {
@@ -268,6 +273,7 @@ function RaceTapper({
   cpIndex: number;
   athletes: Record<string, string>;
   hasCourse: boolean;
+  raceCount: number;
   onSwitch: (sel: { raceId: string; checkpointId: string }) => void;
   pickerFor: (current: RaceSummary) => React.ReactNode;
 }) {
@@ -302,8 +308,11 @@ function RaceTapper({
     };
   });
 
-  const nextCp = race.checkpoints[cpIndex + 1];
-  const allThrough = !!nextCp && !isFinished && loaded && race.athleteIds.length > 0 && counts[cpIndex].n + counts[cpIndex].out === race.athleteIds.length;
+  // Everyone accounted for here: offer the next checkpoint that still has runners out, or the board.
+  const total = race.athleteIds.length;
+  const outstanding = (i: number) => counts[i].n + counts[i].out < total;
+  const hereDone = loaded && total > 0 && !isFinished && !outstanding(cpIndex);
+  const nextCp = hereDone ? race.checkpoints.find((_, i) => i > cpIndex && outstanding(i)) : undefined;
 
   // Grid order. A manager's pick is remembered on this device; otherwise the previous
   // checkpoint's order, or at the first checkpoint their last race (coach's order if none).
@@ -378,6 +387,22 @@ function RaceTapper({
   const [toast, setToast] = useState<string | null>(null);
   const [flashId, setFlashId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  // Press and hold a tile for DNS / DNF. The click that follows a hold is swallowed.
+  const [holdId, setHoldId] = useState<string | null>(null);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heldRef = useRef(false);
+  const holdStart = (id: string) => {
+    heldRef.current = false;
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    holdTimer.current = setTimeout(() => {
+      heldRef.current = true;
+      setHoldId(id);
+    }, HOLD_MS);
+  };
+  const holdEnd = () => {
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    holdTimer.current = null;
+  };
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   // Coarse clock for chip expiry; ticks every few seconds rather than reading the clock during render.
   const [nowMs, setNowMs] = useState(0);
@@ -460,6 +485,10 @@ function RaceTapper({
   };
 
   const onName = (e: SyntheticEvent, athleteId: string) => {
+    if (heldRef.current) {
+      heldRef.current = false;
+      return;
+    }
     const now = eventTimeMs(e);
     const last = lastTapAt.current.get(athleteId) ?? 0;
     lastTapAt.current.set(athleteId, now);
@@ -534,11 +563,11 @@ function RaceTapper({
           )}
         </div>
         <div className="flex items-center justify-between gap-3">
-          <div className="text-2xl font-semibold tracking-tight text-ink">{checkpoint.label}</div>
           {pickerFor({
             gunTimeMs,
             counts: Object.fromEntries(counts.map((c) => [c.id, c.n])),
           })}
+          {raceCount > 1 && <span className="shrink-0 text-[13px] text-ink-2">{race.name}</span>}
         </div>
         <CheckpointCounts counts={counts} total={race.athleteIds.length} loaded={loaded} finished={isFinished} activeId={checkpoint.id} />
       </div>
@@ -550,6 +579,7 @@ function RaceTapper({
             <li>Tap a runner&rsquo;s name the moment they pass. That records their time.</li>
             <li>Can&rsquo;t name them fast enough? Tap <b>Capture time</b> as they pass, then tap the names after. One capture can take a whole pack.</li>
             <li>Wrong name? <b>Undo</b> takes back the last tap.</li>
+            <li>Someone never came by? Press and hold their name for <b>DNS</b> / <b>DNF</b>.</li>
           </ul>
           <Button size="sm" onClick={dismissIntro} className="mt-2">
             Got it
@@ -572,15 +602,22 @@ function RaceTapper({
           onLarge={(v) => setLargePref(v ? "1" : null)}
         />
       </div>
-      {allThrough && (
+      {hereDone && (
         <div className="mx-3 mt-2 flex items-center justify-between gap-3 rounded-lg border border-brand/30 bg-brand-soft px-3 py-2 text-sm text-ink">
           <span>
-            Everyone&rsquo;s through <b>{checkpoint.label}</b>.
+            Everyone&rsquo;s {checkpoint.kind === "finish" ? "in" : "through"} <b>{checkpoint.label}</b>.
           </span>
-          <Button size="sm" onClick={() => onSwitch({ raceId: race.id, checkpointId: nextCp!.id })}>
-            Go to {nextCp!.label}
-            <ArrowRight className="size-3.5" />
-          </Button>
+          {nextCp ? (
+            <Button size="sm" onClick={() => onSwitch({ raceId: race.id, checkpointId: nextCp.id })}>
+              Go to {nextCp.label}
+              <ArrowRight className="size-3.5" />
+            </Button>
+          ) : (
+            <LinkButton href={`/meets/${meetId}/board?race=${race.id}`} size="sm">
+              Live board
+              <ArrowRight className="size-3.5" />
+            </LinkButton>
+          )}
         </div>
       )}
       <div className={`grid flex-1 content-start gap-2 p-3 pb-48 ${large ? "grid-cols-1" : "grid-cols-2"}`}>
@@ -636,6 +673,12 @@ function RaceTapper({
               key={id}
               type="button"
               onClick={(e) => onName(e, id)}
+              onPointerDown={() => holdStart(id)}
+              onPointerUp={holdEnd}
+              onPointerLeave={holdEnd}
+              onPointerCancel={holdEnd}
+              onContextMenu={(e) => e.preventDefault()}
+              style={{ WebkitTouchCallout: "none" }}
               className={`${tile} rounded-lg border text-left transition-colors select-none ${
                 flashing ? "border-brand bg-brand text-brand-ink" : done || out ? "border-line bg-surface-2 text-ink-3" : "border-line bg-surface text-ink shadow-card active:bg-brand-soft"
               }`}
@@ -688,6 +731,45 @@ function RaceTapper({
           );
         })}
       </div>
+
+      {holdId && (
+        <TileStatusSheet
+          name={athletes[holdId] ?? "?"}
+          status={statuses.get(holdId)}
+          hasTime={!!cp?.byAthlete.get(holdId) && !cp.byAthlete.get(holdId)!.missed}
+          lastPassed={(() => {
+            let label: string | null = null;
+            race.checkpoints.forEach((c) => {
+              const m = state.get(c.id)?.byAthlete.get(holdId);
+              if (m && !m.missed) label = c.label;
+            })
+            return label;
+          })()}
+          onClose={() => setHoldId(null)}
+          onStatus={(e, status) => {
+            const id = holdId;
+            // DNF: after the last checkpoint they passed, if any.
+            let after: string | null = null;
+            if (status === "dnf") race.checkpoints.forEach((c) => {
+              const m = state.get(c.id)?.byAthlete.get(id);
+              if (m && !m.missed) after = c.id;
+            });
+            void send({ ...base, type: "status", status, athleteId: id, checkpointId: after, deviceTimeMs: eventTimeMs(e) });
+            setHoldId(null);
+            showToast(`${athletes[id]}: ${STATUS_LABEL[status]}`);
+          }}
+          onClear={(e) => {
+            const cur = statuses.get(holdId);
+            if (cur) void send({ ...base, type: "void", targetTapId: cur.tapId, deviceTimeMs: eventTimeMs(e) });
+            setHoldId(null);
+            showToast(`${athletes[holdId]}: back in the race`);
+          }}
+          onReplace={() => {
+            setConfirmId(holdId);
+            setHoldId(null);
+          }}
+        />
+      )}
 
       {toast && (
         <div className="pointer-events-none fixed inset-x-0 bottom-36 z-20 flex justify-center px-3">
@@ -767,6 +849,56 @@ function OrderRow({ active, label, hint, disabled, onClick }: { active: boolean;
   );
 }
 
+/** Press-and-hold on a name: DNS / DNF without leaving the record screen. */
+function TileStatusSheet({
+  name,
+  status,
+  hasTime,
+  lastPassed,
+  onClose,
+  onStatus,
+  onClear,
+  onReplace,
+}: {
+  name: string;
+  status: AthleteStatus | undefined;
+  hasTime: boolean;
+  lastPassed: string | null;
+  onClose: () => void;
+  onStatus: (e: SyntheticEvent, status: "dns" | "dnf") => void;
+  onClear: (e: SyntheticEvent) => void;
+  onReplace: () => void;
+}) {
+  return (
+    <Sheet title={name} subtitle={status ? STATUS_LONG[status.status] : lastPassed ? `Last seen at ${lastPassed}` : "Not seen yet"} onClose={onClose}>
+      <div className="grid gap-2">
+        {status ? (
+          <Button variant="secondary" size="lg" onClick={onClear}>
+            Clear {STATUS_LABEL[status.status]} · back in the race
+          </Button>
+        ) : (
+          <>
+            <Button variant="secondary" size="lg" onClick={(e) => onStatus(e, "dns")} className="h-14 flex-col gap-0">
+              <span>DNS</span>
+              <span className="text-xs font-normal text-ink-2">Never started</span>
+            </Button>
+            <Button variant="secondary" size="lg" onClick={(e) => onStatus(e, "dnf")} className="h-14 flex-col gap-0">
+              <span>DNF</span>
+              <span className="text-xs font-normal text-ink-2">{lastPassed ? `Dropped out after ${lastPassed}` : "Dropped out"}</span>
+            </Button>
+          </>
+        )}
+        {hasTime && (
+          <Button variant="subtle" size="lg" onClick={onReplace}>
+            Replace their time here…
+          </Button>
+        )}
+        <p className="text-xs text-ink-3">Coaches can change this on the live board (Fix times → tap the name).</p>
+      </div>
+    </Sheet>
+  );
+}
+
 /** Which way the tiles are laid out; remembered on this device for this race. */
 function OrderControl({
   mode,
@@ -827,7 +959,7 @@ function OrderControl({
   return (
     <>
       <Button variant="ghost" size="sm" onClick={() => setOpen(true)} className="-mr-2 text-ink-2">
-        <ArrowUpDown className="size-3.5" />
+        <SlidersHorizontal className="size-3.5" />
         {describe(mode)}
       </Button>
       {open && (
