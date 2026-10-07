@@ -2,7 +2,7 @@ import "server-only";
 import { decrypt, formatCode } from "@/lib/auth/crypto";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
-import type { Athlete, Distance, Meet, Program, Race, School, Season, Sport } from "@/lib/db/schema";
+import type { Athlete, Course, Distance, Meet, Program, Race, School, Season, Sport, Venue } from "@/lib/db/schema";
 
 // Read helpers for server components and actions. Everything filters soft deletes.
 
@@ -89,4 +89,22 @@ export async function gunFiredBy(raceIds: string[]): Promise<Record<string, stri
     .project<{ raceId: string; createdBy: { name: string } }>({ raceId: 1, createdBy: 1 })
     .toArray();
   return Object.fromEntries(taps.map((t) => [t.raceId, t.createdBy.name]));
+}
+
+export type VenueWithCourses = Pick<Venue, "_id" | "name" | "city" | "state"> & { courses: Pick<Course, "_id" | "name" | "activeFromYear" | "activeToYear">[] };
+
+/** The school's venues with their course layouts, for the meet form. */
+export async function listVenuesWithCourses(schoolId: string): Promise<VenueWithCourses[]> {
+  const db = await getDb();
+  const [venues, courses] = await Promise.all([
+    collection(db, "venues").find({ schoolId, deletedAt: null }).sort({ name: 1 }).toArray(),
+    collection(db, "courses").find({ schoolId, deletedAt: null }).sort({ activeFromYear: 1, name: 1 }).toArray(),
+  ]);
+  return venues.map((v) => ({
+    _id: v._id,
+    name: v.name,
+    city: v.city,
+    state: v.state,
+    courses: courses.filter((c) => c.venueId === v._id).map((c) => ({ _id: c._id, name: c.name, activeFromYear: c.activeFromYear, activeToYear: c.activeToYear })),
+  }));
 }

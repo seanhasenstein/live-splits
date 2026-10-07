@@ -36,9 +36,10 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
   if (!meet || !can(session, "view", meet)) notFound();
 
   const races = await listRaces(meet._id);
-  const [program, venue, distances, firedBy] = await Promise.all([
+  const [program, venue, course, distances, firedBy] = await Promise.all([
     getProgram(meet.schoolId, "xc"),
     meet.venueId ? collection(await getDb(), "venues").findOne({ _id: meet.venueId }) : null,
+    meet.courseId ? collection(await getDb(), "courses").findOne({ _id: meet.courseId }) : null,
     collection(await getDb(), "distances").find({ sport: "xc" }).toArray(),
     gunFiredBy(races.map((r) => r._id)),
   ]);
@@ -54,7 +55,20 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
       />
       <Page>
         <AutoRefresh everyMs={races.some((r) => r.gunTimeMs !== null && !r.finishedAt) ? 5000 : 30000} />
-        <PageTitle title={meet.name} description={`${formatLocalDate(meet.date)}${venue ? ` · ${venue.name}${venue.city ? `, ${venue.city}` : ""}` : ""}`} />
+        <PageTitle
+          title={meet.name}
+          description={`${formatLocalDate(meet.date)}${venue ? ` · ${venue.name}${venue.city ? `, ${venue.city}` : ""}` : ""}${
+            course && venue && course.name !== venue.name ? ` · ${course.name}` : ""
+          }`}
+          action={
+            setup ? (
+              <LinkButton href={`/meets/${meet._id}/edit`} variant="subtle" size="sm" title="Edit meet" aria-label="Edit meet">
+                <Pencil className="size-4" />
+                Edit
+              </LinkButton>
+            ) : undefined
+          }
+        />
 
         <Card className="mb-5">
           <CardHeader

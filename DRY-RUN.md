@@ -68,5 +68,6 @@
    while in progress). Tell Badger State Timing before using it at a meet.
 5. Import the season's earlier meets (links or files from the other timing
    companies) so "last race" / "season best" ordering has data.
-6. Prod: `MONGODB_URI=… MONGODB_DB=live_splits_prod pnpm db:migrate`, deploy,
-   then import the Nightfall results on prod.
+6. ~~Prod migrate~~ — done Oct 6. Still to do: deploy, import the Nightfall
+   results on prod, and open the Nightfall meet → Edit → Save once so it
+   gets its course record (courses were added Oct 6).

@@ -45,6 +45,17 @@ round trip (`src/lib/client/clock.ts`). Every tap sends device time + offset;
 the server stores both plus the corrected time. `POST /api/taps` is idempotent
 on `clientTapId`.
 
+## Venues and courses
+
+A venue is the place (Tuscumbia Golf Course); a course is a layout there, and
+a changed route is a new course, because course bests only make sense on the
+same layout. The meet form asks for the venue only: the first meet at a venue
+creates a course named after it; later meets reuse the venue's current layout
+unless the coach picks another or adds a "New layout…". Meets can be edited
+(meet page → Edit) to set this on meets created before courses existed. The
+record screen's "Compare with · This course" and the Order sheet's "same
+course" tag both key off `meets.courseId`.
+
 ## Official results
 
 - **After a race:** meet page → Import results (timing company link, pasted
