@@ -34,6 +34,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps<"/
         athleteIds: r.lineup.map((l) => l.athleteId),
       }))}
       athletes={Object.fromEntries(athletes.map((a) => [a._id, a.displayName]))}
+      genders={Object.fromEntries(athletes.map((a) => [a._id, a.gender]))}
       canFix={can(session, "fix", meet)}
       canTap={can(session, "tap", meet)}
     />

@@ -30,6 +30,8 @@ type Props = {
   timeZone: string;
   races: RaceInfo[];
   athletes: Record<string, string>;
+  /** Athlete gender, for the Girls / Boys filter on a combined race. */
+  genders: Record<string, "F" | "M" | "X">;
   canFix: boolean;
   canTap: boolean;
 };
@@ -38,7 +40,7 @@ type Props = {
 const eventTimeMs = (_e: SyntheticEvent) => Date.now();
 
 
-export function Board({ meetId, meetName, session, initialRaceId, timeZone, races, athletes, canFix, canTap }: Props) {
+export function Board({ meetId, meetName, session, initialRaceId, timeZone, races, athletes, genders, canFix, canTap }: Props) {
   const [raceId, setRaceId] = useState(() => (races.some((r) => r.id === initialRaceId) ? initialRaceId! : (races[0]?.id ?? "")));
   const race = races.find((r) => r.id === raceId) ?? races[0];
 
@@ -67,7 +69,7 @@ export function Board({ meetId, meetName, session, initialRaceId, timeZone, race
         {races.length > 1 && (
           <Segmented value={race.id} onChange={setRaceId} options={races.map((r) => ({ value: r.id, label: r.name }))} className="mb-3 lg:max-w-md" />
         )}
-        <RaceBoard key={race.id} meetId={meetId} race={race} timeZone={timeZone} athletes={athletes} canFix={canFix} canTap={canTap} />
+        <RaceBoard key={race.id} meetId={meetId} race={race} timeZone={timeZone} athletes={athletes} genders={genders} canFix={canFix} canTap={canTap} />
       </main>
     </>
   );
@@ -82,6 +84,7 @@ function RaceBoard({
   race,
   timeZone,
   athletes,
+  genders,
   canFix,
   canTap,
 }: {
@@ -89,6 +92,7 @@ function RaceBoard({
   race: RaceInfo;
   timeZone: string;
   athletes: Record<string, string>;
+  genders: Record<string, "F" | "M" | "X">;
   canFix: boolean;
   canTap: boolean;
 }) {
@@ -105,6 +109,10 @@ function RaceBoard({
   const [statusFor, setStatusFor] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [view, setView] = useState<"splits" | "both">("both");
+  // A combined race (boys and girls together) gets a filter; the counts follow it.
+  const combined = race.athleteIds.some((id) => genders[id] === "F") && race.athleteIds.some((id) => genders[id] === "M");
+  const [who, setWho] = useState<"all" | "F" | "M">("all");
+  const shownIds = useMemo(() => (combined && who !== "all" ? race.athleteIds.filter((id) => genders[id] === who) : race.athleteIds), [combined, who, race.athleteIds, genders]);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = useCallback((text: string) => {
@@ -120,7 +128,7 @@ function RaceBoard({
 
   const rows = useMemo<Row[]>(() => {
     const cps = race.checkpoints.map((c) => state.get(c.id));
-    const rows = race.athleteIds.map((athleteId): Row => {
+    const rows = shownIds.map((athleteId): Row => {
       const marks = cps.map((cp) => cp?.byAthlete.get(athleteId));
       const off = official[athleteId];
       const cells = race.checkpoints.map((c, i): Cell => {
@@ -148,7 +156,7 @@ function RaceBoard({
       if (a.reached >= 0) return key(a) - key(b);
       return (athletes[a.athleteId] ?? "").localeCompare(athletes[b.athleteId] ?? "");
     });
-  }, [race, state, athletes, official, gunTimeMs, statuses]);
+  }, [race, shownIds, state, athletes, official, gunTimeMs, statuses]);
 
   const pendingTotal = race.checkpoints.reduce((n, c) => n + (state.get(c.id)?.pending.length ?? 0), 0);
 
@@ -200,16 +208,30 @@ function RaceBoard({
       </div>
 
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <CheckpointCounts counts={counts} total={race.athleteIds.length} loaded={loaded} finished={isFinished} />
-        <Segmented
-          value={view}
-          onChange={setView}
-          options={[
-            { value: "both", label: "Cumulative + splits" },
-            { value: "splits", label: "Splits only" },
-          ]}
-          className="w-full sm:w-80"
-        />
+        <CheckpointCounts counts={counts} total={shownIds.length} loaded={loaded} finished={isFinished} />
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {combined && (
+            <Segmented
+              value={who}
+              onChange={setWho}
+              options={[
+                { value: "all", label: "Everyone" },
+                { value: "F", label: "Girls" },
+                { value: "M", label: "Boys" },
+              ]}
+              className="w-full sm:w-64"
+            />
+          )}
+          <Segmented
+            value={view}
+            onChange={setView}
+            options={[
+              { value: "both", label: "Cumulative + splits" },
+              { value: "splits", label: "Splits only" },
+            ]}
+            className="w-full sm:w-80"
+          />
+        </div>
       </div>
 
       {longRunning && (

@@ -26,9 +26,9 @@ const tap = (clientTapId: string, p: Partial<TapLike> & { type: TapLike["type"] 
 });
 
 const athletes = [
-  { _id: "A", displayName: "Eddy Giebler", graduationYear: 2028, levelId: "varsity", grade: 11 },
-  { _id: "B", displayName: "Nate Vanic", graduationYear: 2029, levelId: "jv", grade: 10 },
-  { _id: "C", displayName: "Titus Gottschalk", graduationYear: 2027, levelId: "varsity", grade: 12 },
+  { _id: "A", displayName: "Eddy Giebler", graduationYear: 2028, gender: "M" as const, levelId: "varsity", grade: 11 },
+  { _id: "B", displayName: "Nate Vanic", graduationYear: 2029, gender: "M" as const, levelId: "jv", grade: 10 },
+  { _id: "C", displayName: "Titus Gottschalk", graduationYear: 2027, gender: "M" as const, levelId: "varsity", grade: 12 },
 ];
 
 test("workbook layout: header, m:ss truncation, ordering, flags", () => {
@@ -77,4 +77,12 @@ test("app DNS / DNF land in the Place and Finish columns when there is no offici
   expect(byName["Eddy Giebler"].slice(1, 7)).toEqual(["DNF", "Eddy Giebler", "11", "", "DNF", "5:00"]);
   expect(byName["Nate Vanic"].slice(1, 6)).toEqual(["DNS", "Nate Vanic", "10", "", "DNS"]);
   expect(byName["Titus Gottschalk"][5]).toBe("");
+});
+
+test("a combined race labels the Race column with the gender", () => {
+  const mixed = [...athletes, { _id: "D", displayName: "Ella Heronymus", graduationYear: 2028, gender: "F" as const, levelId: "jv", grade: 11 }];
+  const rows = buildExportRows({ race, state: replay(race, []), athletes: mixed, levelLabel: (id) => (id === "jv" ? "JV" : "Varsity"), combined: true });
+  const byName = Object.fromEntries(rows.slice(1).map((r) => [r[2], r[0]]));
+  expect(byName["Ella Heronymus"]).toBe("JV Girls");
+  expect(byName["Nate Vanic"]).toBe("JV Boys");
 });

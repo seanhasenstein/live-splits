@@ -32,16 +32,19 @@ export async function GET(request: Request, { params }: RouteContext<"/api/meets
   const levelById = new Map(race.lineup.map((l) => [l.athleteId, l.levelId]));
   const levelLabel = (id: string) => program?.settings.levels.find((l) => l.id === id)?.label ?? id;
 
+  const combined = (program?.settings.raceCategories.find((c) => c.id === race.raceCategoryId)?.gender ?? null) === null;
   const rows = buildExportRows({
     race,
     state,
     statuses,
     official,
+    combined,
     levelLabel,
     athletes: athletes.map((a) => ({
       _id: a._id,
       displayName: a.displayName,
       graduationYear: a.graduationYear,
+      gender: a.gender,
       levelId: levelById.get(a._id) ?? race.levelIds[0],
       grade: a.graduationYear !== null && season ? gradeForSeason(a.graduationYear, season.endDate) : null,
     })),

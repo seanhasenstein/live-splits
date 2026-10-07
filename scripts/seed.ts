@@ -132,6 +132,7 @@ async function main() {
       raceCategories: [
         { id: "girls", label: "Girls", gender: "F" },
         { id: "boys", label: "Boys", gender: "M" },
+        { id: "mixed", label: "Mixed", gender: null },
       ],
       coachRoles: [
         { id: "head_coach", label: "Head Coach" },

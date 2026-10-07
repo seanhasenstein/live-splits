@@ -75,13 +75,15 @@ export async function commitImportAction(meetId: string, payloadJson: string): P
   const races = await listRaces(meet._id);
 
   const plans: ImportPlan[] = [];
+  const seenByRace = new Map<string, Set<string>>();
   for (const p of payload.plans) {
     const race = races.find((r) => r._id === p.raceId);
     const contest = contests[p.contestIndex];
     if (!race || !contest) return { error: "A race or contest in the import no longer exists." };
     const lineup = new Set(race.lineup.map((l) => l.athleteId));
     if (!p.assignments.every((a) => lineup.has(a.athleteId) && contest.entries[a.entryIndex])) return { error: "An assignment points outside the race lineup." };
-    const seen = new Set<string>();
+    const seen = seenByRace.get(race._id) ?? new Set<string>();
+    seenByRace.set(race._id, seen);
     for (const a of p.assignments) {
       if (seen.has(a.athleteId)) return { error: "An athlete is assigned to two results rows." };
       seen.add(a.athleteId);

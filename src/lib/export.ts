@@ -11,7 +11,7 @@ import { formatElapsed } from "./time";
  * are appended after, so they can be ignored or used.
  */
 
-export type ExportAthlete = Pick<Athlete, "_id" | "displayName" | "graduationYear"> & { levelId: string; grade: number | null };
+export type ExportAthlete = Pick<Athlete, "_id" | "displayName" | "graduationYear" | "gender"> & { levelId: string; grade: number | null };
 
 const FIXED_HEADER = ["Race", "Place", "Athlete", "Gr", "Official Finish", "Finish"];
 const TRAILING_HEADER = ["Previous SB", "Prev SB Meet", "New SB?", "Change", "Letter?"];
@@ -38,8 +38,10 @@ export function buildExportRows(input: {
   official?: OfficialTimes;
   /** App-side DNS / DNR / DNF, used when there is no official result. */
   statuses?: ReadonlyMap<string, AthleteStatus>;
+  /** A combined race (boys and girls together): the Race column says which, so the workbook can split them. */
+  combined?: boolean;
 }): string[][] {
-  const { race, state, athletes, levelLabel, official = {}, statuses = new Map<string, AthleteStatus>() } = input;
+  const { race, state, athletes, levelLabel, official = {}, statuses = new Map<string, AthleteStatus>(), combined = false } = input;
   const splits = race.checkpoints.filter((c) => c.kind === "split");
   const finish = race.checkpoints.find((c) => c.kind === "finish");
   const gun = race.gunTimeMs;
@@ -72,7 +74,7 @@ export function buildExportRows(input: {
       time: o?.finishMs ?? (reached < 0 ? Infinity : (progress[reached] ?? Infinity)),
       name: a.displayName,
       cells: [
-        levelLabel(a.levelId),
+        combined ? `${levelLabel(a.levelId)} ${a.gender === "F" ? "Girls" : a.gender === "M" ? "Boys" : ""}`.trim() : levelLabel(a.levelId),
         o?.place != null ? String(o.place) : statusLabel,
         a.displayName,
         a.grade === null ? "" : String(a.grade),

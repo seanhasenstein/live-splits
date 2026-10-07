@@ -8,7 +8,8 @@ import { isOurTeam, matchAthlete } from "@/lib/results/match";
 import type { ParsedContest } from "@/lib/results/parse";
 import { formatElapsed } from "@/lib/time";
 
-type RaceInfo = { id: string; name: string; athleteIds: string[]; hasOfficial: boolean };
+/** gender null = a combined race (boys and girls together), which takes one contest per gender. */
+type RaceInfo = { id: string; name: string; athleteIds: string[]; hasOfficial: boolean; gender: "F" | "M" | "X" | null };
 type RosterAthlete = Pick<Athlete, "_id" | "displayName" | "officialName" | "aliases">;
 
 const NOT_OURS = "__not_ours__";
@@ -83,17 +84,26 @@ function Mapping({ meetId, loaded, races, athletes, teamAliases }: { meetId: str
   const [plans, setPlans] = useState<Record<number, Plan | null>>(() => {
     const out: Record<number, Plan | null> = {};
     // A meet page often lists the same race twice (a combined contest and the division
-    // contest). Keep the smallest one per race by default: its places match the division results.
-    const keep = new Map<string, number>();
-    contests.forEach((c, ci) => {
-      if (!c.entries.some((e) => isOurTeam(e.team, teamAliases))) return;
-      const raceId = guessRace(c.name, races);
-      const current = keep.get(raceId);
-      if (current === undefined || c.entries.length < contests[current].entries.length) keep.set(raceId, ci);
-    });
+    // contest). Smallest first, keep a contest unless its runners of ours already appear in
+    // a kept contest for that race: the division results win over the combined ones, while
+    // a boys contest and a girls contest both feeding one combined JV race are both kept.
+    const kept = new Set<number>();
+    const seenByRace = new Map<string, Set<string>>();
+    [...contests.keys()]
+      .filter((ci) => contests[ci].entries.some((e) => isOurTeam(e.team, teamAliases)))
+      .sort((a, b) => contests[a].entries.length - contests[b].entries.length)
+      .forEach((ci) => {
+        const raceId = guessRace(contests[ci].name, races);
+        const seen = seenByRace.get(raceId) ?? new Set<string>();
+        const names = contests[ci].entries.filter((e) => isOurTeam(e.team, teamAliases)).map((e) => e.name.toLowerCase());
+        if (names.some((n) => seen.has(n))) return;
+        names.forEach((n) => seen.add(n));
+        seenByRace.set(raceId, seen);
+        kept.add(ci);
+      });
     contests.forEach((c, ci) => {
       const ours = c.entries.map((e, i) => ({ e, i })).filter(({ e }) => isOurTeam(e.team, teamAliases));
-      if (ours.length === 0 || ![...keep.values()].includes(ci)) {
+      if (ours.length === 0 || !kept.has(ci)) {
         out[ci] = null; // nothing of ours, or a duplicate of a kept contest; skipped unless the coach opts in
         return;
       }
@@ -136,6 +146,16 @@ function Mapping({ meetId, loaded, races, athletes, teamAliases }: { meetId: str
     });
   };
 
+  // Who is already placed in each race across every contest, so a combined race's second
+  // contest doesn't list the first contest's runners as missing.
+  const assignedByRace = new Map<string, Set<string>>();
+  for (const plan of Object.values(plans)) {
+    if (!plan) continue;
+    const set = assignedByRace.get(plan.raceId) ?? new Set<string>();
+    for (const v of Object.values(plan.picks)) if (v && v !== NOT_OURS) set.add(v);
+    assignedByRace.set(plan.raceId, set);
+  }
+
   return (
     <div className="space-y-4">
       {contests.map((c, ci) => (
@@ -146,6 +166,7 @@ function Mapping({ meetId, loaded, races, athletes, teamAliases }: { meetId: str
           races={races}
           athletes={athletes}
           teamAliases={teamAliases}
+          assignedInRace={plans[ci] ? (assignedByRace.get(plans[ci].raceId) ?? new Set()) : new Set()}
           onChange={(p) => setPlans((all) => ({ ...all, [ci]: p }))}
         />
       ))}
@@ -168,6 +189,7 @@ function ContestCard({
   races,
   athletes,
   teamAliases,
+  assignedInRace,
   onChange,
 }: {
   contest: ParsedContest;
@@ -175,12 +197,13 @@ function ContestCard({
   races: RaceInfo[];
   athletes: RosterAthlete[];
   teamAliases: string[];
+  /** Athletes placed in this plan's race by any contest. */
+  assignedInRace: Set<string>;
   onChange: (p: Plan | null) => void;
 }) {
   const ours = useMemo(() => contest.entries.map((e, i) => ({ e, i })).filter(({ e }) => isOurTeam(e.team, teamAliases)), [contest, teamAliases]);
   const race = races.find((r) => r.id === plan?.raceId);
-  const assigned = new Set(Object.values(plan?.picks ?? {}).filter((v) => v && v !== NOT_OURS));
-  const missing = race ? race.athleteIds.filter((id) => !assigned.has(id)) : [];
+  const missing = race ? race.athleteIds.filter((id) => !assignedInRace.has(id)) : [];
   const nameOf = (id: string) => athletes.find((a) => a._id === id)?.displayName ?? id;
 
   if (!plan) {
@@ -225,6 +248,7 @@ function ContestCard({
               <option key={r.id} value={r.id}>
                 {r.name}
                 {r.hasOfficial ? " (has official results; will be replaced)" : ""}
+                {r.gender === null ? " · combined" : ""}
               </option>
             ))}
           </Select>

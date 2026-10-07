@@ -13,11 +13,16 @@ async function main() {
   const r4 = await collection(db, "races").updateMany({ liveFeed: { $exists: false } }, { $set: { liveFeed: null } });
   const r5 = await collection(db, "meets").updateMany({ resultsUrl: { $exists: false } }, { $set: { resultsUrl: null } });
   const r6 = await collection(db, "schools").updateMany({ viewerLink: { $exists: false } }, { $set: { viewerLink: null } });
+  // A "Mixed" race category (gender null = whole roster offered) for meets that run boys and girls together.
+  const r7 = await collection(db, "programs").updateMany(
+    { sport: "xc", "settings.raceCategories.id": { $ne: "mixed" } },
+    { $push: { "settings.raceCategories": { id: "mixed", label: "Mixed", gender: null } } },
+  );
   const r3 = await collection(db, "schools").updateMany(
     { "settings.teamAliases": { $exists: false } },
     { $set: { "settings.teamAliases": ["Sheboygan Lutheran", "Sheboygan Area Lutheran", "Sheboygan Area Lutheran HS"] } },
   );
-  console.log(`races.finishedAt: ${r1.modifiedCount}, races.officialImportId: ${r2.modifiedCount}, races.liveFeed: ${r4.modifiedCount}, meets.resultsUrl: ${r5.modifiedCount}, schools.viewerLink: ${r6.modifiedCount}, schools.teamAliases: ${r3.modifiedCount}`);
+  console.log(`races.finishedAt: ${r1.modifiedCount}, races.officialImportId: ${r2.modifiedCount}, races.liveFeed: ${r4.modifiedCount}, meets.resultsUrl: ${r5.modifiedCount}, schools.viewerLink: ${r6.modifiedCount}, programs.mixedCategory: ${r7.modifiedCount}, schools.teamAliases: ${r3.modifiedCount}`);
 }
 
 main()

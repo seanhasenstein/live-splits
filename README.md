@@ -60,6 +60,15 @@ unless the coach picks another or adds a "New layout…". Meets can be edited
 record screen's "Compare with · This course" and the Order sheet's "same
 course" tag both key off `meets.courseId`.
 
+## Combined races
+
+When boys and girls JV run together, set up one race with the **Mixed**
+category: the lineup offers the whole roster, managers see one list at each
+checkpoint, and the live results page gets an Everyone / Girls / Boys filter.
+Import maps each gender's results contest to that same race (places stay per
+contest), and the CSV's Race column reads "JV Girls" / "JV Boys" so the
+workbook can split them.
+
 ## Official results
 
 - **After a race:** meet page → Import results (timing company link, pasted
@@ -74,4 +83,4 @@ course" tag both key off `meets.courseId`.
   Only exact and alias name matches are shown live; do the real import after.
   Be a good neighbour: let the timing company know before leaning on their feed.
 - `pnpm db:migrate` backfills fields added since a database was seeded
-  (`races.liveFeed`, `meets.resultsUrl`, `schools.viewerLink` are the latest).
+  (`races.liveFeed`, `meets.resultsUrl`, `schools.viewerLink` and the Mixed race category are the latest).
