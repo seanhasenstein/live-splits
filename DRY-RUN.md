@@ -80,3 +80,11 @@
   elevation profile / gain per segment on a branded web page and a printable
   version for the post-meet packet. Elevation gain per course also explains
   "vs this course" vs "vs last meet" deltas. After the historical import.
+- **Reading bib RFID at mile marks** (idea, Oct 7): possible for passive UHF
+  bibs (RACE RESULT), not for active transponders. Handhelds miss packs; a
+  reliable rig is a fixed reader + antennas (~$3–4k per checkpoint) and can
+  interfere with the timing company's mats, so never near a mat without
+  their OK. Value is low for our team's splits; the live feed covers mats
+  that exist. Revisit only if we host a meet (then it's a timing system).
+  Cheaper routes to "everyone past mile 1": bib OCR from phone video, or the
+  place-counter mode from PLAN.md.
