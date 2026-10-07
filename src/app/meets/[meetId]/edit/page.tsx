@@ -35,6 +35,7 @@ export default async function EditMeetPage({ params }: PageProps<"/meets/[meetId
             venueCity: venue?.city ?? "",
             venueState: venue?.state ?? "",
             courseId: meet.courseId,
+            resultsUrl: meet.resultsUrl ?? "",
           }}
           cancelHref={`/meets/${meet._id}`}
         />

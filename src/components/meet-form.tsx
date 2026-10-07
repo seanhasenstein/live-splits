@@ -15,6 +15,7 @@ export type MeetFormValues = {
   venueCity: string;
   venueState: string;
   courseId: string | null;
+  resultsUrl: string;
 };
 
 type Props = {
@@ -150,6 +151,10 @@ export function MeetForm({ action, venues, defaultTimeZone, defaultState, meet, 
               )}
             </div>
           )}
+
+          <Field label="Results link" hint="Optional. The timing company's page for this meet; shown on the meet page and used to import results.">
+            <Input name="resultsUrl" defaultValue={meet?.resultsUrl} placeholder="https://www.badgerstatetiming.live/…" inputMode="url" maxLength={500} />
+          </Field>
 
           {state.error && <Alert tone="danger">{state.error}</Alert>}
         </CardBody>

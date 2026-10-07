@@ -25,6 +25,7 @@ export default async function ImportPage({ params }: PageProps<"/meets/[meetId]/
           races={races.map((r) => ({ id: r._id, name: r.name, athleteIds: r.lineup.map((l) => l.athleteId), hasOfficial: !!r.officialImportId }))}
           athletes={roster.map((a) => ({ _id: a._id, displayName: a.displayName, officialName: a.officialName, aliases: a.aliases }))}
           teamAliases={school?.settings.teamAliases ?? []}
+          resultsUrl={meet.resultsUrl ?? null}
         />
       </Page>
     </>

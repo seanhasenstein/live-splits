@@ -13,7 +13,7 @@ type RosterAthlete = Pick<Athlete, "_id" | "displayName" | "officialName" | "ali
 
 const NOT_OURS = "__not_ours__";
 
-export function ImportWizard({ meetId, races, athletes, teamAliases }: { meetId: string; races: RaceInfo[]; athletes: RosterAthlete[]; teamAliases: string[] }) {
+export function ImportWizard({ meetId, races, athletes, teamAliases, resultsUrl }: { meetId: string; races: RaceInfo[]; athletes: RosterAthlete[]; teamAliases: string[]; resultsUrl: string | null }) {
   const [kind, setKind] = useState<"url" | "text" | "pdf">("url");
   const [state, load, loading] = useActionState(loadResultsAction.bind(null, meetId), {} as LoadState);
 
@@ -35,7 +35,7 @@ export function ImportWizard({ meetId, races, athletes, teamAliases }: { meetId:
           />
           {kind === "url" && (
             <Field label="Results link" hint="A Badger State Timing meet page, or a RACE RESULT feed link (api.raceresult.com/…).">
-              <Input name="url" type="url" placeholder="https://www.badgerstatetiming.live/…" required />
+              <Input name="url" type="url" defaultValue={resultsUrl ?? ""} placeholder="https://www.badgerstatetiming.live/…" required />
             </Field>
           )}
           {kind === "text" && (

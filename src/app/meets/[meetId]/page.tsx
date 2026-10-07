@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Pencil, Plus, TableProperties, Timer, Upload, Users } from "lucide-react";
+import { ExternalLink, Pencil, Plus, TableProperties, Timer, Upload, Users } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { ShareMeet } from "@/components/share-meet";
@@ -60,6 +60,12 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
           }`}
           action={
             <div className="flex gap-1">
+              {meet.resultsUrl && (
+                <a href={meet.resultsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-surface px-3 text-[13px] font-medium text-ink hover:bg-surface-2">
+                  Official timing
+                  <ExternalLink className="size-3.5 text-ink-2" />
+                </a>
+              )}
               {can(session, "export", meet) && <ShareMeet meetId={meet._id} codes={readJoinCodes(meet)} canRegenerate={setup} />}
               {setup && (
                 <LinkButton href={`/meets/${meet._id}/edit`} variant="secondary" size="sm" title="Edit meet" aria-label="Edit meet">

@@ -148,7 +148,6 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
             )}
             <ClockWarning sync={clock.sync} error={clock.error} />
           </div>
-          <div className="mt-0.5 text-[13px] text-ink-2">{details}</div>
         </div>
         {(canGun || editHref || csvHref || compareHref) && !armed && (
           <div className="shrink-0 self-start">
@@ -159,6 +158,7 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
           </div>
         )}
       </div>
+      <div className="mt-0.5 text-[13px] text-ink-2">{details}</div>
 
       {gunTimeMs !== null ? (
         <div className="mt-3">

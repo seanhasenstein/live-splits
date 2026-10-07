@@ -31,6 +31,8 @@ export const Meet = tenantDoc({
   date: LocalDate,
   timeZone: TimeZone,
   weather: Weather.nullable(),
+  /** The timing company's page for this meet (live timing / results), linked from the meet page. */
+  resultsUrl: z.url().nullable().default(null),
   /**
    * Join codes: a keyed hash for lookup (what the person typed is hashed and
    * matched) plus the code encrypted at rest, so coaches can see and re-share

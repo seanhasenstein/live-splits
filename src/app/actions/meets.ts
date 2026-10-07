@@ -42,6 +42,13 @@ const MeetForm = z.object({
   venueName: z.string().trim().max(120),
   venueCity: z.string().trim().max(80),
   venueState: z.string().trim().toUpperCase().max(2),
+  resultsUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .default("")
+    .transform((v) => (v && !/^https?:\/\//i.test(v) ? `https://${v}` : v))
+    .pipe(z.union([z.literal(""), z.url("That results link doesn't look like a web address")])),
   /** An existing course at the venue, or "new" to create `newCourseName`; blank = the venue's current layout (created if none). */
   courseId: z.string().trim().max(64).default(""),
   newCourseName: z.string().trim().max(120).default(""),
@@ -137,6 +144,7 @@ export async function createMeetAction(_prev: MeetFormState, formData: FormData)
     date: input.date,
     timeZone: input.timeZone,
     weather: null,
+    resultsUrl: input.resultsUrl || null,
     joinCodes: hashes,
     ...audit,
   });
@@ -184,7 +192,9 @@ export async function updateMeetAction(meetId: string, _prev: MeetFormState, for
   const { venueId, courseId } = await resolvePlace(db, meet.schoolId, input, actor);
   await collection(db, "meets").updateOne(
     { _id: meet._id },
-    { $set: { name: input.name, date: input.date, timeZone: input.timeZone, seasonId: season._id, venueId, courseId, updatedAt: new Date(), updatedBy: actor } },
+    {
+      $set: { name: input.name, date: input.date, timeZone: input.timeZone, seasonId: season._id, venueId, courseId, resultsUrl: input.resultsUrl || null, updatedAt: new Date(), updatedBy: actor },
+    },
   );
   redirect(`/meets/${meet._id}`);
 }
