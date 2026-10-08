@@ -52,3 +52,6 @@ next-env.d.ts
 
 # imported results (other schools' athletes)
 /data/results/
+
+# official results PDFs (other schools' athletes)
+/official-results/
