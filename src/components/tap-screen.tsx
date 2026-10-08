@@ -467,10 +467,11 @@ function RaceTapper({
     if (replacing) void send({ ...base, type: "void", targetTapId: replacing.tapId, deviceTimeMs });
     // Which capture (if any) this name belongs to: a chip the manager picked, else the
     // oldest empty one, else a recent one a pack is still filling, else none (record now).
+    // A replace is a correction ("they passed just now"), so it only uses a chip picked on purpose.
     const selected = selectedSlotId ? cp?.slots.find((x) => x.tapId === selectedSlotId) : undefined;
     const newest = cp?.slots.at(-1);
     const slot: Slot | undefined =
-      selected ?? cp?.pending[0] ?? (newest && deviceTimeMs + offset - newest.timeMs < CAPTURE_OPEN_MS ? newest : undefined);
+      selected ?? (replacing ? undefined : (cp?.pending[0] ?? (newest && deviceTimeMs + offset - newest.timeMs < CAPTURE_OPEN_MS ? newest : undefined)));
     const promise = slot
       ? send({ ...base, type: "assign", athleteId, targetTapId: slot.tapId, deviceTimeMs })
       : send({ ...base, type: "name_tap", athleteId, deviceTimeMs });
