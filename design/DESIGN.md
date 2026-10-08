@@ -56,7 +56,7 @@ stat labels, section labels. Not on buttons.
 
 ## Writing
 
-Sentence case. Buttons say what happens ("Create meet", "Regenerate codes").
+Sentence case. Buttons say what happens ("Create meet", "regenerate the codes" (a quiet link in the Share sheet, then a confirm)).
 Errors say what went wrong and what to do. Empty states invite the next action.
 
 ## Details settled with Sean (Oct 2, 2026)
@@ -86,10 +86,10 @@ Errors say what went wrong and what to do. Empty states invite the next action.
 
 ## Round 3 (Oct 2, 2026)
 
-- Record screen: the current checkpoint is the headline, centered, with race,
-  count and clock beneath. Switching race or checkpoint is deliberate: a
-  Change button opens a sheet and the switch needs a confirm tap.
-- Header carries a Board link; the meet name links back to the meet.
+- Record screen: the current checkpoint is the headline. Switching race or
+  checkpoint is deliberate: tapping the headline ("Mile 1 ▾") opens the
+  "Where are you recording?" sheet and the switch needs a confirm tap.
+- Header carries a Live results link; the meet name links back to the meet.
 - Undo is a stacked icon + label. Capture stays the ink button (red is kept
   for destructive actions).
 - Sheets render through a portal (sticky bars with backdrop blur would
@@ -106,7 +106,7 @@ Errors say what went wrong and what to do. Empty states invite the next action.
   the list stays for names. An empty capture is outlined green ("waiting"),
   a selected one is filled green. The toast sits above the bar.
 - "Names and tiles" sheet (order, compare with, large tiles) uses the same
-  tall option rows as the Change sheet; a disabled row explains why.
+  tall option rows as the checkpoint sheet; a disabled row explains why.
 - DNS / DNR / DNF are neutral pills: an absence, not an alarm.
 - "Live results" on a race card is a brand pill with the pulsing dot while
   the race runs; the board says "Official results · live".

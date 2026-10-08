@@ -410,12 +410,14 @@ function RaceTapper({
       }
     }, HOLD_MS);
   };
+  // heldRef stays set until the click that follows the release arrives (touch fires
+  // pointerup → pointerleave → click, so pointerleave must not clear it); the next
+  // pointerdown resets it anyway.
   const holdEnd = (id: string, release: boolean) => {
     if (holdTimer.current) clearTimeout(holdTimer.current);
     holdTimer.current = null;
     setHoldArmed(null);
     if (release && heldRef.current) setHoldId(id);
-    else heldRef.current = false;
   };
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   // Coarse clock for chip expiry; ticks every few seconds rather than reading the clock during render.
@@ -502,7 +504,7 @@ function RaceTapper({
       : send({ ...base, type: "name_tap", athleteId, deviceTimeMs });
     // A replaced time that came from a capture leaves that capture empty; drop it so the
     // next name tapped doesn't silently inherit the old time. Undo restores by time, not slot.
-    if (replacing?.fromSlotId) {
+    if (replacing?.fromSlotId && replacing.fromSlotId !== slot?.tapId) {
       const old = cp?.slots.find((x) => x.tapId === replacing.fromSlotId);
       if (old && old.athleteIds.every((id) => id === athleteId)) void send({ ...base, type: "void", targetTapId: old.tapId, deviceTimeMs: deviceTimeMs + 1 });
     }
@@ -896,9 +898,15 @@ function TileStatusSheet({
   onClear: (e: SyntheticEvent) => void;
   onReplace: () => void;
 }) {
+  // Opened on finger lift; the browser's click for that lift can arrive a moment later.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setSettled(true), 350);
+    return () => clearTimeout(t);
+  }, []);
   return (
-    <Sheet title={name} subtitle={status ? STATUS_LONG[status.status] : lastPassed ? `Last seen at ${lastPassed}` : "Not seen yet"} onClose={onClose}>
-      <div className="grid gap-2">
+    <Sheet title={name} subtitle={status ? STATUS_LONG[status.status] : lastPassed ? `Last seen at ${lastPassed}` : "Not seen yet"} onClose={() => settled && onClose()}>
+      <div className={`grid gap-2 ${settled ? "" : "pointer-events-none"}`}>
         {status ? (
           <Button variant="secondary" size="lg" onClick={onClear}>
             Clear {STATUS_LABEL[status.status]} · back in the race

@@ -19,8 +19,10 @@ export async function GET(_request: Request, { params }: RouteContext<"/v/[token
   // Season-wide link: a viewer session across every meet.
   const school = await collection(await getDb(), "schools").findOne({ "viewerLink.tokenHash": hashToken(token), deletedAt: null });
   if (!school) return new Response("This viewer link is no longer valid.", { status: 404 });
-  // A manager or coach checking the link keeps their session (and its rights).
+  // A manager or coach checking the link keeps their session (and its rights); a viewer
+  // of one meet is upgraded to the season.
   const current = await getSession();
-  if (!(current && current.schoolId === school._id)) await createSession({ schoolId: school._id, meetId: null, role: "viewer", name: "Viewer" });
+  const keep = current && current.schoolId === school._id && (current.meetId === null || current.role !== "viewer");
+  if (!keep) await createSession({ schoolId: school._id, meetId: null, role: "viewer", name: "Viewer" });
   redirect("/meets");
 }

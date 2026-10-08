@@ -46,7 +46,7 @@ async function main() {
     results: await collection(db, "results").countDocuments({ raceId: { $in: raceIds } }),
     sessions: await collection(db, "sessions").countDocuments({ meetId }),
     venues: venueId ? 1 : 0,
-    courses: courseId ? 1 : 0,
+    courses: venueId ? await collection(db, "courses").countDocuments({ venueId }) : courseId ? 1 : 0,
     meetSeries: meetSeriesId ? 1 : 0,
   };
   console.log(`${meet.name} (${meet.date}${meet.deletedAt ? ", already hidden" : ""}) in ${db.databaseName}:`);
@@ -63,8 +63,12 @@ async function main() {
   await collection(db, "races").deleteMany({ meetId });
   await collection(db, "sessions").deleteMany({ meetId });
   await collection(db, "meets").deleteOne({ _id: meetId });
-  if (venueId) await collection(db, "venues").deleteOne({ _id: venueId });
-  if (courseId) await collection(db, "courses").deleteOne({ _id: courseId });
+  if (venueId) {
+    await collection(db, "venues").deleteOne({ _id: venueId });
+    await collection(db, "courses").deleteMany({ venueId }); // every layout at a venue nobody uses
+  } else if (courseId) {
+    await collection(db, "courses").deleteOne({ _id: courseId });
+  }
   if (meetSeriesId) await collection(db, "meetSeries").deleteOne({ _id: meetSeriesId });
   console.log("Deleted.");
 }

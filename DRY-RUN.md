@@ -13,8 +13,9 @@
 1. `pnpm db:clear-taps "Nightfall Classic" --yes` to wipe the test taps and
    gun times from this week's testing.
 2. On the deployed site, join with the coach access code, open the meet,
-   **Regenerate codes**, and write down the manager code, coach code and
-   viewer link.
+   **Share** → "regenerate the codes", and write down the manager code,
+   coach code and viewer link. Meets → **Season link** is the one to give
+   parents.
 3. Check the lineups on each race (Edit) once the entry list is final.
 
 ## Dry run (two phones, fake race)
@@ -44,7 +45,7 @@
 
 ## After the meet (in order)
 
-1. ~~Athlete race status (DNS / DNR / DNF)~~ — done Oct 6: board → Fix times
+1. ~~Athlete race status (DNS / DNR / DNF)~~ — done Oct 6: Live results → Fix times
    → tap a name → DNS / DNR / DNF (with the last checkpoint passed). Logged as
    a `status` tap; counters show "n out" and count them as accounted for; the
    board moves them to the bottom with a label; the record screen tiles show

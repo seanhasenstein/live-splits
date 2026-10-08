@@ -54,6 +54,7 @@ const MeetForm = z.object({
   newCourseName: z.string().trim().max(120).default(""),
 });
 type MeetInput = z.infer<typeof MeetForm>;
+class PlaceError extends Error {}
 
 /**
  * Venue and course for a meet. The venue is matched by name (created if new).
@@ -88,6 +89,7 @@ async function resolvePlace(db: Db, schoolId: string, input: MeetInput, actor: A
   }
 
   const courses = collection(db, "courses");
+  if (input.courseId === "new" && !input.newCourseName) throw new PlaceError("Name the new layout, or pick an existing one.");
   if (input.courseId && input.courseId !== "new") {
     const picked = await courses.findOne({ _id: input.courseId, venueId, deletedAt: null });
     if (picked) return { venueId, courseId: picked._id };
@@ -130,7 +132,14 @@ export async function createMeetAction(_prev: MeetFormState, formData: FormData)
   const now = new Date();
   const actor = sessionActor(session!);
   const audit = { source: "manual", createdAt: now, createdBy: actor, updatedAt: now, updatedBy: actor, deletedAt: null };
-  const { venueId, courseId } = await resolvePlace(db, schoolId, input, actor);
+  let place: { venueId: string | null; courseId: string | null };
+  try {
+    place = await resolvePlace(db, schoolId, input, actor);
+  } catch (err) {
+    if (err instanceof PlaceError) return { error: err.message };
+    throw err;
+  }
+  const { venueId, courseId } = place;
 
   const { codes, hashes } = newJoinCodes();
   const meet = COLLECTIONS.meets.schema.parse({
@@ -191,7 +200,14 @@ export async function updateMeetAction(meetId: string, _prev: MeetFormState, for
 
   const db = await getDb();
   const actor = sessionActor(session!);
-  const { venueId, courseId } = await resolvePlace(db, meet.schoolId, input, actor);
+  let place: { venueId: string | null; courseId: string | null };
+  try {
+    place = await resolvePlace(db, meet.schoolId, input, actor);
+  } catch (err) {
+    if (err instanceof PlaceError) return { error: err.message };
+    throw err;
+  }
+  const { venueId, courseId } = place;
   await collection(db, "meets").updateOne(
     { _id: meet._id },
     {

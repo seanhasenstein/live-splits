@@ -35,7 +35,7 @@ export type ParsedContest = {
 const STATUS_WORDS: Record<string, ParsedStatus> = { DNF: "dnf", DNS: "dns", DQ: "dq", DNR: "dns" };
 
 function placeAndStatus(raw: unknown): { place: number | null; status: ParsedStatus } {
-  if (typeof raw === "number") return { place: raw, status: "finished" };
+  if (typeof raw === "number") return { place: Number.isInteger(raw) && raw > 0 ? raw : null, status: "finished" };
   const text = String(raw ?? "").trim().toUpperCase();
   if (text in STATUS_WORDS) return { place: null, status: STATUS_WORDS[text] };
   const n = Number(text);

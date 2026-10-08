@@ -3,6 +3,7 @@ import type { CollectionName } from "./collections";
 
 /** Index definitions. Applied by `pnpm db:indexes` (idempotent). */
 export const INDEXES: Partial<Record<CollectionName, IndexDescription[]>> = {
+  schools: [{ key: { "viewerLink.tokenHash": 1 }, partialFilterExpression: { "viewerLink.tokenHash": { $type: "string" } } }],
   programs: [{ key: { schoolId: 1, sport: 1 }, unique: true }],
   seasons: [{ key: { programId: 1, label: 1 }, unique: true }],
   athletes: [{ key: { schoolId: 1, aliases: 1 } }],
@@ -26,6 +27,8 @@ export const INDEXES: Partial<Record<CollectionName, IndexDescription[]>> = {
   results: [
     { key: { schoolId: 1, athleteId: 1, distanceId: 1, "mark.value": 1 } },
     { key: { schoolId: 1, raceId: 1 } },
+    // Official times per race (taps poll, compare, export) and the per-athlete upsert on import.
+    { key: { raceId: 1, athleteId: 1 } },
   ],
   raceEntries: [{ key: { raceId: 1, place: 1 } }],
   taps: [

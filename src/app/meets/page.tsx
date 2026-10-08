@@ -40,10 +40,10 @@ export default async function MeetsPage() {
     .sort({ order: 1 })
     .toArray();
   const racesOf = (m: Meet) => races.filter((r) => r.meetId === m._id);
-  // "Today" in the school's zone, as a local date string.
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: school?.settings.timeZone ?? "America/Chicago" }).format(new Date());
+  // "Today" where the meet is, as a local date string.
+  const todayIn = (timeZone: string) => new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date());
   const groups: Record<MeetStatus, Meet[]> = { live: [], upcoming: [], past: [] };
-  for (const m of meets) groups[statusOf(m, racesOf(m), today)].push(m);
+  for (const m of meets) groups[statusOf(m, racesOf(m), todayIn(m.timeZone))].push(m);
   groups.upcoming.sort((a, b) => a.date.localeCompare(b.date)); // soonest first; past stays newest first
   const anyLive = groups.live.length > 0;
 

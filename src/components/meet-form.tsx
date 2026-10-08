@@ -31,12 +31,17 @@ type Props = {
 export function MeetForm({ action, venues, defaultTimeZone, defaultState, meet, cancelHref }: Props) {
   const [state, formAction, pending] = useActionState(action, {});
   const [venueName, setVenueName] = useState(meet?.venueName ?? "");
+  const [date, setDate] = useState(meet?.date ?? "");
+  // What the coach typed for a new venue; a known venue shows its own city/state instead.
+  const [typedCity, setTypedCity] = useState(meet?.venueCity ?? "");
+  const [typedState, setTypedState] = useState(meet?.venueState || defaultState);
   const [courseId, setCourseId] = useState(meet?.courseId ?? "");
   const [newCourseName, setNewCourseName] = useState("");
 
-  const venue = venues.find((v) => v.name.trim().toLowerCase() === venueName.trim().toLowerCase());
+  const findVenue = (name: string) => venues.find((v) => v.name.trim().toLowerCase() === name.trim().toLowerCase());
+  const venue = findVenue(venueName);
   const courses = venue?.courses ?? [];
-  const year = Number((meet?.date ?? "").slice(0, 4)) || new Date().getFullYear();
+  const year = Number(date.slice(0, 4)) || new Date().getFullYear();
   // What the server would pick if the coach says nothing: the venue's current layout.
   const current = [...courses].filter((c) => c.activeToYear === null || c.activeToYear >= year).sort((a, b) => (b.activeFromYear ?? 0) - (a.activeFromYear ?? 0))[0];
   const selected = courseId || current?._id || "";
@@ -65,7 +70,7 @@ export function MeetForm({ action, venues, defaultTimeZone, defaultState, meet, 
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Date">
-              <Input name="date" type="date" defaultValue={meet?.date} required />
+              <Input name="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
             </Field>
             <Field label="Time zone">
               <Input name="timeZone" defaultValue={meet?.timeZone ?? defaultTimeZone} required />
@@ -76,8 +81,9 @@ export function MeetForm({ action, venues, defaultTimeZone, defaultState, meet, 
               name="venueName"
               value={venueName}
               onChange={(e) => {
+                // The course only resets when the name now means a different venue.
+                if (findVenue(e.target.value)?._id !== venue?._id) setCourseId("");
                 setVenueName(e.target.value);
-                setCourseId("");
               }}
               list="venue-names"
               placeholder="Tuscumbia Golf Course"
@@ -93,11 +99,11 @@ export function MeetForm({ action, venues, defaultTimeZone, defaultState, meet, 
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
               <Field label="City">
-                <Input name="venueCity" key={venue?._id ?? "new"} defaultValue={venue?.city ?? meet?.venueCity ?? ""} placeholder="Green Lake" maxLength={80} readOnly={!!venue} />
+                <Input name="venueCity" value={venue ? (venue.city ?? "") : typedCity} onChange={(e) => setTypedCity(e.target.value)} placeholder="Green Lake" maxLength={80} readOnly={!!venue} />
               </Field>
             </div>
             <Field label="State">
-              <Input name="venueState" key={venue?._id ?? "new"} defaultValue={venue?.state ?? meet?.venueState ?? defaultState} maxLength={2} readOnly={!!venue} />
+              <Input name="venueState" value={venue ? (venue.state ?? "") : typedState} onChange={(e) => setTypedState(e.target.value)} maxLength={2} readOnly={!!venue} />
             </Field>
           </div>
 
@@ -136,7 +142,7 @@ export function MeetForm({ action, venues, defaultTimeZone, defaultState, meet, 
                   {selected === "new" ? (
                     <div className="rounded-md border border-brand bg-brand-soft p-3">
                       <Field label="New layout" hint="Use this when the route changed; times on different layouts aren't compared.">
-                        <Input name="newCourseName" value={newCourseName} onChange={(e) => setNewCourseName(e.target.value)} placeholder={`${venueName.trim()} ${year} route`} maxLength={120} autoFocus />
+                        <Input name="newCourseName" value={newCourseName} onChange={(e) => setNewCourseName(e.target.value)} placeholder={`${venueName.trim()} ${year} route`} maxLength={120} required autoFocus />
                       </Field>
                       <Button variant="subtle" size="sm" onClick={() => setCourseId("")} className="mt-2">
                         Cancel
@@ -162,7 +168,7 @@ export function MeetForm({ action, venues, defaultTimeZone, defaultState, meet, 
           <LinkButton href={cancelHref} variant="secondary">
             Cancel
           </LinkButton>
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" disabled={pending || (selected === "new" && !newCourseName.trim())}>
             {pending ? "Saving…" : meet ? "Save meet" : "Create meet"}
           </Button>
         </CardBody>

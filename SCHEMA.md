@@ -196,7 +196,15 @@ by name/alias (confirmed spellings are added to `athletes.aliases`); the coach
 maps contests to races; `commitImport` writes `imports`, replaces the race's
 `raceEntries`, upserts our `results` (official mark/place/status + `mat` splits
 per checkpoint, with the app's splits snapshotted beside them), and sets
-`races.officialImportId`. Lineup athletes with no row become `status: dns`.
+`races.officialImportId`. Lineup athletes with no row that the coach ticks
+"Record as did not start" become `status: dns`; our runners in the results
+who weren't on the lineup are added to it.
+
+Fields added Oct 6–8: `races.liveFeed` (a RACE RESULT contest feed polled
+while the race runs), `meets.resultsUrl` (the timing company's page, linked
+from the meet page), `schools.viewerLink` (hash + encrypted token for the
+season-wide read-only link), `meets.courseId` now set (one course per venue is
+created automatically). `pnpm db:migrate` backfills the nullable ones.
 
 ### taps
 Append-only log; never updated or deleted. Types: `gun`, `capture`, `assign`,

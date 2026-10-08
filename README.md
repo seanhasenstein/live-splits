@@ -18,7 +18,7 @@ pnpm dev
 ## Scripts
 
 - `pnpm dev` / `pnpm build` / `pnpm lint` / `pnpm typecheck`
-- `pnpm db:indexes` — create indexes
+- `pnpm db:indexes` — create indexes (run again after pulling: new indexes were added Oct 8)
 - `pnpm db:seed` — create indexes and seed
 - `pnpm db:migrate` — backfill fields added since the database was seeded
 - `pnpm db:clear-taps "<meet>" --yes` — wipe a meet's taps and gun times (test data)
@@ -30,8 +30,9 @@ pnpm dev
 - A coach types `COACH_ACCESS_CODE` on `/join` to get a school-level coach
   session: create meets, set up races, see/regenerate join codes.
 - Each meet has a **manager code** (tap, fix, gun) and a **coach code** (same
-  plus export). Coaches see them on the meet page any time (stored encrypted)
-  and can share `/join?code=…` links; Regenerate replaces them.
+  plus export). Coaches see them behind the meet page's **Share** button any
+  time (stored encrypted), tap to copy, share `/join?code=…` links, and can
+  regenerate them from the same sheet.
 - The **viewer link** (`/v/<token>`) opens a read-only session for one meet.
 - The **season link** (Meets → Season link; also `/v/<token>`) opens a
   read-only session for every meet: the meets list (happening now / upcoming /
@@ -57,7 +58,7 @@ same layout. The meet form asks for the venue only: the first meet at a venue
 creates a course named after it; later meets reuse the venue's current layout
 unless the coach picks another or adds a "New layout…". Meets can be edited
 (meet page → Edit) to set this on meets created before courses existed. The
-record screen's "Compare with · This course" and the Order sheet's "same
+record screen's "Compare with · This course" and the "Names and tiles" sheet's "same
 course" tag both key off `meets.courseId`.
 
 ## Combined races
