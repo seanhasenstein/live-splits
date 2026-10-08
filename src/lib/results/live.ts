@@ -9,7 +9,8 @@ import { fromRaceResultUrl } from "./sources";
 /**
  * Official times from a race's live feed while it is in progress. The feed is
  * read at most once every UPSTREAM_MS per race (per server instance), however
- * many phones are polling; the result rides along on the taps response. Only
+ * many phones are polling, and never in a poll's critical path (stale while
+ * revalidating); the result rides along on the taps response. Only
  * exact and alias name matches count: a live feed is nobody's chance to
  * confirm a spelling. The real import, after the race, is still the record.
  */
@@ -22,27 +23,32 @@ export function liveFeedActive(race: Pick<Race, "liveFeed" | "gunTimeMs" | "fini
 
 export async function getLiveOfficial(meet: Meet, race: Race): Promise<OfficialTimes> {
   if (!race.liveFeed) return {};
-  const entry = cache.get(race._id);
+  const key = `${race._id}:${race.liveFeed.url}`;
+  const entry = cache.get(key);
   const now = Date.now();
   if (entry && now - entry.at < UPSTREAM_MS) return entry.data;
-  if (entry?.inflight) return entry.inflight;
-  const inflight = fetchLive(meet, race)
-    .then((data) => {
-      cache.set(race._id, { at: Date.now(), data, inflight: null });
-      return data;
-    })
-    .catch(() => {
-      // Upstream hiccup: keep showing what we had, and try again next window.
-      const data = entry?.data ?? {};
-      cache.set(race._id, { at: Date.now(), data, inflight: null });
-      return data;
-    });
-  cache.set(race._id, { at: entry?.at ?? 0, data: entry?.data ?? {}, inflight });
-  return inflight;
+  if (!entry?.inflight) {
+    const inflight = fetchLive(meet, race)
+      .then((data) => {
+        cache.set(key, { at: Date.now(), data, inflight: null });
+        return data;
+      })
+      .catch(() => {
+        // Upstream hiccup: keep showing what we had, and try again next window.
+        const data = cache.get(key)?.data ?? {};
+        cache.set(key, { at: Date.now(), data, inflight: null });
+        return data;
+      });
+    cache.set(key, { at: entry?.at ?? 0, data: entry?.data ?? {}, inflight });
+  }
+  // Never make a phone's poll wait on the timing company: serve the last snapshot while the
+  // refresh runs. Only the very first read for a feed has nothing to serve, and it returns
+  // empty rather than blocking; the next poll picks the data up.
+  return cache.get(key)!.data;
 }
 
 async function fetchLive(meet: Meet, race: Race): Promise<OfficialTimes> {
-  const contest = await fromRaceResultUrl(race.liveFeed!.url, race.liveFeed!.contestName ?? undefined);
+  const contest = await fromRaceResultUrl(race.liveFeed!.url, race.liveFeed!.contestName ?? undefined, { live: true });
   const athletes = await collection(await getDb(), "athletes")
     .find({ _id: { $in: race.lineup.map((l) => l.athleteId) }, schoolId: meet.schoolId, deletedAt: null })
     .toArray();

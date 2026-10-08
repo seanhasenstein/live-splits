@@ -70,7 +70,7 @@ export function buildExportRows(input: {
     const statusLabel = o ? (o.status !== "finished" ? o.status.toUpperCase() : "") : appStatus ? STATUS_LABEL[appStatus.status] : "";
     return {
       level: levelOrder.get(a.levelId) ?? 99,
-      reached: o?.finishMs != null ? progress.length : reached,
+      reached: o?.finishMs != null ? progress.length - 1 : reached,
       time: o?.finishMs ?? (reached < 0 ? Infinity : (progress[reached] ?? Infinity)),
       name: a.displayName,
       cells: [

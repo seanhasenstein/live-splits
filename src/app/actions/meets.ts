@@ -69,7 +69,9 @@ async function resolvePlace(db: Db, schoolId: string, input: MeetInput, actor: A
   const year = Number(input.date.slice(0, 4));
 
   const venues = collection(db, "venues");
-  let venueId = (await venues.findOne({ schoolId, name: input.venueName, deletedAt: null }))?._id ?? null;
+  // Same match the form uses (case-insensitive), so "tuscumbia golf course" doesn't become a second venue.
+  const nameMatch = { $regex: `^${input.venueName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" };
+  let venueId = (await venues.findOne({ schoolId, name: nameMatch, deletedAt: null }))?._id ?? null;
   if (!venueId) {
     const venue = COLLECTIONS.venues.schema.parse({
       _id: newId(),

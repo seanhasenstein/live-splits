@@ -23,11 +23,27 @@ async function getText(url: string): Promise<string> {
   return res.text();
 }
 
-/** One RACE RESULT contest feed: a JSON array of rows. */
-export async function fromRaceResultUrl(url: string, contestName = "RACE RESULT contest"): Promise<ParsedContest> {
-  const rows = await getJson<Record<string, unknown>[]>(url);
+const RACE_RESULT_HOST = "api.raceresult.com";
+const BADGER_HOSTS = new Set(["badgerstatetiming.live", "www.badgerstatetiming.live"]);
+
+/** Only fetch from the timing companies we know, over https: links come from coaches and from their pages. */
+function checkHost(url: string, allowed: (host: string) => boolean): URL {
+  let u: URL;
+  try {
+    u = new URL(url.trim());
+  } catch {
+    throw new SourceError("That doesn't look like a link.");
+  }
+  if (u.protocol !== "https:" || !allowed(u.host)) throw new SourceError(`Links to ${u.host} can't be read.`);
+  return u;
+}
+
+/** One RACE RESULT contest feed: a JSON array of rows. `live`: rows without a finish are still running, not DNF. */
+export async function fromRaceResultUrl(url: string, contestName = "RACE RESULT contest", options: { live?: boolean } = {}): Promise<ParsedContest> {
+  const u = checkHost(url, (h) => h === RACE_RESULT_HOST);
+  const rows = await getJson<Record<string, unknown>[]>(u.toString());
   if (!Array.isArray(rows)) throw new SourceError("That RACE RESULT link didn't return a results list.");
-  return parseRaceResultJson(rows, contestName, url);
+  return parseRaceResultJson(rows, contestName, u.toString(), options);
 }
 
 /**
@@ -37,7 +53,7 @@ export async function fromRaceResultUrl(url: string, contestName = "RACE RESULT 
  * side just means re-reading it.
  */
 export async function fromBadgerStateUrl(pageUrl: string): Promise<ParsedContest[]> {
-  const u = new URL(pageUrl);
+  const u = checkHost(pageUrl, (h) => BADGER_HOSTS.has(h));
   const slug = u.pathname.replace(/^\/+|\/+$/g, "");
   if (!slug) throw new SourceError("That Badger State Timing link has no meet in it.");
 
@@ -78,8 +94,8 @@ export async function fromUrl(url: string): Promise<ParsedContest[]> {
   } catch {
     throw new SourceError("That doesn't look like a link.");
   }
-  if (u.host === "api.raceresult.com") return [await fromRaceResultUrl(u.toString())];
-  if (u.host.endsWith("badgerstatetiming.live")) return fromBadgerStateUrl(u.toString());
+  if (u.host === RACE_RESULT_HOST) return [await fromRaceResultUrl(u.toString())];
+  if (BADGER_HOSTS.has(u.host)) return fromBadgerStateUrl(u.toString());
   throw new SourceError(`No importer for ${u.host} yet. Paste the results as text or upload the PDF instead.`);
 }
 

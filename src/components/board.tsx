@@ -144,9 +144,11 @@ function RaceBoard({
       });
       return { athleteId, marks, cells, reached, officialStatus: off?.status ?? null, officialPlace: off?.place ?? null, status: statuses.get(athleteId) };
     });
+    // Compare like with like: official times are from the gun, app times are elapsed when
+    // there's a gun (else wall-clock, which is still monotonic within one race).
     const key = (r: Row) => {
       const c = r.cells[r.reached];
-      return c.official ?? c.absoluteMs ?? 0;
+      return c.official ?? c.elapsedMs ?? c.absoluteMs ?? 0;
     };
     // Anyone out of the race (app status, or official DNS/DNF) sits at the bottom.
     const out = (r: Row) => (r.status || (r.officialStatus && r.officialStatus !== "finished") ? 1 : 0);
@@ -166,7 +168,7 @@ function RaceBoard({
       id: c.id,
       label: c.label,
       n: rows.filter(has).length,
-      out: rows.filter((r) => !has(r) && !expectedAt(r.status, i, race.checkpoints)).length,
+      out: rows.filter((r) => !has(r) && (!expectedAt(r.status, i, race.checkpoints) || (!!r.officialStatus && r.officialStatus !== "finished"))).length,
     };
   });
 

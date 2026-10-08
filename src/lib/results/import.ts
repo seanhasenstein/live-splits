@@ -50,17 +50,12 @@ export async function commitImport(meet: Meet, plans: ImportPlan[], raw: string,
   });
   await collection(db, "imports").insertOne(importDoc);
 
-  // The full field, replacing any earlier import of each race. Done once per race up front:
-  // a combined race (boys + girls JV together) takes two contests, both of which must survive.
-  for (const raceId of new Set(plans.map((p) => p.race._id))) {
-    await collection(db, "raceEntries").updateMany({ raceId, deletedAt: null }, { $set: { deletedAt: now, updatedAt: now, updatedBy: actor } });
-  }
-
-  for (const plan of plans) {
+  // Build (and validate) every race's entries before touching the database, so a bad row
+  // fails the import up front instead of after the old entries were already retired.
+  const entriesByPlan = plans.map((plan) => {
     const { race, contest } = plan;
     const byIndex = new Map(plan.assignments.map((a) => [a.entryIndex, a.athleteId]));
-
-    const entries = contest.entries.map((e, i) =>
+    return contest.entries.map((e, i) =>
       COLLECTIONS.raceEntries.schema.parse({
         _id: newId(),
         schoolId: meet.schoolId,
@@ -80,6 +75,18 @@ export async function commitImport(meet: Meet, plans: ImportPlan[], raw: string,
         ...audit,
       }),
     );
+  });
+
+  // The full field, replacing any earlier import of each race. Done once per race up front:
+  // a combined race (boys + girls JV together) takes two contests, both of which must survive.
+  for (const raceId of new Set(plans.map((p) => p.race._id))) {
+    await collection(db, "raceEntries").updateMany({ raceId, deletedAt: null }, { $set: { deletedAt: now, updatedAt: now, updatedBy: actor } });
+  }
+
+  for (const [planIndex, plan] of plans.entries()) {
+    const { race, contest } = plan;
+    const byIndex = new Map(plan.assignments.map((a) => [a.entryIndex, a.athleteId]));
+    const entries = entriesByPlan[planIndex];
     if (entries.length > 0) await collection(db, "raceEntries").insertMany(entries);
     const entryIdByIndex = new Map(entries.map((e, i) => [i, e._id]));
 

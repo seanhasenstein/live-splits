@@ -16,9 +16,13 @@ export const metadata: Metadata = { title: "Meets" };
 
 type MeetStatus = "live" | "upcoming" | "past";
 
-/** Live if any race is running; upcoming until the meet's date has passed or every race is finished. */
+/**
+ * Live if a race is running on the meet's day (a gun nobody marked finished
+ * shouldn't keep last week's meet "live"); upcoming until the date has passed
+ * or every race is finished.
+ */
 function statusOf(meet: Meet, races: Race[], today: string): MeetStatus {
-  if (races.some((r) => r.gunTimeMs !== null && !r.finishedAt)) return "live";
+  if (meet.date === today && races.some((r) => r.gunTimeMs !== null && !r.finishedAt)) return "live";
   const allDone = races.length > 0 && races.every((r) => r.finishedAt || r.officialImportId);
   if (allDone || meet.date < today) return "past";
   return "upcoming";

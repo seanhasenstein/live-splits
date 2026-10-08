@@ -46,10 +46,31 @@ export async function loadResultsAction(meetId: string, _prev: LoadState, formDa
   }
 }
 
+const ParsedContestSchema = z.object({
+  name: z.string().min(1).max(200),
+  distanceMeters: z.number().nullable(),
+  splitLabels: z.array(z.string()),
+  entries: z.array(
+    z.object({
+      firstName: z.string(),
+      lastName: z.string(),
+      name: z.string().min(1),
+      team: z.string().nullable(),
+      grade: z.int().nullable(),
+      bib: z.string().nullable(),
+      place: z.int().positive().nullable(),
+      status: z.enum(["finished", "dnf", "dns", "dq"]),
+      finishMs: z.int().nonnegative().nullable(),
+      splits: z.record(z.string(), z.int().nonnegative()),
+    }),
+  ),
+  source: z.object({ kind: z.enum(["raceresult", "text"]), url: z.string().optional() }),
+});
+
 const CommitPayload = z.object({
   raw: z.string(),
   sourceUrl: z.string().nullable(),
-  contests: z.array(z.any()),
+  contests: z.array(ParsedContestSchema),
   plans: z.array(
     z.object({
       raceId: Id,
@@ -68,7 +89,13 @@ export async function commitImportAction(meetId: string, payloadJson: string): P
   const session = await getSession();
   const meet = await getMeet(meetId);
   if (!meet || !can(session, "export", meet)) return { error: "Not allowed" };
-  const parsed = CommitPayload.safeParse(JSON.parse(payloadJson));
+  let json: unknown;
+  try {
+    json = JSON.parse(payloadJson);
+  } catch {
+    return { error: "Invalid import" };
+  }
+  const parsed = CommitPayload.safeParse(json);
   if (!parsed.success) return { error: "Invalid import" };
   const payload = parsed.data;
   const contests = payload.contests as ParsedContest[];

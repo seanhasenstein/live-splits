@@ -233,19 +233,17 @@ function collect(race: Pick<Race, "checkpoints">, marks: Map<string, Mark>, slot
  * replay because a status belongs to the athlete, not a checkpoint.
  */
 export function replayStatuses(taps: TapLike[]): Map<string, AthleteStatus> {
-  const out = new Map<string, AthleteStatus>();
-  const athleteOf = new Map<string, string>();
+  // Newest status tap per athlete first; then voids, whatever order a clock resync put them in.
+  const out = new Map<string, AthleteStatus & { at: number }>();
   for (const t of sortTaps(taps)) {
     if (t.type === "status" && t.athleteId && t.status) {
-      athleteOf.set(t.clientTapId, t.athleteId);
-      out.set(t.athleteId, { tapId: t.clientTapId, status: t.status, afterCheckpointId: t.checkpointId, by: t.createdBy?.name ?? null });
-    } else if (t.type === "void" && t.targetTapId) {
-      // Clearing the current status puts them back in the race; an older one doesn't come back.
-      const athleteId = athleteOf.get(t.targetTapId);
-      if (athleteId && out.get(athleteId)?.tapId === t.targetTapId) out.delete(athleteId);
+      out.set(t.athleteId, { tapId: t.clientTapId, status: t.status, afterCheckpointId: t.checkpointId, by: t.createdBy?.name ?? null, at: t.serverTimeMs });
     }
   }
-  return out;
+  const voided = new Set(taps.filter((t) => t.type === "void" && t.targetTapId).map((t) => t.targetTapId!));
+  // Clearing the current status puts them back in the race; an older one doesn't come back.
+  for (const [athleteId, s] of out) if (voided.has(s.tapId)) out.delete(athleteId);
+  return new Map([...out].map(([id, s]) => [id, { tapId: s.tapId, status: s.status, afterCheckpointId: s.afterCheckpointId, by: s.by }]));
 }
 
 /** Whether an athlete with this status is still expected at checkpoint `cpIndex`. */

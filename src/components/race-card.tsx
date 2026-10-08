@@ -146,7 +146,7 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
                 </Badge>
               )
             )}
-            <ClockWarning sync={clock.sync} error={clock.error} />
+            {canGun && <ClockWarning sync={clock.sync} error={clock.error} />}
           </div>
         </div>
         {(canGun || editHref || csvHref || compareHref) && !armed && (

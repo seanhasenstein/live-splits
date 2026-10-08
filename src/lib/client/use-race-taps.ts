@@ -37,6 +37,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
   const [official, setOfficial] = useState<OfficialTimes>({});
   /** The official times are coming from the timing company's live feed, not an import. */
   const [officialLive, setOfficialLive] = useState(false);
+  const liveRef = useRef(false);
   const [finished, setFinished] = useState(false);
   const [loaded, setLoaded] = useState(false);
   /** Derived in the poll loop (not during render): is the race overdue, and how old is our data. */
@@ -61,7 +62,12 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
       if (body.official) {
         setOfficial(body.official);
         setOfficialLive(!!body.officialLive);
+      } else if (liveRef.current && !body.officialLive) {
+        // The live feed just ended (imported, or finished): fetch the real official times next.
+        since.current = 0;
+        setOfficialLive(false);
       }
+      liveRef.current = !!body.officialLive;
       if (body.taps.length > 0) {
         setServerTaps((prev) => {
           const next = new Map(prev);
@@ -88,9 +94,15 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
       if (!gun) return POLL.notStarted;
       return Date.now() - gun > LONG_RUNNING_MS ? POLL.longRunning : POLL.inProgress;
     };
+    let inFlight = false;
     const tick = async () => {
-      if (stopped) return;
-      if (document.visibilityState === "visible") await poll();
+      if (stopped || inFlight) return; // a visibilitychange mid-fetch must not start a second loop
+      inFlight = true;
+      try {
+        if (document.visibilityState === "visible") await poll();
+      } finally {
+        inFlight = false;
+      }
       if (stopped) return;
       const { gunTimeMs: gun, finished: done, lastUpdatedAt } = stateRef.current;
       const age = lastUpdatedAt === null ? 0 : Date.now() - lastUpdatedAt;

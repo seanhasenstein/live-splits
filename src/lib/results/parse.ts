@@ -48,7 +48,7 @@ const toGrade = (raw: unknown): number | null => {
 };
 
 /** RACE RESULT per-contest JSON (api.raceresult.com/<event>/<key>): columns Place, Bib, Firstname, Lastname, Team, Grade, <mat>, <mat>_Rank, Finish. */
-export function parseRaceResultJson(rows: Record<string, unknown>[], contestName: string, url?: string): ParsedContest {
+export function parseRaceResultJson(rows: Record<string, unknown>[], contestName: string, url?: string, options: { live?: boolean } = {}): ParsedContest {
   const columns = new Set<string>();
   for (const r of rows) for (const k of Object.keys(r)) columns.add(k);
   const reserved = new Set(["Place", "Bib", "Firstname", "Lastname", "Team", "Grade", "Finish", "Points"]);
@@ -72,7 +72,8 @@ export function parseRaceResultJson(rows: Record<string, unknown>[], contestName
       grade: toGrade(r.Grade),
       bib: r.Bib != null && String(r.Bib) !== "" ? String(r.Bib) : null,
       place,
-      status: status === "finished" && finishMs === null ? "dnf" : status,
+      // Final results: a row with no finish and no status word is a DNF. Live: they just haven't finished yet.
+      status: status === "finished" && finishMs === null && !options.live ? "dnf" : status,
       finishMs,
       splits,
     };
