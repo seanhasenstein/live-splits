@@ -401,12 +401,17 @@ function RaceTapper({
         lineup: race.athleteIds,
         names: athletes,
         history: race.history,
+        // Official times are elapsed from the gun; app marks are re-based the same way when there is a gun.
         prevTime: (id) => {
+          const prevCp = cpIndex > 0 ? race.checkpoints[cpIndex - 1] : undefined;
+          const o = prevCp ? (official[id]?.byCheckpoint[prevCp.id] ?? (prevCp.kind === "finish" ? official[id]?.finishMs : undefined)) : undefined;
+          if (o != null) return o;
           const m = prev?.byAthlete.get(id);
-          return m && !m.missed ? m.timeMs : null;
+          if (!m || m.missed || m.timeMs === null) return null;
+          return gunTimeMs ? m.timeMs - gunTimeMs : m.timeMs;
         },
       }),
-    [orderMode, race, prev, athletes],
+    [orderMode, race, prev, athletes, cpIndex, official, gunTimeMs],
   );
 
   const [lastAction, setLastAction] = useState<LastAction | null>(null);
@@ -995,16 +1000,17 @@ function OrderControl({
   const [showRaces, setShowRaces] = useState(mode.kind === "race");
   const prevLabel = cpIndex > 0 ? checkpoints[cpIndex - 1].label : null;
   const raceLabel = (id: string) => history.races.find((r) => r.id === id)?.label ?? "a race";
+  // Button label: reads as an ordering, so "Mile 2 order" next to a "Finish" title isn't mistaken for the checkpoint.
   const describe = (m: OrderMode) => {
     switch (m.kind) {
       case "prev":
-        return prevLabel ?? "Previous checkpoint";
+        return prevLabel ? `${prevLabel} order` : "Previous checkpoint";
       case "last":
-        return "Last race";
+        return "Last-race order";
       case "race":
-        return raceLabel(m.raceId);
+        return `${raceLabel(m.raceId)} order`;
       case "best":
-        return "Season best";
+        return "Season-best order";
       case "coach":
         return "Coach's order";
       case "az":
