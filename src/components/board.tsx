@@ -142,7 +142,8 @@ function RaceBoard({
       cells.forEach((cell, i) => {
         if (cell.official !== null || cell.absoluteMs !== null) reached = i;
       });
-      return { athleteId, marks, cells, reached, officialStatus: off?.status ?? null, officialPlace: off?.place ?? null, status: statuses.get(athleteId) };
+      // Official results outrank an app-side DNS/DNF: the timing company saw them finish.
+      return { athleteId, marks, cells, reached, officialStatus: off?.status ?? null, officialPlace: off?.place ?? null, status: off ? undefined : statuses.get(athleteId) };
     });
     // Compare like with like: official times are from the gun, app times are elapsed when
     // there's a gun (else wall-clock, which is still monotonic within one race).

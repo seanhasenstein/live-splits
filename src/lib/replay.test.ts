@@ -171,3 +171,11 @@ test("statuses: newest wins, void clears, DNF keeps the last checkpoint passed",
   taps.push(tap({ type: "void", targetTapId: dnf.tapId }));
   expect(replayStatuses(taps).has("A")).toBe(false);
 });
+
+test("a status void that sorts before its target (clock resync) still clears it", () => {
+  const taps: TapLike[] = [
+    { clientTapId: "s1", type: "status", checkpointId: null, athleteId: "A", targetTapId: null, serverTimeMs: 5000, timeMs: null, estimate: false, missed: false, status: "dns" },
+    { clientTapId: "v1", type: "void", checkpointId: null, athleteId: null, targetTapId: "s1", serverTimeMs: 4800, timeMs: null, estimate: false, missed: false },
+  ];
+  expect(replayStatuses(taps).has("A")).toBe(false);
+});

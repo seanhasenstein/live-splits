@@ -64,3 +64,15 @@ test("header labels survive collapsed spacing", () => {
   expect(headerLabels("2K 4K")).toEqual(["2K", "4K"]);
   expect(headerLabels("")).toEqual([]);
 });
+
+test("live feed: a row with no finish yet is still running; an explicit DNF stays DNF", () => {
+  const rows = [
+    { Place: "", Bib: "12", Firstname: "Ava", Lastname: "Lee", Team: "Sheboygan Lutheran", Grade: "10", "Mile 1": "7:23.4", Finish: "" },
+    { Place: "DNF", Bib: "13", Firstname: "Bo", Lastname: "Ray", Team: "Sheboygan Lutheran", Grade: "11", "Mile 1": "7:30.0", Finish: "" },
+  ];
+  const live = parseRaceResultJson(rows, "Girls", undefined, { live: true });
+  expect(live.entries[0]).toMatchObject({ status: "finished", finishMs: null, splits: { "Mile 1": 7 * 60_000 + 23_400 } });
+  expect(live.entries[1].status).toBe("dnf");
+  // Final results: the same unfinished row is a DNF.
+  expect(parseRaceResultJson(rows, "Girls").entries[0].status).toBe("dnf");
+});

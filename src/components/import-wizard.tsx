@@ -271,6 +271,7 @@ function ContestCard({
                   <div className="flex items-center gap-2">
                     {m.kind === "exact" && <Badge tone="brand">matched</Badge>}
                     {m.kind === "alias" && <Badge tone="brand">known spelling</Badge>}
+                    {value && value !== NOT_OURS && race && !race.athleteIds.includes(value) && <Badge tone="gold">added to lineup</Badge>}
                     {m.kind === "last-name" && !value && <Badge tone="gold">check</Badge>}
                     {m.kind === "none" && !value && (
                       <Badge tone="danger" dot>
@@ -295,7 +296,7 @@ function ContestCard({
               );
             })}
           </div>
-          <p className="mt-1.5 text-xs text-ink-3">A new spelling you confirm is remembered for next time.</p>
+          <p className="mt-1.5 text-xs text-ink-3">A new spelling you confirm is remembered for next time. A runner who isn&rsquo;t in this race&rsquo;s lineup is added to it.</p>
         </div>
 
         {missing.length > 0 && (

@@ -100,6 +100,8 @@ export async function commitImportAction(meetId: string, payloadJson: string): P
   const payload = parsed.data;
   const contests = payload.contests as ParsedContest[];
   const races = await listRaces(meet._id);
+  const actor = sessionActor(session!);
+  const db = await getDb();
 
   const plans: ImportPlan[] = [];
   const seenByRace = new Map<string, Set<string>>();
@@ -107,8 +109,18 @@ export async function commitImportAction(meetId: string, payloadJson: string): P
     const race = races.find((r) => r._id === p.raceId);
     const contest = contests[p.contestIndex];
     if (!race || !contest) return { error: "A race or contest in the import no longer exists." };
+    if (!p.assignments.every((a) => contest.entries[a.entryIndex])) return { error: "An assignment points at a results row that doesn't exist." };
+    // Our runners in the results who weren't on the lineup ran anyway: add them, at their roster level.
     const lineup = new Set(race.lineup.map((l) => l.athleteId));
-    if (!p.assignments.every((a) => lineup.has(a.athleteId) && contest.entries[a.entryIndex])) return { error: "An assignment points outside the race lineup." };
+    const extra = [...new Set(p.assignments.map((a) => a.athleteId))].filter((id) => !lineup.has(id));
+    if (extra.length > 0) {
+      const roster = await collection(db, "seasonRosters").find({ seasonId: meet.seasonId, athleteId: { $in: extra }, deletedAt: null }).toArray();
+      if (roster.length !== extra.length) return { error: "A results row is assigned to someone who isn't on this season's roster." };
+      const added = roster.map((r) => ({ athleteId: r.athleteId, levelId: race.levelIds.includes(r.defaultLevelId) ? r.defaultLevelId : race.levelIds[0] }));
+      race.lineup = [...race.lineup, ...added];
+      added.forEach((l) => lineup.add(l.athleteId));
+      await collection(db, "races").updateOne({ _id: race._id }, { $push: { lineup: { $each: added } }, $set: { updatedAt: new Date(), updatedBy: actor } });
+    }
     const seen = seenByRace.get(race._id) ?? new Set<string>();
     seenByRace.set(race._id, seen);
     for (const a of p.assignments) {
@@ -118,8 +130,6 @@ export async function commitImportAction(meetId: string, payloadJson: string): P
     plans.push({ race, contest, assignments: p.assignments, dnsAthleteIds: p.dnsAthleteIds.filter((id) => lineup.has(id) && !seen.has(id)) });
   }
 
-  const actor = sessionActor(session!);
-  const db = await getDb();
   for (const p of payload.plans) {
     for (const { athleteId, alias } of p.newAliases) {
       await collection(db, "athletes").updateOne({ _id: athleteId, schoolId: meet.schoolId }, { $addToSet: { aliases: alias }, $set: { updatedAt: new Date(), updatedBy: actor } });

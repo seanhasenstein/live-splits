@@ -86,3 +86,19 @@ test("a combined race labels the Race column with the gender", () => {
   expect(byName["Ella Heronymus"]).toBe("JV Girls");
   expect(byName["Nate Vanic"]).toBe("JV Boys");
 });
+
+test("official and app finishers sort together by time", () => {
+  const gun = 1_000_000;
+  const taps = [
+    tap("1", { type: "name_tap", athleteId: "A", checkpointId: "fin", serverTimeMs: gun + 18 * 60_000 }), // app-only 18:00
+  ];
+  const official = { B: { finishMs: 22 * 60_000, status: "finished", place: 40, byCheckpoint: {} } };
+  const rows = buildExportRows({ race, state: replay(race, taps), athletes, levelLabel: (id) => id, official });
+  const names = rows.slice(1).filter((r) => r[0] === "varsity").map((r) => r[2]);
+  expect(names[0]).toBe("Eddy Giebler"); // A (18:00) before C (no time)
+  const jv = rows.slice(1).filter((r) => r[0] === "jv").map((r) => r[2]);
+  expect(jv).toEqual(["Nate Vanic"]);
+  // Put B in varsity to compare directly with A
+  const rows2 = buildExportRows({ race, state: replay(race, taps), athletes: athletes.map((a) => ({ ...a, levelId: "varsity" })), levelLabel: (id) => id, official });
+  expect(rows2.slice(1).map((r) => r[2]).slice(0, 2)).toEqual(["Eddy Giebler", "Nate Vanic"]);
+});
