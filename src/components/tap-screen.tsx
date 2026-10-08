@@ -168,10 +168,13 @@ function SwitchControl({
           setOpen(true);
         }}
         aria-label="Change race or checkpoint"
-        className="-ml-2 flex min-w-0 items-center gap-1 rounded-lg px-2 py-0.5 text-left hover:bg-surface-2 active:bg-surface-2"
+        className="flex min-w-0 items-center gap-1.5 rounded-lg border border-line-strong bg-surface py-1 pr-2 pl-3 text-left shadow-card hover:bg-surface-2 active:bg-surface-2"
       >
         <span className="truncate text-2xl font-semibold tracking-tight text-ink">{race.checkpoints.find((c) => c.id === checkpointId)?.label}</span>
-        <ChevronDown className="size-5 shrink-0 text-ink-2" aria-hidden />
+        <span className="flex items-center gap-0.5 rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-ink-2">
+          Switch
+          <ChevronDown className="size-3.5" aria-hidden />
+        </span>
       </button>
       {open && (
         <Sheet title="Where are you recording?" subtitle="Taps go to the race and checkpoint you pick here." onClose={() => setOpen(false)}>
@@ -312,7 +315,26 @@ function RaceTapper({
   const total = race.athleteIds.length;
   const outstanding = (i: number) => counts[i].n + counts[i].out < total;
   const hereDone = loaded && total > 0 && !isFinished && !outstanding(cpIndex);
-  const nextCp = hereDone ? race.checkpoints.find((_, i) => i > cpIndex && outstanding(i)) : undefined;
+  // Somewhere else still waiting on runners: later checkpoints first, then earlier ones.
+  const nextCp = hereDone ? (race.checkpoints.find((_, i) => i > cpIndex && outstanding(i)) ?? race.checkpoints.find((_, i) => i < cpIndex && outstanding(i))) : undefined;
+  const nextIsBack = !!nextCp && race.checkpoints.indexOf(nextCp) < cpIndex;
+  // Everything's in: say how it ended.
+  const finishCount = race.checkpoints.length ? counts[race.checkpoints.length - 1] : undefined;
+  const outByStatus = race.athleteIds.reduce(
+    (acc, id) => {
+      const st = statuses.get(id)?.status;
+      if (st && !(official[id] && official[id].status === "finished")) acc[st] += 1;
+      return acc;
+    },
+    { dns: 0, dnr: 0, dnf: 0 },
+  );
+  const allDoneText = (() => {
+    if (!finishCount) return "";
+    const out = Object.values(outByStatus).reduce((a, b) => a + b, 0);
+    if (out === 0) return "Everyone has finished.";
+    const parts = (["dnf", "dns", "dnr"] as const).filter((k) => outByStatus[k] > 0).map((k) => `${outByStatus[k]} ${STATUS_LABEL[k]}`);
+    return `Everyone's accounted for: ${finishCount.n} finished, ${parts.join(", ")}.`;
+  })();
 
   // Grid order. A manager's pick is remembered on this device; otherwise the previous
   // checkpoint's order, or at the first checkpoint their last race (coach's order if none).
@@ -633,21 +655,30 @@ function RaceTapper({
         />
       </div>
       {hereDone && (
-        <div className="mx-3 mt-2 flex items-center justify-between gap-3 rounded-lg border border-brand/30 bg-brand-soft px-3 py-2 text-sm text-ink">
-          <span>
-            Everyone&rsquo;s {checkpoint.kind === "finish" ? "in" : "through"} <b>{checkpoint.label}</b>.
-          </span>
-          {nextCp ? (
-            <Button size="sm" onClick={() => onSwitch({ raceId: race.id, checkpointId: nextCp.id })}>
-              Go to {nextCp.label}
-              <ArrowRight className="size-3.5" />
-            </Button>
-          ) : (
-            <LinkButton href={`/meets/${meetId}/results?race=${race.id}`} size="sm">
-              Live results
-              <ArrowRight className="size-3.5" />
-            </LinkButton>
-          )}
+        <div className="mx-3 mt-2 rounded-lg border border-brand/30 bg-brand-soft px-3 py-2 text-sm text-ink">
+          <div className="flex items-center justify-between gap-3">
+            <span>
+              {nextCp ? (
+                <>
+                  Everyone&rsquo;s {checkpoint.kind === "finish" ? "in" : "through"} <b>{checkpoint.label}</b>.{nextIsBack && ` ${nextCp.label} still has runners out.`}
+                </>
+              ) : (
+                allDoneText
+              )}
+            </span>
+            {nextCp ? (
+              <Button size="sm" onClick={() => onSwitch({ raceId: race.id, checkpointId: nextCp.id })}>
+                {nextIsBack ? "Back to" : "Go to"} {nextCp.label}
+                <ArrowRight className="size-3.5" />
+              </Button>
+            ) : (
+              <LinkButton href={`/meets/${meetId}/results?race=${race.id}`} size="sm">
+                Live results
+                <ArrowRight className="size-3.5" />
+              </LinkButton>
+            )}
+          </div>
+          {!nextCp && <p className="mt-1 text-xs text-ink-2">Need to change something? Switch checkpoints above, or use Fix times on Live results.</p>}
         </div>
       )}
       <div className={`grid flex-1 content-start gap-2 p-3 pb-48 ${large ? "grid-cols-1" : "grid-cols-2"}`}>

@@ -18,11 +18,13 @@ async function main() {
     { sport: "xc", "settings.raceCategories.id": { $ne: "mixed" } },
     { $push: { "settings.raceCategories": { id: "mixed", label: "Mixed", gender: null } } },
   );
+  // Races imported before imports stopped the clock: mark them finished at the import time.
+  const r8 = await collection(db, "races").updateMany({ officialImportId: { $ne: null }, finishedAt: null }, [{ $set: { finishedAt: "$updatedAt" } }]);
   const r3 = await collection(db, "schools").updateMany(
     { "settings.teamAliases": { $exists: false } },
     { $set: { "settings.teamAliases": ["Sheboygan Lutheran", "Sheboygan Area Lutheran", "Sheboygan Area Lutheran HS"] } },
   );
-  console.log(`races.finishedAt: ${r1.modifiedCount}, races.officialImportId: ${r2.modifiedCount}, races.liveFeed: ${r4.modifiedCount}, meets.resultsUrl: ${r5.modifiedCount}, schools.viewerLink: ${r6.modifiedCount}, programs.mixedCategory: ${r7.modifiedCount}, schools.teamAliases: ${r3.modifiedCount}`);
+  console.log(`races.finishedAt: ${r1.modifiedCount}, races.officialImportId: ${r2.modifiedCount}, races.liveFeed: ${r4.modifiedCount}, meets.resultsUrl: ${r5.modifiedCount}, schools.viewerLink: ${r6.modifiedCount}, programs.mixedCategory: ${r7.modifiedCount}, races.finishedByImport: ${r8.modifiedCount}, schools.teamAliases: ${r3.modifiedCount}`);
 }
 
 main()

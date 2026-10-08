@@ -158,7 +158,11 @@ export async function commitImport(meet: Meet, plans: ImportPlan[], raw: string,
       if (athlete) await upsertResult(athlete, null, null);
     }
 
-    await collection(db, "races").updateOne({ _id: race._id }, { $set: { officialImportId: importDoc._id, updatedAt: now, updatedBy: actor } });
+    // Official results mean the race is over: stop the clock if nobody has yet.
+    await collection(db, "races").updateOne(
+      { _id: race._id },
+      { $set: { officialImportId: importDoc._id, finishedAt: race.finishedAt ?? now, updatedAt: now, updatedBy: actor } },
+    );
   }
   return { importId: importDoc._id };
 }
