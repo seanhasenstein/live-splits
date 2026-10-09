@@ -4,7 +4,7 @@ import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
 import { checkpointForLabel, type OfficialTimes } from "./import";
 import { matchAthlete } from "./match";
-import { fromRaceResultUrl } from "./sources";
+import { fromFeedUrl } from "./sources";
 
 /**
  * Official times from a race's live feed while it is in progress. The feed is
@@ -48,7 +48,7 @@ export async function getLiveOfficial(meet: Meet, race: Race): Promise<OfficialT
 }
 
 async function fetchLive(meet: Meet, race: Race): Promise<OfficialTimes> {
-  const contest = await fromRaceResultUrl(race.liveFeed!.url, race.liveFeed!.contestName ?? undefined, { live: true });
+  const contest = await fromFeedUrl(race.liveFeed!.url, race.liveFeed!.contestName ?? undefined, { live: true });
   const athletes = await collection(await getDb(), "athletes")
     .find({ _id: { $in: race.lineup.map((l) => l.athleteId) }, schoolId: meet.schoolId, deletedAt: null })
     .toArray();

@@ -190,7 +190,8 @@ Raw pasted/uploaded source stored as-is (`raw`), with `source`, `fileName`,
 `contentType`, and the meet/race it belongs to.
 
 **Import flow** (`src/lib/results/`): a vendor adapter (RACE RESULT JSON by
-URL, Badger State Timing meet pages, pasted text, PDF) produces
+URL, Badger State Timing meet pages, XM Timing meet pages / Arrow Live Results
+race pages, pasted text, PDF) produces
 `ParsedContest[]`; our rows are found by `teamAliases` and matched to athletes
 by name/alias (confirmed spellings are added to `athletes.aliases`); the coach
 maps contests to races; `commitImport` writes `imports`, replaces the race's

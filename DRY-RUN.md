@@ -66,7 +66,8 @@
      Last three taps in the bottom bar. First-use intro card.
 4. ~~Live official results~~ — done Oct 6: Adjust → Live official results
    (link the race to the timing company's feed; polled at most every 15 s
-   while in progress). Tell Badger State Timing before using it at a meet.
+   while in progress; RACE RESULT feeds and Arrow Live Results pages). Tell
+   the timing company before using it at a meet.
 5. Import the season's earlier meets (links or files from the other timing
    companies) so "last race" / "season best" ordering has data.
 6. ~~Prod migrate~~ — done Oct 6. Still to do: deploy, import the Nightfall

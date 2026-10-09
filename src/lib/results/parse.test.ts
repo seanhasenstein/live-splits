@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import { isOurTeam, matchAthlete, normalizeName } from "./match";
-import { headerLabels, parseRaceResultJson, parseResultsText } from "./parse";
+import { headerLabels, parseArrowResultsHtml, parseRaceResultJson, parseResultsText } from "./parse";
 
 const dir = `${process.cwd()}/data/results/2026-10-02-nightfall-classic`;
 const ALIASES = ["Sheboygan Lutheran", "Sheboygan Area Lutheran"];
@@ -75,4 +75,19 @@ test("live feed: a row with no finish yet is still running; an explicit DNF stay
   expect(live.entries[1].status).toBe("dnf");
   // Final results: the same unfinished row is a DNF.
   expect(parseRaceResultJson(rows, "Girls").entries[0].status).toBe("dnf");
+});
+
+const arrowRows = (finish: string) => `<Table class="table table-striped"><thead><tr><th>Place</th><th>Bib#</th><th>Name</th><th>Team</th><th>Gender</th><th>Age</th><th>Finish</th></tr></thead><tbody>
+<tr><td class="smallColumn">1</td><td class="smallColumn">1251</td><td><span class="visible-xs">#1251</span><a href="/ParticipantDetails/Details?pParticipantID=1">Eddy Giebler</a></td><td class="hidden-xs">Sheboygan Lutheran</td><td>M</td><td>0</td><td>00:17:09.87<br><text class="hidden-xs"></text></td></tr>
+<tr><td class="smallColumn"></td><td class="smallColumn">222</td><td><a href="/ParticipantDetails/Details?pParticipantID=2">Brynlee Van Der Schmidt</a></td><td class="hidden-xs">Cedar Grove-Belgium</td><td>F</td><td>0</td><td>${finish}</td></tr>
+</tbody></Table>`;
+
+test("parses Arrow Live Results rows", () => {
+  const c = parseArrowResultsHtml(arrowRows(""), "Boys Varsity - Sm School", "https://www.arrowliveresults.com/X");
+  expect(c.source).toEqual({ kind: "arrow", url: "https://www.arrowliveresults.com/X" });
+  expect(c.entries[0]).toMatchObject({ name: "Eddy Giebler", firstName: "Eddy", lastName: "Giebler", team: "Sheboygan Lutheran", bib: "1251", place: 1, status: "finished", finishMs: 17 * 60000 + 9870, grade: null });
+  expect(c.entries[1]).toMatchObject({ name: "Brynlee Van Der Schmidt", lastName: "Van Der Schmidt", place: null, finishMs: null, status: "dnf" });
+  // Mid-race the same row is a runner still out on the course.
+  expect(parseArrowResultsHtml(arrowRows(""), "Boys Varsity", undefined, { live: true }).entries[1].status).toBe("finished");
+  expect(parseArrowResultsHtml(arrowRows("DNF"), "Boys Varsity").entries[1]).toMatchObject({ status: "dnf", finishMs: null });
 });

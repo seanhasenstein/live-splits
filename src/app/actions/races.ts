@@ -12,7 +12,7 @@ import { Id } from "@/lib/db/schema";
 import { RacePayload } from "@/lib/race-form";
 import { distanceValue } from "@/lib/distance";
 import { gunFromOfficial } from "@/lib/results/import";
-import { fromUrl, SourceError } from "@/lib/results/sources";
+import { fromUrl, isLiveFeedUrl, SourceError } from "@/lib/results/sources";
 import { recordTaps, TapError } from "@/lib/taps";
 import { zonedTimeToEpochMs } from "@/lib/time";
 
@@ -305,10 +305,7 @@ export async function setLiveFeedAction(raceId: string, feed: { url: string; con
   const parsed = z.object({ url: z.url(), contestName: z.string().max(200).nullable() }).nullable().safeParse(feed);
   if (!parsed.success) return { error: "That isn't a valid link." };
   // Only feeds the server knows how to read get polled.
-  if (parsed.data) {
-    const u = new URL(parsed.data.url);
-    if (u.protocol !== "https:" || u.host !== "api.raceresult.com") return { error: "Only RACE RESULT contest feeds (https://api.raceresult.com/…) can be polled live." };
-  }
+  if (parsed.data && !isLiveFeedUrl(parsed.data.url)) return { error: "Only RACE RESULT feeds (api.raceresult.com) and Arrow Live Results pages (arrowliveresults.com) can be polled live." };
   await collection(await getDb(), "races").updateOne({ _id: race._id }, { $set: { liveFeed: parsed.data, updatedAt: new Date(), updatedBy: sessionActor(session!) } });
   return {};
 }

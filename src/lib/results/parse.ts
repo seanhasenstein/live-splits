@@ -29,7 +29,7 @@ export type ParsedContest = {
   splitLabels: string[];
   entries: ParsedEntry[];
   /** Where it came from, for the import record. */
-  source: { kind: "raceresult" | "text"; url?: string };
+  source: { kind: "raceresult" | "arrow" | "text"; url?: string };
 };
 
 const STATUS_WORDS: Record<string, ParsedStatus> = { DNF: "dnf", DNS: "dns", DQ: "dq", DNR: "dns" };
@@ -163,4 +163,49 @@ export function parseResultsText(text: string, contestName = "Pasted results"): 
     });
   }
   return { name: contestName, distanceMeters: null, splitLabels: splitLabels ?? [], entries, source: { kind: "text" } };
+}
+
+const stripTags = (html: string) =>
+  html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, " ")
+    .trim();
+
+/**
+ * Arrow Live Results (used by XM Timing): the `/Results/pvResults` partial is
+ * a table of Place, Bib#, Name, Team, Gender, Age, Finish (hh:mm:ss.cc). No
+ * mat splits and no grade. The page updates live, so with `live` a row without
+ * a finish is still running rather than a DNF.
+ */
+export function parseArrowResultsHtml(html: string, contestName: string, url?: string, options: { live?: boolean } = {}): ParsedContest {
+  const body = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i)?.[1] ?? "";
+  const entries: ParsedEntry[] = [];
+  for (const row of body.match(/<tr[\s\S]*?<\/tr>/gi) ?? []) {
+    const cells = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((m) => m[1]);
+    if (cells.length < 7) continue;
+    const { place, status } = placeAndStatus(stripTags(cells[0]));
+    // The name cell carries a "#bib" for phones plus the linked name; take the link text.
+    const name = stripTags(cells[2].match(/<a[^>]*>([\s\S]*?)<\/a>/i)?.[1] ?? cells[2].replace(/#\d+/, ""));
+    if (!name) continue;
+    const words = name.split(" ");
+    const finishText = stripTags(cells[6]).split(" ")[0] ?? "";
+    const finishMs = /^\d/.test(finishText) ? parseElapsed(finishText) : null;
+    entries.push({
+      firstName: words[0] ?? "",
+      lastName: words.slice(1).join(" "),
+      name,
+      team: stripTags(cells[3]) || null,
+      grade: null,
+      bib: stripTags(cells[1]) || null,
+      place,
+      status: status === "finished" && finishMs === null && !options.live ? "dnf" : status,
+      finishMs,
+      splits: {},
+    });
+  }
+  return { name: contestName, distanceMeters: null, splitLabels: [], entries, source: { kind: "arrow", url } };
 }

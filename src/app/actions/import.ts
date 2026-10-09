@@ -72,7 +72,7 @@ const ParsedContestSchema = z.object({
       splits: z.record(z.string(), z.int().nonnegative()),
     }),
   ),
-  source: z.object({ kind: z.enum(["raceresult", "text"]), url: z.string().optional() }),
+  source: z.object({ kind: z.enum(["raceresult", "arrow", "text"]), url: z.string().optional() }),
 });
 
 const CommitPayload = z.object({

@@ -1,5 +1,5 @@
 import "server-only";
-import { type ParsedContest, parseRaceResultJson, parseResultsText } from "./parse";
+import { type ParsedContest, parseArrowResultsHtml, parseRaceResultJson, parseResultsText } from "./parse";
 
 /**
  * Turn what a coach hands us (a URL, pasted text, a PDF) into contests.
@@ -25,6 +25,18 @@ async function getText(url: string): Promise<string> {
 
 const RACE_RESULT_HOST = "api.raceresult.com";
 const BADGER_HOSTS = new Set(["badgerstatetiming.live", "www.badgerstatetiming.live"]);
+const ARROW_HOSTS = new Set(["arrowliveresults.com", "www.arrowliveresults.com"]);
+const XM_HOSTS = new Set(["xmtiming.com", "www.xmtiming.com"]);
+
+/** Hosts whose race pages can be polled live during a race. */
+export function isLiveFeedUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && (u.host === RACE_RESULT_HOST || ARROW_HOSTS.has(u.host));
+  } catch {
+    return false;
+  }
+}
 
 /** Only fetch from the timing companies we know, over https: links come from coaches and from their pages. */
 function checkHost(url: string, allowed: (host: string) => boolean): URL {
@@ -87,6 +99,44 @@ export async function fromBadgerStateUrl(pageUrl: string): Promise<ParsedContest
   return out;
 }
 
+/**
+ * One Arrow Live Results race page (XM Timing). The page embeds its event id;
+ * the rows come from a partial view that the page itself polls.
+ */
+export async function fromArrowUrl(pageUrl: string, options: { live?: boolean } = {}): Promise<ParsedContest> {
+  const u = checkHost(pageUrl, (h) => ARROW_HOSTS.has(h));
+  const html = await getText(u.toString());
+  const eventId = html.match(/var\s+EventId\s*=\s*(\d+)/)?.[1];
+  if (!eventId) throw new SourceError("That Arrow Live Results page has no event on it.");
+  const title = html.match(/<title>([^<]*)<\/title>/i)?.[1]?.trim() || `Arrow event ${eventId}`;
+  const rows = await getText(`${u.origin}/Results/pvResults?pEventId=${eventId}&pDivision=Overall&pChipTime=false`);
+  return parseArrowResultsHtml(rows, title, u.toString(), options);
+}
+
+/** An XM Timing meet page lists one Arrow page per race; read them all. */
+export async function fromXmTimingUrl(pageUrl: string): Promise<ParsedContest[]> {
+  const u = checkHost(pageUrl, (h) => XM_HOSTS.has(h));
+  const html = await getText(u.toString());
+  const links = [...new Set([...html.matchAll(/https?:\/\/(?:www\.)?arrowliveresults\.com\/[A-Za-z0-9_-]+/g)].map((m) => m[0]))];
+  if (links.length === 0) throw new SourceError("That XM Timing page has no results links yet.");
+  const out: ParsedContest[] = [];
+  for (const link of links) {
+    try {
+      out.push(await fromArrowUrl(link.replace(/^http:/, "https:")));
+    } catch {
+      // A race not published yet; skip it rather than fail the meet.
+    }
+  }
+  if (out.length === 0) throw new SourceError("That meet has no published results yet.");
+  return out;
+}
+
+/** A single race feed by its link, for live polling: RACE RESULT or Arrow. */
+export async function fromFeedUrl(url: string, contestName: string | undefined, options: { live?: boolean } = {}): Promise<ParsedContest> {
+  const u = checkHost(url, (h) => h === RACE_RESULT_HOST || ARROW_HOSTS.has(h));
+  return ARROW_HOSTS.has(u.host) ? fromArrowUrl(u.toString(), options) : fromRaceResultUrl(u.toString(), contestName, options);
+}
+
 export async function fromUrl(url: string): Promise<ParsedContest[]> {
   let u: URL;
   try {
@@ -97,6 +147,8 @@ export async function fromUrl(url: string): Promise<ParsedContest[]> {
   // A bare feed link has no contest name; the key in the URL at least tells two apart.
   if (u.host === RACE_RESULT_HOST) return [await fromRaceResultUrl(u.toString(), `RACE RESULT contest ${u.pathname.split("/").filter(Boolean).at(-1)?.slice(0, 6) ?? ""}`.trim())];
   if (BADGER_HOSTS.has(u.host)) return fromBadgerStateUrl(u.toString());
+  if (ARROW_HOSTS.has(u.host)) return [await fromArrowUrl(u.toString())];
+  if (XM_HOSTS.has(u.host)) return fromXmTimingUrl(u.toString());
   throw new SourceError(`No importer for ${u.host} yet. Paste the results as text or upload the PDF instead.`);
 }
 
