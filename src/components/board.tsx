@@ -556,7 +556,7 @@ function RaceBoard({
             );
             const idx = group.findIndex((r) => r.athleteId === athleteSheet);
             if (idx < 0 || group[idx].reached < 0) return null;
-            const team = `${combined ? (gender === "F" ? "girls " : gender === "M" ? "boys " : "") : ""}${level ?? ""}`.trim() || "team";
+            const team = `${gender === "F" ? "girls " : gender === "M" ? "boys " : ""}${level ?? ""} team`.replace(/\s+/g, " ").trim();
             return { rank: idx + 1, of: group.length, team };
           })()}
           raceClockMs={!isFinished && gunTimeMs !== null && nowMs > 0 ? nowMs - gunTimeMs : null}
@@ -632,7 +632,7 @@ function AthleteSheet({
   projectAt: (i: number) => number | null;
   overdue: (projected: number) => boolean;
   history: LineupHistory["byAthlete"][string] | undefined;
-  /** Position within the runner's gender + level group, e.g. { rank: 3, of: 7, team: "girls varsity" }. */
+  /** Position within the runner's gender + level group, e.g. { rank: 3, of: 7, team: "girls varsity team" }. */
   teamRank: { rank: number; of: number; team: string } | null;
   /** Elapsed race time right now (ms), while the race runs. */
   raceClockMs: number | null;
