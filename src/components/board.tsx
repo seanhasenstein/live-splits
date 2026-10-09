@@ -632,7 +632,7 @@ function AthleteSheet({
 
   return (
     <Sheet title={<span className="text-xl font-semibold tracking-tight">{name}</span>} subtitle={subtitle} onClose={onClose}>
-      <div className="mb-3 flex items-end justify-between gap-3">
+      <div className="mt-2 mb-3 flex items-end justify-between gap-3">
         <div>
           {status && finish === null ? (
             <>
