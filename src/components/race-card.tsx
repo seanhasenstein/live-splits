@@ -121,8 +121,9 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
     });
   };
 
+  // Finished stands on its own: imported results end a race even if nobody fired the gun in the app.
   const running = gunTimeMs !== null && !finishedAt;
-  const finished = gunTimeMs !== null && !!finishedAt;
+  const finished = !!finishedAt;
 
   return (
     <div
@@ -168,6 +169,8 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
             {firedBy && ` · by ${firedBy}`}
           </div>
         </div>
+      ) : finished ? (
+        <p className="mt-3 text-[13px] text-ink-2">No gun time was recorded in the app.</p>
       ) : canGun ? (
         <div className="mt-3">
           {armed ? (

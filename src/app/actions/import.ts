@@ -35,11 +35,16 @@ export async function loadResultsAction(meetId: string, _prev: LoadState, formDa
       if (contest.entries.length === 0) return { error: "No result rows found. Each line should read: place, name, grade, team, times." };
       return { contests: [contest], raw: text, sourceUrl: null };
     }
-    const file = formData.get("file");
-    if (!(file instanceof File) || file.size === 0) return { error: "Choose a PDF." };
-    const contest = await fromPdf(new Uint8Array(await file.arrayBuffer()), file.name.replace(/\.pdf$/i, ""));
-    if (contest.entries.length === 0) return { error: "No result rows found in that PDF." };
-    return { contests: [contest], raw: JSON.stringify(contest), sourceUrl: file.name };
+    // One contest per PDF; several at once for a combined race.
+    const files = formData.getAll("file").filter((f): f is File => f instanceof File && f.size > 0);
+    if (files.length === 0) return { error: "Choose a PDF." };
+    const contests: ParsedContest[] = [];
+    for (const file of files) {
+      const contest = await fromPdf(new Uint8Array(await file.arrayBuffer()), file.name.replace(/\.pdf$/i, ""));
+      if (contest.entries.length === 0) return { error: `No result rows found in ${file.name}.` };
+      contests.push(contest);
+    }
+    return { contests, raw: JSON.stringify(contests), sourceUrl: files.map((f) => f.name).join(", ") };
   } catch (err) {
     if (err instanceof SourceError) return { error: err.message };
     return { error: err instanceof Error ? err.message : "Couldn't read those results." };

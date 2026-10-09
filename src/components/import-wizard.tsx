@@ -50,8 +50,8 @@ export function ImportWizard({ meetId, races, athletes, teamAliases, resultsUrl 
             </>
           )}
           {kind === "pdf" && (
-            <Field label="Results PDF" hint="The timing company's results PDF for one race.">
-              <input name="file" type="file" accept="application/pdf" required className="block w-full text-sm text-ink file:mr-3 file:rounded-md file:border file:border-line-strong file:bg-surface file:px-3 file:py-1.5 file:text-sm file:text-ink" />
+            <Field label="Results PDFs" hint="One PDF per results contest. Pick several at once for a combined race (boys and girls JV together).">
+              <input name="file" type="file" accept="application/pdf" multiple required className="block w-full text-sm text-ink file:mr-3 file:rounded-md file:border file:border-line-strong file:bg-surface file:px-3 file:py-1.5 file:text-sm file:text-ink" />
             </Field>
           )}
           {state.error && <Alert tone="danger">{state.error}</Alert>}
