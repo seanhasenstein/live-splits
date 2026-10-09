@@ -135,13 +135,18 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
                           <LinkButton
                             href={`/meets/${meet._id}/record?race=${race._id}`}
                             size="lg"
-                            variant={state === "in_progress" ? "danger-solid" : state === "finished" ? "primary" : "ink"}
+                            variant={state === "in_progress" ? "danger-solid" : state === "finished" ? "subtle" : "ink"}
                           >
                             {state === "in_progress" ? <LiveDot className="bg-white" /> : <Timer className="size-4" />}
                             Record splits
                           </LinkButton>
                         )}
-                        <LinkButton href={`/meets/${meet._id}/results?race=${race._id}`} size="lg" variant="subtle" className={can(session, "tap", meet) ? "" : "col-span-2"}>
+                        <LinkButton
+                          href={`/meets/${meet._id}/results?race=${race._id}`}
+                          size="lg"
+                          variant={state === "finished" ? "primary" : "subtle"}
+                          className={can(session, "tap", meet) ? "" : "col-span-2"}
+                        >
                           <TableProperties className="size-4" />
                           Live results
                         </LinkButton>

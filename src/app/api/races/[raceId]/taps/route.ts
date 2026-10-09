@@ -5,6 +5,9 @@ import { collection } from "@/lib/db/collections";
 import { getOfficialTimes } from "@/lib/results/import";
 import { getLiveOfficial, liveFeedActive } from "@/lib/results/live";
 
+/** A record screen counts as "here" this long after its last poll. */
+const PRESENCE_MS = 2 * 60_000;
+
 /**
  * A race's tap log, for the tap screen and live board (polled every few
  * seconds). `?since=<ms>` returns only taps stored after that server time;
@@ -17,11 +20,30 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
   if (!race || !meet) return Response.json({ error: "Race not found" }, { status: 404 });
   if (!can(await getSession(), "view", meet)) return Response.json({ error: "Not allowed" }, { status: 403 });
 
-  const since = Number(new URL(request.url).searchParams.get("since") ?? 0);
+
+  const url = new URL(request.url);
+  const since = Number(url.searchParams.get("since") ?? 0);
+  const session = await getSession();
+  const db = await getDb();
+
+  // `?at=<checkpointId>` is the record screen saying where it is; remembered on the session
+  // so the results page can show who's covering each checkpoint. Refreshed at most every 20 s.
+  const at = url.searchParams.get("at");
+  if (session && at && race.checkpoints.some((c) => c.id === at)) {
+    const p = session.presence;
+    if (!p || p.raceId !== race._id || p.checkpointId !== at || Date.now() - p.at.getTime() > 20_000) {
+      await collection(db, "sessions").updateOne({ _id: session._id }, { $set: { presence: { raceId: race._id, checkpointId: at, at: new Date() } } });
+    }
+  }
+  const recording = (
+    await collection(db, "sessions")
+      .find({ "presence.raceId": race._id, "presence.at": { $gt: new Date(Date.now() - PRESENCE_MS) }, revokedAt: null }, { projection: { name: 1, "presence.checkpointId": 1 } })
+      .toArray()
+  ).map((s) => ({ name: s.name, checkpointId: s.presence!.checkpointId }));
   // Taps whose insert is still in flight have an earlier createdAt than this poll; re-send a
   // generous window (clients dedupe by clientTapId) so a slow write is never skipped.
   const serverTimeMs = Date.now() - 5000;
-  const taps = await collection(await getDb(), "taps")
+  const taps = await collection(db, "taps")
     .find(since > 0 ? { raceId, createdAt: { $gt: new Date(since) } } : { raceId })
     .sort({ createdAt: 1 })
     .project({ _id: 0, schoolId: 0, schemaVersion: 0, meetId: 0 })
@@ -33,7 +55,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
   const official = live ? await getLiveOfficial(meet, race) : since > 0 ? undefined : await getOfficialTimes(race);
 
   return Response.json(
-    { taps, gunTimeMs: race.gunTimeMs, serverTimeMs, official, officialLive: live, finished: !!race.finishedAt },
+    { taps, gunTimeMs: race.gunTimeMs, serverTimeMs, official, officialLive: live, finished: !!race.finishedAt, recording },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

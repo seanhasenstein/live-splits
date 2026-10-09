@@ -27,6 +27,7 @@ export default async function RecordPage({ params, searchParams }: PageProps<"/m
       initial={{ raceId: typeof raceParam === "string" ? raceParam : null, checkpointId: typeof cpParam === "string" ? cpParam : null }}
       timeZone={meet.timeZone}
       hasCourse={!!meet.courseId}
+      canGun={can(session, "gun", meet)}
       races={races.map((r, i) => ({
         id: r._id,
         name: r.name,

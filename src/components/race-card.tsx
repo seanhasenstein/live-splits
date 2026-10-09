@@ -3,6 +3,7 @@
 import { ChevronRight, CircleCheck, Download, Flag, GitCompare, MoreHorizontal, Pencil, Radio, Timer } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { StartRaceControl } from "@/components/start-race";
 import { clearGunTimeAction, findLiveFeedsAction, gunFromOfficialPreviewAction, type LiveFeedOption, setGunFromOfficialAction, setGunTimeAction, setLiveFeedAction, setRaceFinishedAction } from "@/app/actions/races";
 import { Alert, Badge, Button, Field, Input, Sheet, Time, RaceStateBadge } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
@@ -46,8 +47,6 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
   const [finishedAt, setFinishedAt] = useState(initialFinished);
   const [seen, setSeen] = useState({ initialGun, initialFinished });
   const [armed, setArmed] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [sending, startSend] = useTransition();
   const [adjusting, setAdjusting] = useState(false);
   const [options, setOptions] = useState(false);
 
@@ -57,69 +56,6 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
     setGunTimeMs(initialGun);
     setFinishedAt(initialFinished);
   }
-
-  // Disarm on its own; a forgotten armed button is a misfire waiting to happen.
-  useEffect(() => {
-    if (!armed) return;
-    const t = setTimeout(() => setArmed(false), 15000);
-    return () => clearTimeout(t);
-  }, [armed]);
-
-  // The START payload is kept so a failed send can be retried with the original
-  // moment and id (the server dedupes on clientTapId).
-  const [pendingStart, setPendingStart] = useState<Record<string, unknown> | null>(null);
-
-  const sendStart = (payload: Record<string, unknown>) => {
-    startSend(async () => {
-      try {
-        const res = await fetch("/api/taps", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ taps: [payload] }),
-        });
-        const body = (await res.json().catch(() => ({}))) as { error?: string; gunTimeMs?: number | null };
-        if (res.status === 409) {
-          // Someone else started it first; show their gun, don't overwrite it.
-          setPendingStart(null);
-          setError(body.error ?? "This race was already started.");
-          router.refresh();
-          return;
-        }
-        if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-        setPendingStart(null);
-        setGunTimeMs(body.gunTimeMs ?? (payload.deviceTimeMs as number) + (payload.clockOffsetMs as number));
-        setError(null);
-        router.refresh();
-      } catch (e) {
-        setPendingStart(payload);
-        setError(`${e instanceof Error ? e.message : "Couldn't record the start."} The moment you tapped is saved; retry to send it.`);
-      }
-    });
-  };
-
-  const fire = () => {
-    const deviceTimeMs = Date.now();
-    const sync = clock.sync;
-    setArmed(false);
-    if (!sync) {
-      setError("The clock isn't synced yet. Try again in a second.");
-      return;
-    }
-    sendStart({
-      clientTapId: crypto.randomUUID(),
-      type: "gun",
-      raceId,
-      checkpointId: null,
-      athleteId: null,
-      targetTapId: null,
-      deviceTimeMs,
-      clockOffsetMs: sync.offsetMs,
-      timeMs: null,
-      estimate: false,
-      missed: false,
-      note: null,
-    });
-  };
 
   // Finished stands on its own: imported results end a race even if nobody fired the gun in the app.
   const running = gunTimeMs !== null && !finishedAt;
@@ -173,42 +109,18 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
         <p className="mt-3 text-[13px] text-ink-2">No gun time was recorded in the app.</p>
       ) : canGun ? (
         <div className="mt-3">
-          {armed ? (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={fire}
-                disabled={sending}
-                className="h-16 flex-1 rounded-lg bg-brand text-2xl font-semibold tracking-wide text-brand-ink shadow-card active:bg-brand/80 disabled:opacity-50"
-              >
-                START
-              </button>
-              <Button variant="secondary" size="lg" onClick={() => setArmed(false)} className="h-16">
-                Cancel
-              </Button>
-            </div>
-          ) : (
-            <Button size="lg" onClick={() => setArmed(true)} disabled={sending || !clock.sync} className="w-full">
-              {sending ? "Recording…" : "Start race…"}
-            </Button>
-          )}
-          <p className="mt-1.5 text-xs text-ink-3">
-            {armed ? "Tap START the moment the gun goes off." : "Shows the START button; it closes itself after 15 seconds."}
-          </p>
+          <StartRaceControl
+            raceId={raceId}
+            onArmedChange={setArmed}
+            onStarted={(gun) => {
+              setGunTimeMs(gun);
+              router.refresh();
+            }}
+            onConflict={() => router.refresh()}
+          />
         </div>
       ) : (
         <p className="mt-3 text-[13px] text-ink-2">Waiting for the start.</p>
-      )}
-
-      {error && (
-        <div className="mt-2 space-y-2">
-          <Alert tone="danger">{error}</Alert>
-          {pendingStart && (
-            <Button size="sm" onClick={() => sendStart(pendingStart)} disabled={sending}>
-              {sending ? "Sending…" : "Retry sending the start"}
-            </Button>
-          )}
-        </div>
       )}
 
       {actions && <div className="mt-3">{actions[running ? "in_progress" : finished ? "finished" : "not_started"]}</div>}

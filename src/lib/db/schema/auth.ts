@@ -38,6 +38,8 @@ export const Session = z.object({
   lastSeenAt: z.date(),
   expiresAt: z.date(),
   revokedAt: z.date().nullable(),
+  /** Where this person's record screen is pointed right now, so coaches can see who's covering which checkpoint. */
+  presence: z.object({ raceId: Id, checkpointId: z.string().min(1), at: z.date() }).nullable().default(null),
 });
 export type Session = z.infer<typeof Session>;
 

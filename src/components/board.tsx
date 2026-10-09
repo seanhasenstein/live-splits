@@ -97,7 +97,7 @@ function RaceBoard({
   canTap: boolean;
 }) {
   const clock = useClock();
-  const { taps, gunTimeMs, official, officialLive, finished, longRunning, staleMinutes, send, online, loaded } = useRaceTaps(race.id, race.gunTimeMs);
+  const { taps, gunTimeMs, official, officialLive, finished, longRunning, staleMinutes, send, online, loaded, recording } = useRaceTaps(race.id, race.gunTimeMs);
   const isFinished = race.finished || finished;
   const hasOfficial = Object.keys(official).length > 0;
   const state = useMemo(
@@ -153,13 +153,15 @@ function RaceBoard({
     };
     // Anyone out of the race (app status, or official DNS/DNF) sits at the bottom.
     const out = (r: Row) => (r.status || (r.officialStatus && r.officialStatus !== "finished") ? 1 : 0);
+    // Not yet seen: the coach's order (the lineup as arranged on the race page), same as the record screen.
+    const lineupIndex = new Map(race.athleteIds.map((id, i) => [id, i]));
     return rows.sort((a, b) => {
       if (out(a) !== out(b)) return out(a) - out(b);
       if (a.reached !== b.reached) return b.reached - a.reached;
       if (a.reached >= 0) return key(a) - key(b);
-      return (athletes[a.athleteId] ?? "").localeCompare(athletes[b.athleteId] ?? "");
+      return (lineupIndex.get(a.athleteId) ?? 0) - (lineupIndex.get(b.athleteId) ?? 0);
     });
-  }, [race, shownIds, state, athletes, official, gunTimeMs, statuses]);
+  }, [race, shownIds, state, official, gunTimeMs, statuses]);
 
   const pendingTotal = race.checkpoints.reduce((n, c) => n + (state.get(c.id)?.pending.length ?? 0), 0);
 
@@ -233,6 +235,21 @@ function RaceBoard({
         </div>
       </div>
 
+      {recording.length > 0 && !isFinished && (
+        <p className="mb-3 text-[13px] text-ink-2">
+          <span className="font-medium text-ink">Recording now</span>
+          {race.checkpoints
+            .map((c) => ({ c, who: recording.filter((r) => r.checkpointId === c.id).map((r) => r.name) }))
+            .filter(({ who }) => who.length > 0)
+            .map(({ c, who }) => (
+              <span key={c.id}>
+                {" · "}
+                {c.label}: {who.join(", ")}
+              </span>
+            ))}
+        </p>
+      )}
+
       {longRunning && (
         <div className="mb-3">
           <Alert tone="gold">This race has been running for over 90 minutes. Mark it finished (meet page → Options → Adjust) to stop live updates.</Alert>
@@ -249,7 +266,7 @@ function RaceBoard({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line text-left text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
-              <th className="px-3 py-2 font-semibold sm:px-4">Athlete</th>
+              <th className="px-3 py-2 font-semibold sm:px-4">{hasOfficial ? "Place · Athlete" : "Athlete"}</th>
               {race.checkpoints.map((c, i) => (
                 <th key={c.id} className="px-2 py-2 text-right font-semibold last:px-3 sm:last:px-4">
                   {c.label}
@@ -278,6 +295,7 @@ function RaceBoard({
             {rows.map((row) => (
               <tr key={row.athleteId} className={row.reached < 0 ? "text-ink-3" : ""}>
                 <td className={`px-3 py-2 align-top font-medium sm:px-4 ${row.reached < 0 ? "" : "text-ink"}`}>
+                  {row.officialPlace !== null && <span className="tnum mr-1.5 text-ink-3">{row.officialPlace}</span>}
                   {editing ? (
                     <button type="button" onClick={() => setStatusFor(row.athleteId)} className="rounded px-1.5 py-1 text-left hover:bg-gold-soft" title="Set DNS / DNR / DNF">
                       {athletes[row.athleteId]}

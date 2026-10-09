@@ -27,7 +27,10 @@ const RETRY_MS = [1000, 2000, 4000, 8000, 15000];
  * The live tap log for a race: what the server has, plus what this device has
  * queued but not yet delivered. Polls the server and flushes the outbox.
  */
-export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
+export type Recording = { name: string; checkpointId: string };
+
+/** `at`: the checkpoint this record screen is on, reported with each poll (undefined for the results page). */
+export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?: string) {
   const [serverTaps, setServerTaps] = useState<Map<string, ServerTap>>(() => new Map());
   const [outbox, setOutbox] = useState<Map<string, OutboxTap>>(() => new Map());
   const [gunTimeMs, setGunTimeMs] = useState(initialGunTimeMs);
@@ -38,6 +41,11 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
   /** The official times are coming from the timing company's live feed, not an import. */
   const [officialLive, setOfficialLive] = useState(false);
   const liveRef = useRef(false);
+  const [recording, setRecording] = useState<Recording[]>([]);
+  const atRef = useRef(at);
+  useEffect(() => {
+    atRef.current = at;
+  }, [at]);
   const [finished, setFinished] = useState(false);
   const [loaded, setLoaded] = useState(false);
   /** Derived in the poll loop (not during render): is the race overdue, and how old is our data. */
@@ -52,9 +60,10 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
   // --- polling -------------------------------------------------------------
   const poll = useCallback(async () => {
     try {
-      const res = await fetch(`/api/races/${raceId}/taps?since=${since.current}`, { cache: "no-store" });
+      const res = await fetch(`/api/races/${raceId}/taps?since=${since.current}${atRef.current ? `&at=${encodeURIComponent(atRef.current)}` : ""}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const body = (await res.json()) as { taps: ServerTap[]; gunTimeMs: number | null; serverTimeMs: number; official?: OfficialTimes; officialLive?: boolean; finished?: boolean };
+      const body = (await res.json()) as { taps: ServerTap[]; gunTimeMs: number | null; serverTimeMs: number; official?: OfficialTimes; officialLive?: boolean; finished?: boolean; recording?: Recording[] };
+      if (body.recording) setRecording(body.recording);
       since.current = body.serverTimeMs;
       setGunTimeMs(body.gunTimeMs);
       setFinished(!!body.finished);
@@ -266,6 +275,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null) {
     gunTimeMs,
     official,
     officialLive,
+    recording,
     finished,
     longRunning: health.longRunning,
     staleMinutes: health.staleMinutes,

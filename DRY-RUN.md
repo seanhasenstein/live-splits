@@ -81,6 +81,9 @@
   elevation profile / gain per segment on a branded web page and a printable
   version for the post-meet packet. Elevation gain per course also explains
   "vs this course" vs "vs last meet" deltas. After the historical import.
+- **Per-athlete view** (idea, Oct 9): tap a name on Live results → sheet with
+  their splits, pace, vs last meet, and season trend. Worth it once earlier
+  meets are imported.
 - **Reading bib RFID at mile marks** (idea, Oct 7): possible for passive UHF
   bibs (RACE RESULT), not for active transponders. Handhelds miss packs; a
   reliable rig is a fixed reader + antennas (~$3–4k per checkpoint) and can

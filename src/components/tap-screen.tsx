@@ -5,6 +5,7 @@ import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState 
 import { ArrowRight, Check, ChevronDown, Pencil, SlidersHorizontal, Undo2, X } from "lucide-react";
 import { ClockWarning } from "@/components/race-card";
 import { CheckpointCounts, DeltaText, RaceStatusBar } from "@/components/race-status";
+import { StartRaceControl } from "@/components/start-race";
 import { SessionMenu } from "@/components/session-menu";
 import { AppHeader, Badge, Button, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast, RaceStateBadge } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
@@ -36,6 +37,7 @@ type Props = {
   timeZone: string;
   /** The meet has a course on file, so "vs this course" can mean something. */
   hasCourse: boolean;
+  canGun: boolean;
   races: RaceInfo[];
   athletes: Record<string, string>;
 };
@@ -65,7 +67,7 @@ const FLASH_MS = 400;
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const eventTimeMs = (_e: SyntheticEvent) => Date.now();
 
-export function TapScreen({ meetId, meetName, session, initial, timeZone, hasCourse, races, athletes }: Props) {
+export function TapScreen({ meetId, meetName, session, initial, timeZone, hasCourse, canGun, races, athletes }: Props) {
   useWakeLock();
   // Selection lives in the URL (?race=&cp=) so a reload lands on the same checkpoint.
   const [sel, setSel] = useState(() => {
@@ -106,7 +108,7 @@ export function TapScreen({ meetId, meetName, session, initial, timeZone, hasCou
       cpIndex={cpIndex}
       athletes={athletes}
       hasCourse={hasCourse}
-      raceCount={races.length}
+      canGun={canGun}
       onSwitch={setSel}
       pickerFor={(current) => <SwitchControl races={races} race={race} checkpointId={race.checkpoints[cpIndex].id} current={current} onSwitch={setSel} />}
     />
@@ -168,10 +170,13 @@ function SwitchControl({
           setOpen(true);
         }}
         aria-label="Change race or checkpoint"
-        className="flex min-w-0 items-center gap-1.5 rounded-lg border border-line-strong bg-surface py-1 pr-2 pl-3 text-left shadow-card hover:bg-surface-2 active:bg-surface-2"
+        className="flex w-full min-w-0 items-center gap-3 rounded-lg border border-line-strong bg-surface py-1.5 pr-2 pl-3 text-left shadow-card hover:bg-surface-2 active:bg-surface-2"
       >
-        <span className="truncate text-2xl font-semibold tracking-tight text-ink">{race.checkpoints.find((c) => c.id === checkpointId)?.label}</span>
-        <span className="flex items-center gap-0.5 rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-ink-2">
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-2xl leading-tight font-semibold tracking-tight text-ink">{race.checkpoints.find((c) => c.id === checkpointId)?.label}</span>
+          <span className="block truncate text-[13px] text-ink-2">{race.name}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-0.5 rounded-md bg-surface-2 px-2 py-1 text-[11px] font-medium text-ink-2">
           Switch
           <ChevronDown className="size-3.5" aria-hidden />
         </span>
@@ -223,7 +228,7 @@ function SwitchControl({
                             {n} of {pickedRace.athleteIds.length} recorded
                           </span>
                         )}
-                        {active && <Check className="size-4 text-brand-text" />}
+
                       </span>
                     </button>
                   );
@@ -264,7 +269,7 @@ function RaceTapper({
   cpIndex,
   athletes,
   hasCourse,
-  raceCount,
+  canGun,
   onSwitch,
   pickerFor,
 }: {
@@ -276,13 +281,14 @@ function RaceTapper({
   cpIndex: number;
   athletes: Record<string, string>;
   hasCourse: boolean;
-  raceCount: number;
+  /** May fire the gun from here (manager or coach). */
+  canGun: boolean;
   onSwitch: (sel: { raceId: string; checkpointId: string }) => void;
   pickerFor: (current: RaceSummary) => React.ReactNode;
 }) {
   const clock = useClock();
   const checkpoint = race.checkpoints[cpIndex];
-  const { taps, gunTimeMs, official, officialLive, finished, staleMinutes, send, online, signedOut, rejected, loaded, unsent } = useRaceTaps(race.id, race.gunTimeMs);
+  const { taps, gunTimeMs, official, officialLive, finished, staleMinutes, send, online, signedOut, rejected, loaded, unsent, refresh } = useRaceTaps(race.id, race.gunTimeMs, checkpoint.id);
   const isFinished = race.finished || finished;
   const officialAt = (athleteId: string): number | null => {
     const o = official[athleteId];
@@ -619,13 +625,13 @@ function RaceTapper({
             </Badge>
           )}
         </div>
-        <div className="flex items-center justify-between gap-3">
-          {pickerFor({
-            gunTimeMs,
-            counts: Object.fromEntries(counts.map((c) => [c.id, c.n])),
-          })}
-          {raceCount > 1 && <span className="shrink-0 text-[13px] text-ink-2">{race.name}</span>}
-        </div>
+        {pickerFor({
+          gunTimeMs,
+          counts: Object.fromEntries(counts.map((c) => [c.id, c.n])),
+        })}
+        {!gunTimeMs && !isFinished && canGun && (
+          <StartRaceControl raceId={race.id} onStarted={() => refresh()} onConflict={() => refresh()} />
+        )}
         <CheckpointCounts counts={counts} total={race.athleteIds.length} loaded={loaded} finished={isFinished} activeId={checkpoint.id} />
       </div>
 
