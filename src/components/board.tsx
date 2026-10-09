@@ -745,7 +745,7 @@ function AthleteSheet({
         <div className="mt-5 mb-4 flex items-end justify-between gap-x-6 gap-y-3 border-t border-line pt-3">
           <div className="flex flex-wrap gap-x-6 gap-y-3">
             {teamRank && (
-              <SmallStat value={`${teamRank.rank}${ordinal(teamRank.rank)} of ${teamRank.of}`} label={finish === null && lastSeen ? `${teamRank.team} at ${lastSeen.label}` : teamRank.team} />
+              <SmallStat value={`${teamRank.rank}${ordinal(teamRank.rank)} of ${teamRank.of} runner${teamRank.of === 1 ? "" : "s"}`} label={finish === null && lastSeen ? `${teamRank.team} at ${lastSeen.label}` : teamRank.team} />
             )}
             {last && last.finishMs !== null && (
               <SmallStat
