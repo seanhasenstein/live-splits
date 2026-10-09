@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pencil } from "lucide-react";
+import { ChevronRight, Pencil } from "lucide-react";
 import { CheckpointCounts, DeltaText, RaceStatusBar } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
 import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
@@ -216,7 +216,6 @@ function RaceBoard({
     const pacePerMeter = (here - before) / segMeters;
     return here + pacePerMeter * (race.checkpoints[i].meters - race.checkpoints[row.reached].meters);
   };
-  const projectFinish = (row: Row) => (finishIndex < 0 ? null : projectAt(row, finishIndex));
   // "Overdue" is a cue for the people who can do something about it; viewers just see the projection.
   const staff = canFix || canTap;
   /** Past their projected time by more than a minute: worth a look. */
@@ -363,8 +362,9 @@ function RaceBoard({
                           {athletes[row.athleteId]}
                         </button>
                       ) : (
-                        <button type="button" onClick={() => setAthleteSheet(row.athleteId)} className="-mx-1.5 rounded px-1.5 py-1 text-left hover:bg-surface-2">
+                        <button type="button" onClick={() => setAthleteSheet(row.athleteId)} className="-mx-1.5 inline-flex items-center gap-0.5 rounded px-1.5 py-1 text-left hover:bg-surface-2" title="Splits, pace and comparison">
                           {athletes[row.athleteId]}
+                          <ChevronRight className="size-3.5 shrink-0 text-ink-3" aria-hidden />
                         </button>
                       )}
                       {row.status ? (
@@ -491,7 +491,7 @@ function RaceBoard({
       )}
 
       <p className="mt-3 text-xs text-ink-3">
-        * edited &nbsp; ~ estimate{!isFinished && ` · a ~ time marked projected is a guess from the runner's last split${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : "Official times replace app taps where imported. ")}{" "}
+        {!editing && "Tap a name for that runner's splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a ~ time marked projected is a guess from the runner's last split${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : "Official times replace app taps where imported. ")}{" "}
         {view === "splits"
           ? "Splits are the time since the previous checkpoint; beneath each, the pace per mile and the change from the previous segment (+ slower, − faster). The finish column also shows the finish time."
           : "Cumulative time from the gun, with the split beneath and the pace change from the previous segment (+ slower, − faster)."}{" "}
@@ -509,10 +509,11 @@ function RaceBoard({
           race={race}
           row={rows.find((r) => r.athleteId === athleteSheet)}
           name={athletes[athleteSheet] ?? "?"}
-          projected={(() => {
+          projectAt={(i) => {
             const r = rows.find((x) => x.athleteId === athleteSheet);
-            return r ? projectFinish(r) : null;
-          })()}
+            return r ? projectAt(r, i) : null;
+          }}
+          overdue={staff ? overdue : () => false}
           history={race.history.byAthlete[athleteSheet]}
           onClose={() => setAthleteSheet(null)}
         />
@@ -562,14 +563,17 @@ function AthleteSheet({
   race,
   row,
   name,
-  projected,
+  projectAt,
+  overdue,
   history,
   onClose,
 }: {
   race: RaceInfo;
   row: Row | undefined;
   name: string;
-  projected: number | null;
+  /** Projected elapsed time at checkpoint i while the race runs, else null. */
+  projectAt: (i: number) => number | null;
+  overdue: (projected: number) => boolean;
   history: LineupHistory["byAthlete"][string] | undefined;
   onClose: () => void;
 }) {
@@ -580,6 +584,7 @@ function AthleteSheet({
   };
   const finishIndex = race.checkpoints.findIndex((c) => c.kind === "finish");
   const finish = finishIndex >= 0 ? t(finishIndex) : null;
+  const projected = finishIndex >= 0 ? projectAt(finishIndex) : null;
   const statusLabel = row?.officialStatus && row.officialStatus !== "finished" ? row.officialStatus.toUpperCase() : row?.status ? STATUS_LABEL[row.status.status] : null;
   const subtitle = [race.name, row?.officialPlace !== null && row?.officialPlace !== undefined ? `${row.officialPlace}${ordinal(row.officialPlace)} place` : null, statusLabel].filter(Boolean).join(" · ");
   const refAt = (i: number): number | null => {
@@ -607,7 +612,7 @@ function AthleteSheet({
         <div className="flex items-center gap-x-3 px-3 py-1.5 text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
           <span className="min-w-0 flex-1">Checkpoint</span>
           <span className="w-16 shrink-0 text-right">Time</span>
-          <span className="w-28 shrink-0 text-right">Split · pace</span>
+          <span className="w-32 shrink-0 text-right">Split · pace</span>
           {last && <span className="w-14 shrink-0 text-right">vs last</span>}
         </div>
         {race.checkpoints.map((c, i) => {
@@ -624,8 +629,18 @@ function AthleteSheet({
                 {cell?.official !== null && cell?.official !== undefined && <span className="ml-1.5 text-[10px] font-semibold tracking-wide text-brand-text uppercase">official</span>}
                 {cell?.mark?.estimate && cell.official === null && <span className="ml-1.5 text-xs text-ink-3">estimate</span>}
               </span>
-              <Time className="w-16 shrink-0 text-right font-semibold text-ink">{cell?.missed ? "missed" : here !== null ? formatElapsed(here) : "—"}</Time>
-              <Time className="w-28 shrink-0 text-right text-ink-2">
+              {(() => {
+                const p = here === null && !cell?.missed ? projectAt(i) : null;
+                if (p === null) return <Time className="w-16 shrink-0 text-right font-semibold text-ink">{cell?.missed ? "missed" : here !== null ? formatElapsed(here) : "—"}</Time>;
+                const late = overdue(p);
+                return (
+                  <span className={`w-16 shrink-0 text-right ${late ? "text-gold-text" : "text-ink-3"}`}>
+                    <Time className="block">~{formatElapsed(p).replace(/\.\d$/, "")}</Time>
+                    <span className="block text-[10px] tracking-wide uppercase">{late ? "overdue" : "projected"}</span>
+                  </span>
+                );
+              })()}
+              <Time className="w-32 shrink-0 text-right whitespace-nowrap text-ink-2">
                 {split !== null && segMeters > 0 ? `${formatElapsed(split)} · ${formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}/mi` : "—"}
               </Time>
               {last && (
