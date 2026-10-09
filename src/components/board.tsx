@@ -5,7 +5,7 @@ import { type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, u
 import { Pencil } from "lucide-react";
 import { CheckpointCounts, DeltaText, RaceStatusBar } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
-import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Sheet, Stat, Time, Toast } from "@/components/ui";
+import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type AthleteStatus, type CheckpointState, expectedAt, type Mark, replay, replayStatuses, type Slot, STATUS_LABEL, STATUS_LONG } from "@/lib/replay";
@@ -668,17 +668,20 @@ function AthleteSheet({
           )
         )}
       </div>
+      {/* Secondary stats: a size down from the headline pair, with room above. */}
       {(teamRank || (last && last.finishMs !== null) || (raceClockMs !== null && finish === null && !status && lastSeen)) && (
-        <div className="mb-4 flex flex-wrap gap-x-6 gap-y-2">
-          {teamRank && <Stat value={`${teamRank.rank}${ordinal(teamRank.rank)} of ${teamRank.of}`} label={finish !== null ? "on the team" : "on the team · right now"} />}
+        <div className="mt-5 mb-4 flex flex-wrap gap-x-6 gap-y-3 border-t border-line pt-3">
+          {teamRank && (
+            <SmallStat value={`${teamRank.rank}${ordinal(teamRank.rank)} of ${teamRank.of}`} label={finish !== null ? "on the team" : lastSeen ? `on the team · as of ${lastSeen.label}` : "on the team"} />
+          )}
           {raceClockMs !== null && finish === null && !status && lastSeen && (
-            <Stat value={`${formatElapsed(Math.max(0, raceClockMs - lastSeen.at)).replace(/\.\d$/, "")} ago`} label={`passed ${lastSeen.label}`} />
+            <SmallStat value={`${formatElapsed(Math.max(0, raceClockMs - lastSeen.at)).replace(/\.\d$/, "")} ago`} label={`passed ${lastSeen.label}`} />
           )}
           {last && last.finishMs !== null && (
-            <div>
-              <Time className="block text-2xl leading-none font-semibold">{finish !== null ? <DeltaText ms={finish - last.finishMs} /> : <span className="text-ink-2">{formatElapsed(last.finishMs)}</span>}</Time>
-              <span className="mt-1 block text-[11px] font-medium tracking-[0.08em] text-ink-2 uppercase">{finish !== null ? "vs last meet" : "last meet"}</span>
-            </div>
+            <SmallStat
+              value={finish !== null ? <DeltaText ms={finish - last.finishMs} /> : <span className="text-ink-2">{formatElapsed(last.finishMs)}</span>}
+              label={finish !== null ? "vs last meet" : "last meet"}
+            />
           )}
         </div>
       )}
@@ -731,6 +734,15 @@ function AthleteSheet({
         {!last && "No earlier results this season to compare with."}
       </p>
     </Sheet>
+  );
+}
+
+function SmallStat({ value, label }: { value: ReactNode; label: string }) {
+  return (
+    <div>
+      <Time className="block text-lg leading-none font-semibold text-ink">{value}</Time>
+      <span className="mt-1 block text-[11px] font-medium tracking-[0.06em] text-ink-2 uppercase">{label}</span>
+    </div>
   );
 }
 
