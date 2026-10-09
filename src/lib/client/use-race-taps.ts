@@ -46,6 +46,8 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
   const [seenAt, setSeenAt] = useState<Map<string, number>>(() => new Map());
   const firstLoadDone = useRef(false);
   const quietRefetch = useRef(false);
+  /** When this device last fired the gun itself (see adoptGun). */
+  const adoptedAt = useRef<number | null>(null);
   const atRef = useRef(at);
   useEffect(() => {
     atRef.current = at;
@@ -69,6 +71,8 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
       const body = (await res.json()) as { taps: ServerTap[]; gunTimeMs: number | null; serverTimeMs: number; official?: OfficialTimes; officialLive?: boolean; finished?: boolean; recording?: Recording[] };
       if (body.recording) setRecording(body.recording);
       since.current = body.serverTimeMs;
+      // A poll that started before this device fired the gun can land after it; keep the gun.
+      if (body.gunTimeMs === null && adoptedAt.current && Date.now() - adoptedAt.current < 15_000) body.gunTimeMs = stateRef.current.gunTimeMs;
       setGunTimeMs(body.gunTimeMs);
       setFinished(!!body.finished);
       stateRef.current = { gunTimeMs: body.gunTimeMs, finished: !!body.finished, lastUpdatedAt: Date.now() };
@@ -157,6 +161,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
   const adoptGun = useCallback((gun: number) => {
     setGunTimeMs(gun);
     stateRef.current = { ...stateRef.current, gunTimeMs: gun };
+    adoptedAt.current = Date.now();
   }, []);
 
   // --- outbox --------------------------------------------------------------

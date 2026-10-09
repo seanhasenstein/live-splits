@@ -77,8 +77,8 @@ export function CheckpointCounts({
   finished,
   activeId,
 }: {
-  /** n = recorded here; out = not expected here (DNS/DNR/DNF), shown beneath and counted as accounted for. */
-  counts: { id: string; label: string; n: number; out?: number }[];
+  /** n = recorded here; out = not expected here (DNS/DNR/DNF); missed = passed without a time. Both count as accounted for. */
+  counts: { id: string; label: string; n: number; out?: number; missed?: number }[];
   total: number;
   loaded: boolean;
   finished: boolean;
@@ -89,11 +89,13 @@ export function CheckpointCounts({
     <div className="flex divide-x divide-line rounded-lg border border-line bg-surface shadow-card">
       {counts.map((c) => {
         const out = c.out ?? 0;
-        const accounted = c.n + out;
+        const missed = c.missed ?? 0;
+        const accounted = c.n + out + missed;
         const complete = loaded && accounted === total && total > 0;
         const short = loaded && finished && accounted < total;
         const active = c.id === activeId;
-        const label = short ? `${c.label} · ${total - accounted} missing` : out > 0 ? `${c.label} · ${out} out` : c.label;
+        const notes = [out > 0 ? `${out} out` : null, missed > 0 ? `${missed} missed` : null].filter(Boolean);
+        const label = short ? `${c.label} · ${total - accounted} missing` : notes.length ? `${c.label} · ${notes.join(", ")}` : c.label;
         return (
           <div
             key={c.id}

@@ -59,14 +59,15 @@ export function Board({ meetId, meetName, session, initialRaceId, timeZone, race
   const [raceId, setRaceId] = useState(() => (races.some((r) => r.id === initialRaceId) ? initialRaceId! : (races[0]?.id ?? "")));
   const race = races.find((r) => r.id === raceId) ?? races[0];
 
-  // The deep-linked athlete opens once, for the race the link named; switching races drops it from the URL.
+  // The deep-linked athlete opens once, for the race the page opened on; switching races drops it from the URL.
+  const [openedOn] = useState(raceId);
   const [pendingAthlete, setPendingAthlete] = useState(initialAthleteId);
   useEffect(() => {
     const url = new URL(window.location.href);
     url.searchParams.set("race", raceId);
-    if (raceId !== initialRaceId) url.searchParams.delete("athlete");
+    if (raceId !== openedOn) url.searchParams.delete("athlete");
     window.history.replaceState(window.history.state, "", url);
-  }, [raceId, initialRaceId]);
+  }, [raceId, openedOn]);
 
   if (!race) {
     return (
@@ -96,7 +97,7 @@ export function Board({ meetId, meetName, session, initialRaceId, timeZone, race
           athletes={athletes}
           genders={genders}
           grades={grades}
-          initialAthleteId={race.id === initialRaceId ? pendingAthlete : null}
+          initialAthleteId={race.id === openedOn ? pendingAthlete : null}
           onInitialAthleteShown={() => setPendingAthlete(null)}
           canFix={canFix}
           canTap={canTap}
@@ -159,19 +160,38 @@ function RaceBoard({
     else url.searchParams.delete("athlete");
     window.history.replaceState(window.history.state, "", url);
   };
-  // Server-corrected clock, ticking once a second while the race runs (fresh glow, race clock, overdue).
+  // Server-corrected clock, ticking once a second while the race runs (race clock, overdue).
+  // Depends on the offset, not the hook's object (which is new every render).
   const running = gunTimeMs !== null && !isFinished;
+  const offsetMs = clock.sync?.offsetMs ?? null;
   const [nowMs, setNowMs] = useState(0);
   useEffect(() => {
-    if (!running) return;
-    const tick = () => setNowMs(clock.now() ?? Date.now());
-    tick();
+    if (!running || offsetMs === null) return;
+    const tick = () => setNowMs(Date.now() + offsetMs);
+    const first = setTimeout(tick, 0);
     const t = setInterval(tick, 1000);
-    return () => clearInterval(t);
-  }, [running, clock]);
+    return () => {
+      clearTimeout(first);
+      clearInterval(t);
+    };
+  }, [running, offsetMs]);
+  // The fresh glow runs on the device clock (so does seenAt) and only needs a ticker for a few seconds after new taps.
+  const [localNow, setLocalNow] = useState(0);
+  useEffect(() => {
+    if (seenAt.size === 0) return;
+    const tick = () => setLocalNow(Date.now());
+    const first = setTimeout(tick, 0);
+    const t = setInterval(tick, 1000);
+    const stop = setTimeout(() => clearInterval(t), FRESH_MS + 1500);
+    return () => {
+      clearTimeout(first);
+      clearInterval(t);
+      clearTimeout(stop);
+    };
+  }, [seenAt]);
   const isFresh = (tapId: string | undefined) => {
     const at = tapId ? seenAt.get(tapId) : undefined;
-    return at !== undefined && nowMs > 0 && nowMs - at < FRESH_MS;
+    return at !== undefined && localNow > 0 && localNow - at < FRESH_MS;
   };
   const [editing, setEditing] = useState(false);
   const [view, setView] = useState<"splits" | "both">("both");
@@ -244,6 +264,7 @@ function RaceBoard({
       label: c.label,
       n: rows.filter(has).length,
       out: rows.filter((r) => !has(r) && (!expectedAt(r.status, i, race.checkpoints) || (!!r.officialStatus && r.officialStatus !== "finished"))).length,
+      missed: rows.filter((r) => !has(r) && r.cells[i].missed && expectedAt(r.status, i, race.checkpoints)).length,
     };
   });
 

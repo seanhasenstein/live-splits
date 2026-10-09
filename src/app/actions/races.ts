@@ -212,10 +212,11 @@ export async function clearGunTimeAction(raceId: string): Promise<FormState> {
       },
     ]);
   }
-  // No gun means the race is back to not started; a finished flag would strand it.
+  // No gun means the race is back to not started (a finished flag would strand it) — unless
+  // official results are in, in which case it stays finished and just has no app gun.
   await collection(db, "races").updateOne(
     { _id: race._id },
-    { $set: { gunTimeMs: null, gunTimeSource: null, finishedAt: null, updatedAt: new Date(), updatedBy: sessionActor(session!) } },
+    { $set: { gunTimeMs: null, gunTimeSource: null, ...(race.officialImportId ? {} : { finishedAt: null }), updatedAt: new Date(), updatedBy: sessionActor(session!) } },
   );
   return {};
 }

@@ -309,17 +309,20 @@ function RaceTapper({
       const m = state.get(c.id)?.byAthlete.get(id);
       return hasOfficial || (!!m && !m.missed);
     };
+    const missed = (id: string) => !has(id) && !!state.get(c.id)?.byAthlete.get(id)?.missed;
     return {
       id: c.id,
       label: c.label,
       n: race.athleteIds.filter(has).length,
       out: race.athleteIds.filter((id) => !has(id) && !expectedAt(statuses.get(id), i, race.checkpoints)).length,
+      // Marked missed: they passed, nobody got the time. Accounted for, with no time to add.
+      missed: race.athleteIds.filter((id) => missed(id) && expectedAt(statuses.get(id), i, race.checkpoints)).length,
     };
   });
 
   // Everyone accounted for here: offer the next checkpoint that still has runners out, or the board.
   const total = race.athleteIds.length;
-  const outstanding = (i: number) => counts[i].n + counts[i].out < total;
+  const outstanding = (i: number) => counts[i].n + counts[i].out + counts[i].missed < total;
   const hereDone = loaded && total > 0 && !isFinished && !outstanding(cpIndex);
   // A later checkpoint still waiting on runners. (An earlier one with gaps isn't "runners out":
   // everyone through here has passed it, so those are missed taps, a job for Fix times.)
@@ -327,7 +330,7 @@ function RaceTapper({
   const gapsBehind = hereDone
     ? race.checkpoints.flatMap((c, i) => {
         if (i >= cpIndex || !outstanding(i)) return [];
-        const n = total - counts[i].n - counts[i].out;
+        const n = total - counts[i].n - counts[i].out - counts[i].missed;
         return [`${c.label} is missing ${n} time${n === 1 ? "" : "s"}`];
       })
     : [];
