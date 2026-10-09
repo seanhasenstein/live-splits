@@ -78,7 +78,7 @@ export function Board({ meetId, meetName, session, initialRaceId, timeZone, race
         {races.length > 1 && (
           <Segmented value={race.id} onChange={setRaceId} options={races.map((r) => ({ value: r.id, label: r.name }))} className="mb-3 lg:max-w-md" />
         )}
-        <RaceBoard key={race.id} meetId={meetId} race={race} timeZone={timeZone} athletes={athletes} genders={genders} canFix={canFix} canTap={canTap} />
+        <RaceBoard key={race.id} meetId={meetId} meetName={meetName} race={race} timeZone={timeZone} athletes={athletes} genders={genders} canFix={canFix} canTap={canTap} />
       </main>
     </>
   );
@@ -90,6 +90,7 @@ type Row = { athleteId: string; marks: (Mark | undefined)[]; cells: Cell[]; reac
 
 function RaceBoard({
   meetId,
+  meetName,
   race,
   timeZone,
   athletes,
@@ -98,6 +99,7 @@ function RaceBoard({
   canTap,
 }: {
   meetId: string;
+  meetName: string;
   race: RaceInfo;
   timeZone: string;
   athletes: Record<string, string>;
@@ -510,6 +512,7 @@ function RaceBoard({
       {athleteSheet && (
         <AthleteSheet
           race={race}
+          meetName={meetName}
           row={rows.find((r) => r.athleteId === athleteSheet)}
           name={athletes[athleteSheet] ?? "?"}
           projectAt={(i) => {
@@ -564,6 +567,7 @@ type Send = ReturnType<typeof useRaceTaps>["send"];
 /** One runner's race at a readable size, with how it compares to their last meet. */
 function AthleteSheet({
   race,
+  meetName,
   row,
   name,
   projectAt,
@@ -572,6 +576,7 @@ function AthleteSheet({
   onClose,
 }: {
   race: RaceInfo;
+  meetName: string;
   row: Row | undefined;
   name: string;
   /** Projected elapsed time at checkpoint i while the race runs, else null. */
@@ -588,8 +593,17 @@ function AthleteSheet({
   const finishIndex = race.checkpoints.findIndex((c) => c.kind === "finish");
   const finish = finishIndex >= 0 ? t(finishIndex) : null;
   const projected = finishIndex >= 0 ? projectAt(finishIndex) : null;
-  const statusLabel = row?.officialStatus && row.officialStatus !== "finished" ? row.officialStatus.toUpperCase() : row?.status ? STATUS_LABEL[row.status.status] : null;
-  const subtitle = [race.name, row?.officialPlace !== null && row?.officialPlace !== undefined ? `${row.officialPlace}${ordinal(row.officialPlace)} place` : null, statusLabel].filter(Boolean).join(" · ");
+  // Out of the race: the status is the headline, not a footnote.
+  const status: { short: string; long: string } | null =
+    row?.officialStatus && row.officialStatus !== "finished"
+      ? { short: row.officialStatus.toUpperCase(), long: `${STATUS_LONG[row.officialStatus as keyof typeof STATUS_LONG] ?? row.officialStatus.toUpperCase()} · official results` }
+      : row?.status
+        ? {
+            short: STATUS_LABEL[row.status.status],
+            long: `${STATUS_LONG[row.status.status]}${row.status.afterCheckpointId ? ` · after ${race.checkpoints.find((c) => c.id === row.status!.afterCheckpointId)?.label ?? ""}` : ""}`,
+          }
+        : null;
+  const subtitle = [race.name, meetName, row?.officialPlace !== null && row?.officialPlace !== undefined ? `${row.officialPlace}${ordinal(row.officialPlace)} place` : null].filter(Boolean).join(" · ");
   const refAt = (i: number): number | null => {
     if (!last) return null;
     const c = race.checkpoints[i];
@@ -600,8 +614,17 @@ function AthleteSheet({
     <Sheet title={name} subtitle={subtitle} onClose={onClose}>
       <div className="mb-4 flex items-end justify-between gap-3">
         <div>
-          <div className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">{finish !== null ? "Finish" : projected !== null ? "Projected finish" : "Finish"}</div>
-          <Time className="text-4xl font-semibold tracking-tight text-ink">{finish !== null ? formatElapsed(finish) : projected !== null ? `~${formatElapsed(projected).replace(/\.\d$/, "")}` : "—"}</Time>
+          {status && finish === null ? (
+            <>
+              <div className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">{status.long}</div>
+              <div className="text-4xl font-semibold tracking-tight text-ink">{status.short}</div>
+            </>
+          ) : (
+            <>
+              <div className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">{finish !== null ? "Finish" : projected !== null ? "Projected finish" : "Finish"}</div>
+              <Time className="text-4xl font-semibold tracking-tight text-ink">{finish !== null ? formatElapsed(finish) : projected !== null ? `~${formatElapsed(projected).replace(/\.\d$/, "")}` : "—"}</Time>
+            </>
+          )}
         </div>
         {last && last.finishMs !== null && (
           <div className="text-right">
