@@ -217,6 +217,8 @@ function RaceBoard({
     return here + pacePerMeter * (race.checkpoints[i].meters - race.checkpoints[row.reached].meters);
   };
   const projectFinish = (row: Row) => (finishIndex < 0 ? null : projectAt(row, finishIndex));
+  // "Overdue" is a cue for the people who can do something about it; viewers just see the projection.
+  const staff = canFix || canTap;
   /** Past their projected time by more than a minute: worth a look. */
   const overdue = (projected: number) => {
     const n = clock.now();
@@ -408,9 +410,9 @@ function RaceBoard({
                   const cellNode = (
                     <>
                       {projected !== null ? (
-                        <span className={`block ${overdue(projected) ? "text-gold-text" : "text-ink-3"}`}>
+                        <span className={`block ${staff && overdue(projected) ? "text-gold-text" : "text-ink-3"}`}>
                           <Time className="block">~{formatElapsed(projected).replace(/\.\d$/, "")}</Time>
-                          <span className="block text-[10px] tracking-wide uppercase">{overdue(projected) ? "overdue" : "projected"}</span>
+                          <span className="block text-[10px] tracking-wide uppercase">{staff && overdue(projected) ? "overdue" : "projected"}</span>
                         </span>
                       ) : (
                         <Time className={`block ${cell.missed ? "italic" : last && here !== null && view !== "splits" ? "font-semibold" : ""}`}>
@@ -489,7 +491,7 @@ function RaceBoard({
       )}
 
       <p className="mt-3 text-xs text-ink-3">
-        * edited &nbsp; ~ estimate{!isFinished && " · a ~ time marked projected is a guess from the runner's last split; overdue means they're more than a minute past it"} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : "Official times replace app taps where imported. ")}{" "}
+        * edited &nbsp; ~ estimate{!isFinished && ` · a ~ time marked projected is a guess from the runner's last split${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : "Official times replace app taps where imported. ")}{" "}
         {view === "splits"
           ? "Splits are the time since the previous checkpoint; beneath each, the pace per mile and the change from the previous segment (+ slower, − faster). The finish column also shows the finish time."
           : "Cumulative time from the gun, with the split beneath and the pace change from the previous segment (+ slower, − faster)."}{" "}
@@ -601,11 +603,12 @@ function AthleteSheet({
         )}
       </div>
       <div className="divide-y divide-line rounded-lg border border-line">
-        <div className={`grid gap-x-3 px-3 py-1.5 text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase ${last ? "grid-cols-[1fr_auto_auto_auto]" : "grid-cols-[1fr_auto_auto]"}`}>
-          <span>Checkpoint</span>
-          <span className="text-right">Time</span>
-          <span className="text-right">Split · pace</span>
-          {last && <span className="text-right">vs last</span>}
+        {/* Flex with fixed right-hand columns: Safari's grid skips re-layout when a cell's content changes under an open sheet. */}
+        <div className="flex items-center gap-x-3 px-3 py-1.5 text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
+          <span className="min-w-0 flex-1">Checkpoint</span>
+          <span className="w-16 shrink-0 text-right">Time</span>
+          <span className="w-28 shrink-0 text-right">Split · pace</span>
+          {last && <span className="w-14 shrink-0 text-right">vs last</span>}
         </div>
         {race.checkpoints.map((c, i) => {
           const here = t(i);
@@ -615,18 +618,18 @@ function AthleteSheet({
           const ref = refAt(i);
           const cell = row?.cells[i];
           return (
-            <div key={c.id} className={`grid items-baseline gap-x-3 px-3 py-2 text-sm ${last ? "grid-cols-[1fr_auto_auto_auto]" : "grid-cols-[1fr_auto_auto]"}`}>
-              <span className="font-medium text-ink">
+            <div key={c.id} className="flex items-center gap-x-3 px-3 py-2 text-sm">
+              <span className="min-w-0 flex-1 font-medium text-ink">
                 {c.label}
                 {cell?.official !== null && cell?.official !== undefined && <span className="ml-1.5 text-[10px] font-semibold tracking-wide text-brand-text uppercase">official</span>}
                 {cell?.mark?.estimate && cell.official === null && <span className="ml-1.5 text-xs text-ink-3">estimate</span>}
               </span>
-              <Time className="text-right font-semibold text-ink">{cell?.missed ? "missed" : here !== null ? formatElapsed(here) : "—"}</Time>
-              <Time className="text-right text-ink-2">
+              <Time className="w-16 shrink-0 text-right font-semibold text-ink">{cell?.missed ? "missed" : here !== null ? formatElapsed(here) : "—"}</Time>
+              <Time className="w-28 shrink-0 text-right text-ink-2">
                 {split !== null && segMeters > 0 ? `${formatElapsed(split)} · ${formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}/mi` : "—"}
               </Time>
               {last && (
-                <Time className="text-right">{here !== null && ref !== null ? <DeltaText ms={here - ref} /> : ref !== null ? <span className="text-ink-3">{formatElapsed(ref)}</span> : <span className="text-ink-3">—</span>}</Time>
+                <Time className="w-14 shrink-0 text-right">{here !== null && ref !== null ? <DeltaText ms={here - ref} /> : ref !== null ? <span className="text-ink-3">{formatElapsed(ref)}</span> : <span className="text-ink-3">—</span>}</Time>
               )}
             </div>
           );
