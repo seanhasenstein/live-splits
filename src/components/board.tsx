@@ -631,7 +631,7 @@ function AthleteSheet({
   };
 
   return (
-    <Sheet title={name} subtitle={subtitle} onClose={onClose}>
+    <Sheet title={<span className="text-xl font-semibold tracking-tight">{name}</span>} subtitle={subtitle} onClose={onClose}>
       <div className="mb-3 flex items-end justify-between gap-3">
         <div>
           {status && finish === null ? (
@@ -691,7 +691,7 @@ function AthleteSheet({
           )}
         </div>
       )}
-      <div className="divide-y divide-line rounded-lg border border-line">
+      <div className="mt-6 divide-y divide-line rounded-lg border border-line">
         {/* Flex with fixed right-hand columns: Safari's grid skips re-layout when a cell's content changes under an open sheet. */}
         <div className="flex items-center gap-x-3 px-3 py-1.5 text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
           <span className="min-w-0 flex-1">Checkpoint</span>
