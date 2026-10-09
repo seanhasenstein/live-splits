@@ -804,23 +804,15 @@ function AthleteSheet({
         })}
       </div>
       <div className="mt-4 flex items-center justify-between gap-2">
-        {/* At either end the button simply isn't there; the space stays so the other one doesn't jump. */}
-        {neighbors.prev ? (
-          <Button variant="secondary" size="sm" onClick={() => onPick(neighbors.prev!.id)} className="min-w-0 max-w-[48%]">
-            <ChevronLeft className="size-4 shrink-0" />
-            <span className="truncate">{neighbors.prev.name}</span>
-          </Button>
-        ) : (
-          <span />
-        )}
-        {neighbors.next ? (
-          <Button variant="secondary" size="sm" onClick={() => onPick(neighbors.next!.id)} className="min-w-0 max-w-[48%]">
-            <span className="truncate">{neighbors.next.name}</span>
-            <ChevronRight className="size-4 shrink-0" />
-          </Button>
-        ) : (
-          <span />
-        )}
+        {/* At either end: a disabled chevron, as pagination does. */}
+        <Button variant="secondary" size="sm" onClick={() => neighbors.prev && onPick(neighbors.prev.id)} disabled={!neighbors.prev} aria-label="Previous runner" className="min-w-0 max-w-[48%]">
+          <ChevronLeft className="size-4 shrink-0" />
+          {neighbors.prev && <span className="truncate">{neighbors.prev.name}</span>}
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => neighbors.next && onPick(neighbors.next.id)} disabled={!neighbors.next} aria-label="Next runner" className="min-w-0 max-w-[48%]">
+          {neighbors.next && <span className="truncate">{neighbors.next.name}</span>}
+          <ChevronRight className="size-4 shrink-0" />
+        </Button>
       </div>
       <p className="mt-2 text-xs text-ink-3">
         {officialCount === 0 && timedCount > 0 && "Times are from the app, not the timing company. "}
