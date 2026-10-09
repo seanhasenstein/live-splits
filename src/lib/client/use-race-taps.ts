@@ -42,6 +42,8 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
   const [officialLive, setOfficialLive] = useState(false);
   const liveRef = useRef(false);
   const [recording, setRecording] = useState<Recording[]>([]);
+  /** When each tap first arrived here (epoch ms); the board flashes times younger than a few seconds. */
+  const [seenAt, setSeenAt] = useState<Map<string, number>>(() => new Map());
   const atRef = useRef(at);
   useEffect(() => {
     atRef.current = at;
@@ -81,6 +83,14 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
         setServerTaps((prev) => {
           const next = new Map(prev);
           for (const t of body.taps) next.set(t.clientTapId, t);
+          return next;
+        });
+        setSeenAt((prev) => {
+          const fresh = body.taps.filter((t) => !prev.has(t.clientTapId));
+          if (fresh.length === 0) return prev;
+          const next = new Map(prev);
+          const now = Date.now();
+          for (const t of fresh) next.set(t.clientTapId, now);
           return next;
         });
       }
@@ -276,6 +286,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
     official,
     officialLive,
     recording,
+    seenAt,
     finished,
     longRunning: health.longRunning,
     staleMinutes: health.staleMinutes,

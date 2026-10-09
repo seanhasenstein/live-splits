@@ -10,6 +10,8 @@ import { useClock } from "@/lib/client/clock";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type AthleteStatus, type CheckpointState, expectedAt, type Mark, replay, replayStatuses, type Slot, STATUS_LABEL, STATUS_LONG } from "@/lib/replay";
 import type { AthleteRaceStatus } from "@/lib/db/schema";
+import { lastFinished } from "@/lib/order";
+import type { LineupHistory } from "@/lib/results/history";
 import { METERS_PER_MILE, paceMsPerMile } from "@/lib/pace";
 import { formatClock, formatElapsed, parseElapsed } from "@/lib/time";
 
@@ -20,6 +22,8 @@ type RaceInfo = {
   finished: boolean;
   checkpoints: { id: string; label: string; meters: number; kind: "split" | "finish" }[];
   athleteIds: string[];
+  /** Earlier results this season, for "vs last meet" on the athlete sheet. */
+  history: LineupHistory;
 };
 
 type Props = {
@@ -35,6 +39,9 @@ type Props = {
   canFix: boolean;
   canTap: boolean;
 };
+
+/** A time that just arrived glows this long. */
+const FRESH_MS = 4000;
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const eventTimeMs = (_e: SyntheticEvent) => Date.now();
@@ -97,7 +104,7 @@ function RaceBoard({
   canTap: boolean;
 }) {
   const clock = useClock();
-  const { taps, gunTimeMs, official, officialLive, finished, longRunning, staleMinutes, send, online, loaded, recording } = useRaceTaps(race.id, race.gunTimeMs);
+  const { taps, gunTimeMs, official, officialLive, finished, longRunning, staleMinutes, send, online, loaded, recording, seenAt } = useRaceTaps(race.id, race.gunTimeMs);
   const isFinished = race.finished || finished;
   const hasOfficial = Object.keys(official).length > 0;
   const state = useMemo(
@@ -107,6 +114,17 @@ function RaceBoard({
   const statuses = useMemo(() => replayStatuses(taps), [taps]);
   const [fix, setFix] = useState<{ athleteId: string; cpIndex: number } | null>(null);
   const [statusFor, setStatusFor] = useState<string | null>(null);
+  const [athleteSheet, setAthleteSheet] = useState<string | null>(null);
+  // Coarse clock so freshly arrived times can stop glowing after a few seconds.
+  const [nowMs, setNowMs] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const isFresh = (tapId: string | undefined) => {
+    const at = tapId ? seenAt.get(tapId) : undefined;
+    return at !== undefined && nowMs > 0 && nowMs - at < FRESH_MS;
+  };
   const [editing, setEditing] = useState(false);
   const [view, setView] = useState<"splits" | "both">("both");
   // A combined race (boys and girls together) gets a filter; the counts follow it.
@@ -175,6 +193,31 @@ function RaceBoard({
     };
   });
 
+  // Elapsed-from-gun time at a checkpoint (official beats app), for projections and the team line.
+  const elapsedAt = (row: Row, i: number): number | null => {
+    const c = row.cells[i];
+    return c ? (c.official ?? c.elapsedMs) : null;
+  };
+  const finishIndex = race.checkpoints.findIndex((c) => c.kind === "finish");
+  /** While the race runs: where they'd finish at their last segment's pace. */
+  const projectFinish = (row: Row): number | null => {
+    if (isFinished || finishIndex < 0 || row.reached < 0 || row.reached >= finishIndex) return null;
+    const here = elapsedAt(row, row.reached);
+    if (here === null) return null;
+    const before = row.reached > 0 ? elapsedAt(row, row.reached - 1) : 0;
+    const segMeters = race.checkpoints[row.reached].meters - (row.reached > 0 ? race.checkpoints[row.reached - 1].meters : 0);
+    if (before === null || segMeters <= 0) return null;
+    const pacePerMeter = (here - before) / segMeters;
+    return here + pacePerMeter * (race.checkpoints[finishIndex].meters - race.checkpoints[row.reached].meters);
+  };
+  const finishTimes = finishIndex < 0 ? [] : rows.map((r) => elapsedAt(r, finishIndex)).filter((t): t is number => t !== null).sort((a, b) => a - b);
+  const teamLine =
+    finishTimes.length >= 5
+      ? `Top 5 avg ${formatElapsed(Math.round(finishTimes.slice(0, 5).reduce((a, b) => a + b, 0) / 5))} · 1–5 spread ${formatElapsed(finishTimes[4] - finishTimes[0])} · ${finishTimes.length} finished`
+      : finishTimes.length > 0
+        ? `${finishTimes.length} finished`
+        : null;
+
   return (
     <>
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -234,6 +277,8 @@ function RaceBoard({
           />
         </div>
       </div>
+
+      {teamLine && <p className="mb-3 text-[13px] text-ink-2">{teamLine}</p>}
 
       {recording.length > 0 && !isFinished && (
         <p className="mb-3 text-[13px] text-ink-2">
@@ -304,7 +349,9 @@ function RaceBoard({
                           {athletes[row.athleteId]}
                         </button>
                       ) : (
-                        athletes[row.athleteId]
+                        <button type="button" onClick={() => setAthleteSheet(row.athleteId)} className="-mx-1.5 rounded px-1.5 py-1 text-left hover:bg-surface-2">
+                          {athletes[row.athleteId]}
+                        </button>
                       )}
                       {row.status ? (
                         <span className="mt-0.5 block">
@@ -344,12 +391,20 @@ function RaceBoard({
                   const cumulative = cell.official !== null ? formatElapsed(cell.official) : cell.absoluteMs !== null ? fmt(cell.absoluteMs) : "—";
                   const shown = cell.missed ? "missed" : view === "splits" && i > 0 ? (split === null ? "—" : formatElapsed(split)) : cumulative;
                   const flag = cell.official !== null ? "" : m && !cell.missed && shown !== "—" ? (m.estimate ? "~" : m.edited ? "*" : "") : "";
+                  const projected = last && here === null && !cell.missed ? projectFinish(row) : null;
+                  const fresh = isFresh(m?.tapId);
                   const cellNode = (
                     <>
-                      <Time className={`block ${cell.missed ? "italic" : last && here !== null && view !== "splits" ? "font-semibold" : ""}`}>
-                        {shown}
-                        {flag}
-                      </Time>
+                      {projected !== null ? (
+                        <span title="Projected from their last split">
+                          <Time className="block text-ink-3">~{formatElapsed(projected).replace(/\.\d$/, "")}</Time>
+                        </span>
+                      ) : (
+                        <Time className={`block ${cell.missed ? "italic" : last && here !== null && view !== "splits" ? "font-semibold" : ""}`}>
+                          {shown}
+                          {flag}
+                        </Time>
+                      )}
                       {view === "both" && i > 0 && split !== null && (
                         <Time className="block text-[11px] text-ink-3">
                           {formatElapsed(split)}
@@ -391,7 +446,7 @@ function RaceBoard({
                           {cellNode}
                         </button>
                       ) : (
-                        <span className="block px-1.5 py-1.5" title={cell.official !== null ? "Official time" : undefined}>
+                        <span className={`block rounded-md px-1.5 py-1.5 transition-colors duration-1000 ${fresh ? "bg-brand-soft" : ""}`} title={cell.official !== null ? "Official time" : undefined}>
                           {cellNode}
                         </span>
                       )}
@@ -434,6 +489,20 @@ function RaceBoard({
         </div>
       )}
 
+      {athleteSheet && (
+        <AthleteSheet
+          race={race}
+          row={rows.find((r) => r.athleteId === athleteSheet)}
+          name={athletes[athleteSheet] ?? "?"}
+          projected={(() => {
+            const r = rows.find((x) => x.athleteId === athleteSheet);
+            return r ? projectFinish(r) : null;
+          })()}
+          history={race.history.byAthlete[athleteSheet]}
+          onClose={() => setAthleteSheet(null)}
+        />
+      )}
+
       {statusFor && (
         <StatusSheet
           race={race}
@@ -472,6 +541,90 @@ function RaceBoard({
 }
 
 type Send = ReturnType<typeof useRaceTaps>["send"];
+
+/** One runner's race at a readable size, with how it compares to their last meet. */
+function AthleteSheet({
+  race,
+  row,
+  name,
+  projected,
+  history,
+  onClose,
+}: {
+  race: RaceInfo;
+  row: Row | undefined;
+  name: string;
+  projected: number | null;
+  history: LineupHistory["byAthlete"][string] | undefined;
+  onClose: () => void;
+}) {
+  const last = lastFinished(history);
+  const t = (i: number): number | null => {
+    const c = row?.cells[i];
+    return c ? (c.official ?? c.elapsedMs) : null;
+  };
+  const finishIndex = race.checkpoints.findIndex((c) => c.kind === "finish");
+  const finish = finishIndex >= 0 ? t(finishIndex) : null;
+  const statusLabel = row?.officialStatus && row.officialStatus !== "finished" ? row.officialStatus.toUpperCase() : row?.status ? STATUS_LABEL[row.status.status] : null;
+  const subtitle = [race.name, row?.officialPlace !== null && row?.officialPlace !== undefined ? `${row.officialPlace}${ordinal(row.officialPlace)} place` : null, statusLabel].filter(Boolean).join(" · ");
+  const refAt = (i: number): number | null => {
+    if (!last) return null;
+    const c = race.checkpoints[i];
+    return c.kind === "finish" ? last.finishMs : (last.splits[String(c.meters)] ?? null);
+  };
+
+  return (
+    <Sheet title={name} subtitle={subtitle} onClose={onClose}>
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">{finish !== null ? "Finish" : projected !== null ? "Projected finish" : "Finish"}</div>
+          <Time className="text-4xl font-semibold tracking-tight text-ink">{finish !== null ? formatElapsed(finish) : projected !== null ? `~${formatElapsed(projected).replace(/\.\d$/, "")}` : "—"}</Time>
+        </div>
+        {last && last.finishMs !== null && (
+          <div className="text-right">
+            <div className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">vs last meet</div>
+            <Time className="text-xl font-semibold">{finish !== null ? <DeltaText ms={finish - last.finishMs} /> : <span className="text-ink-2">{formatElapsed(last.finishMs)}</span>}</Time>
+          </div>
+        )}
+      </div>
+      <div className="divide-y divide-line rounded-lg border border-line">
+        <div className={`grid gap-x-3 px-3 py-1.5 text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase ${last ? "grid-cols-[1fr_auto_auto_auto]" : "grid-cols-[1fr_auto_auto]"}`}>
+          <span>Checkpoint</span>
+          <span className="text-right">Time</span>
+          <span className="text-right">Split · pace</span>
+          {last && <span className="text-right">vs last</span>}
+        </div>
+        {race.checkpoints.map((c, i) => {
+          const here = t(i);
+          const before = i > 0 ? t(i - 1) : here !== null ? 0 : null;
+          const split = here !== null && before !== null ? here - before : null;
+          const segMeters = c.meters - (i > 0 ? race.checkpoints[i - 1].meters : 0);
+          const ref = refAt(i);
+          const cell = row?.cells[i];
+          return (
+            <div key={c.id} className={`grid items-baseline gap-x-3 px-3 py-2 text-sm ${last ? "grid-cols-[1fr_auto_auto_auto]" : "grid-cols-[1fr_auto_auto]"}`}>
+              <span className="font-medium text-ink">
+                {c.label}
+                {cell?.official !== null && cell?.official !== undefined && <span className="ml-1.5 text-[10px] font-semibold tracking-wide text-brand-text uppercase">official</span>}
+                {cell?.mark?.estimate && cell.official === null && <span className="ml-1.5 text-xs text-ink-3">estimate</span>}
+              </span>
+              <Time className="text-right font-semibold text-ink">{cell?.missed ? "missed" : here !== null ? formatElapsed(here) : "—"}</Time>
+              <Time className="text-right text-ink-2">
+                {split !== null && segMeters > 0 ? `${formatElapsed(split)} · ${formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}/mi` : "—"}
+              </Time>
+              {last && (
+                <Time className="text-right">{here !== null && ref !== null ? <DeltaText ms={here - ref} /> : ref !== null ? <span className="text-ink-3">{formatElapsed(ref)}</span> : <span className="text-ink-3">—</span>}</Time>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {!last && <p className="mt-2 text-xs text-ink-3">No earlier results this season to compare with.</p>}
+    </Sheet>
+  );
+}
+
+const ordinal = (n: number) => (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th");
 
 /** DNS / DNR / DNF for one athlete. A DNF remembers the last checkpoint they passed. */
 function StatusSheet({
