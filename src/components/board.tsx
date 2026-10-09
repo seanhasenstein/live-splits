@@ -166,9 +166,11 @@ function RaceBoard({
     [gunTimeMs, timeZone],
   );
 
-  const rows = useMemo<Row[]>(() => {
+  // Every runner in race order; `rows` is the filtered view of it. The athlete sheet and team
+  // positions read from the full set so a filter never blanks a sheet or changes a rank.
+  const allRows = useMemo<Row[]>(() => {
     const cps = race.checkpoints.map((c) => state.get(c.id));
-    const rows = shownIds.map((athleteId): Row => {
+    const rows = race.athleteIds.map((athleteId): Row => {
       const marks = cps.map((cp) => cp?.byAthlete.get(athleteId));
       const off = official[athleteId];
       const cells = race.checkpoints.map((c, i): Cell => {
@@ -201,7 +203,8 @@ function RaceBoard({
       if (a.reached >= 0) return key(a) - key(b);
       return (lineupIndex.get(a.athleteId) ?? 0) - (lineupIndex.get(b.athleteId) ?? 0);
     });
-  }, [race, shownIds, state, official, gunTimeMs, statuses]);
+  }, [race, state, official, gunTimeMs, statuses]);
+  const rows = useMemo(() => (shownIds.length === race.athleteIds.length ? allRows : allRows.filter((r) => shownIds.includes(r.athleteId))), [allRows, shownIds, race.athleteIds.length]);
 
   const pendingTotal = race.checkpoints.reduce((n, c) => n + (state.get(c.id)?.pending.length ?? 0), 0);
 
@@ -528,7 +531,7 @@ function RaceBoard({
         <AthleteSheet
           race={race}
           meetName={meetName}
-          row={rows.find((r) => r.athleteId === athleteSheet)}
+          row={allRows.find((r) => r.athleteId === athleteSheet)}
           name={athletes[athleteSheet] ?? "?"}
           grade={grades[athleteSheet] ?? null}
           neighbors={(() => {
@@ -539,7 +542,7 @@ function RaceBoard({
           })()}
           onPick={setAthleteSheet}
           projectAt={(i) => {
-            const r = rows.find((x) => x.athleteId === athleteSheet);
+            const r = allRows.find((x) => x.athleteId === athleteSheet);
             return r ? projectAt(r, i) : null;
           }}
           overdue={staff ? overdue : () => false}
@@ -548,7 +551,7 @@ function RaceBoard({
             // already sorted furthest-along-then-fastest, with anyone out of the race at the end.
             const level = race.levels[athleteSheet];
             const gender = genders[athleteSheet];
-            const group = rows.filter(
+            const group = allRows.filter(
               (r) => race.levels[r.athleteId] === level && (!combined || genders[r.athleteId] === gender) && !(r.status || (r.officialStatus && r.officialStatus !== "finished")),
             );
             const idx = group.findIndex((r) => r.athleteId === athleteSheet);
