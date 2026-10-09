@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pencil } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil, Share } from "lucide-react";
 import { CheckpointCounts, DeltaText, RaceStatusBar } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
 import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, LiveDot, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
@@ -22,6 +22,8 @@ type RaceInfo = {
   finished: boolean;
   checkpoints: { id: string; label: string; meters: number; kind: "split" | "finish" }[];
   athleteIds: string[];
+  /** Level label per athlete in this race (Varsity / JV). */
+  levels: Record<string, string>;
   /** Earlier results this season, for "vs last meet" on the athlete sheet. */
   history: LineupHistory;
 };
@@ -36,6 +38,10 @@ type Props = {
   athletes: Record<string, string>;
   /** Athlete gender, for the Girls / Boys filter on a combined race. */
   genders: Record<string, "F" | "M" | "X">;
+  /** Grade this season, when known. */
+  grades: Record<string, number | null>;
+  /** `?athlete=` in the URL: open that runner's sheet on load. */
+  initialAthleteId: string | null;
   canFix: boolean;
   canTap: boolean;
 };
@@ -49,7 +55,7 @@ const OVERDUE_MS = 60_000;
 const eventTimeMs = (_e: SyntheticEvent) => Date.now();
 
 
-export function Board({ meetId, meetName, session, initialRaceId, timeZone, races, athletes, genders, canFix, canTap }: Props) {
+export function Board({ meetId, meetName, session, initialRaceId, timeZone, races, athletes, genders, grades, initialAthleteId, canFix, canTap }: Props) {
   const [raceId, setRaceId] = useState(() => (races.some((r) => r.id === initialRaceId) ? initialRaceId! : (races[0]?.id ?? "")));
   const race = races.find((r) => r.id === raceId) ?? races[0];
 
@@ -78,7 +84,7 @@ export function Board({ meetId, meetName, session, initialRaceId, timeZone, race
         {races.length > 1 && (
           <Segmented value={race.id} onChange={setRaceId} options={races.map((r) => ({ value: r.id, label: r.name }))} className="mb-3 lg:max-w-md" />
         )}
-        <RaceBoard key={race.id} meetId={meetId} meetName={meetName} race={race} timeZone={timeZone} athletes={athletes} genders={genders} canFix={canFix} canTap={canTap} />
+        <RaceBoard key={race.id} meetId={meetId} meetName={meetName} race={race} timeZone={timeZone} athletes={athletes} genders={genders} grades={grades} initialAthleteId={initialAthleteId} canFix={canFix} canTap={canTap} />
       </main>
     </>
   );
@@ -95,6 +101,8 @@ function RaceBoard({
   timeZone,
   athletes,
   genders,
+  grades,
+  initialAthleteId,
   canFix,
   canTap,
 }: {
@@ -104,6 +112,8 @@ function RaceBoard({
   timeZone: string;
   athletes: Record<string, string>;
   genders: Record<string, "F" | "M" | "X">;
+  grades: Record<string, number | null>;
+  initialAthleteId: string | null;
   canFix: boolean;
   canTap: boolean;
 }) {
@@ -118,7 +128,15 @@ function RaceBoard({
   const statuses = useMemo(() => replayStatuses(taps), [taps]);
   const [fix, setFix] = useState<{ athleteId: string; cpIndex: number } | null>(null);
   const [statusFor, setStatusFor] = useState<string | null>(null);
-  const [athleteSheet, setAthleteSheet] = useState<string | null>(null);
+  // The open runner's sheet is in the URL (?athlete=) so it can be shared and reopened.
+  const [athleteSheet, setAthleteSheetState] = useState<string | null>(initialAthleteId && race.athleteIds.includes(initialAthleteId) ? initialAthleteId : null);
+  const setAthleteSheet = (id: string | null) => {
+    setAthleteSheetState(id);
+    const url = new URL(window.location.href);
+    if (id) url.searchParams.set("athlete", id);
+    else url.searchParams.delete("athlete");
+    window.history.replaceState(window.history.state, "", url);
+  };
   // Coarse clock so freshly arrived times can stop glowing after a few seconds.
   const [nowMs, setNowMs] = useState(0);
   useEffect(() => {
@@ -515,6 +533,14 @@ function RaceBoard({
           meetName={meetName}
           row={rows.find((r) => r.athleteId === athleteSheet)}
           name={athletes[athleteSheet] ?? "?"}
+          who={[gradeWord(grades[athleteSheet] ?? null), race.levels[athleteSheet]].filter(Boolean).join(" · ")}
+          neighbors={(() => {
+            const i = rows.findIndex((r) => r.athleteId === athleteSheet);
+            const prev = i > 0 ? rows[i - 1].athleteId : null;
+            const next = i >= 0 && i < rows.length - 1 ? rows[i + 1].athleteId : null;
+            return { prev: prev ? { id: prev, name: athletes[prev] ?? "?" } : null, next: next ? { id: next, name: athletes[next] ?? "?" } : null };
+          })()}
+          onPick={setAthleteSheet}
           projectAt={(i) => {
             const r = rows.find((x) => x.athleteId === athleteSheet);
             return r ? projectAt(r, i) : null;
@@ -578,6 +604,9 @@ function AthleteSheet({
   meetName,
   row,
   name,
+  who,
+  neighbors,
+  onPick,
   projectAt,
   overdue,
   history,
@@ -589,6 +618,11 @@ function AthleteSheet({
   meetName: string;
   row: Row | undefined;
   name: string;
+  /** "Sophomore · JV" */
+  who: string;
+  /** The runners either side in the table, for walking the team without closing. */
+  neighbors: { prev: { id: string; name: string } | null; next: { id: string; name: string } | null };
+  onPick: (id: string) => void;
   /** Projected elapsed time at checkpoint i while the race runs, else null. */
   projectAt: (i: number) => number | null;
   overdue: (projected: number) => boolean;
@@ -623,7 +657,27 @@ function AthleteSheet({
             long: `${STATUS_LONG[row.status.status]}${row.status.afterCheckpointId ? ` · after ${race.checkpoints.find((c) => c.id === row.status!.afterCheckpointId)?.label ?? ""}` : ""}`,
           }
         : null;
-  const subtitle = `${race.name} · ${meetName}`;
+  const subtitle = (
+    <>
+      {race.name} · {meetName}
+      {who && <span className="block">{who}</span>}
+    </>
+  );
+  const finishMeters = finishIndex >= 0 ? race.checkpoints[finishIndex].meters : 0;
+  const avgPace = finish !== null && finishMeters > 0 ? paceMsPerMile(finish, finishMeters) : null;
+  const share = async () => {
+    const parts = race.checkpoints.map((c, i) => {
+      const v = t(i);
+      return v !== null ? `${c.label} ${formatElapsed(v)}` : null;
+    });
+    const text = `${name} — ${race.name}, ${meetName}: ${finish !== null ? formatElapsed(finish) : status ? status.short : "in progress"}${row?.officialPlace != null ? `, ${row.officialPlace}${ordinal(row.officialPlace)}` : ""} · ${parts.filter(Boolean).join(" · ")}`;
+    try {
+      if (navigator.share) await navigator.share({ title: name, text, url: window.location.href });
+      else await navigator.clipboard.writeText(`${text}\n${window.location.href}`);
+    } catch {
+      // dismissed
+    }
+  };
   const refAt = (i: number): number | null => {
     if (!last) return null;
     const c = race.checkpoints[i];
@@ -645,6 +699,7 @@ function AthleteSheet({
                 {finish !== null ? (finishOfficial ? "Finish · official" : "Finish · unofficial") : projected !== null ? "Projected finish" : "Finish"}
               </div>
               <Time className="text-4xl font-semibold tracking-tight text-ink">{finish !== null ? formatElapsed(finish) : projected !== null ? `~${formatElapsed(projected).replace(/\.\d$/, "")}` : "—"}</Time>
+              {avgPace !== null && <Time className="block text-[13px] text-ink-2">{formatElapsed(avgPace).replace(/\.\d$/, "")}/mi average</Time>}
             </>
           )}
         </div>
@@ -734,6 +789,19 @@ function AthleteSheet({
           );
         })}
       </div>
+      <div className="mt-4 flex items-center justify-between gap-2">
+        <Button variant="secondary" size="sm" onClick={() => neighbors.prev && onPick(neighbors.prev.id)} disabled={!neighbors.prev} className="min-w-0 max-w-[40%]">
+          <ChevronLeft className="size-4 shrink-0" />
+          <span className="truncate">{neighbors.prev?.name ?? "First"}</span>
+        </Button>
+        <Button variant="subtle" size="sm" onClick={share} aria-label="Share">
+          <Share className="size-4" />
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => neighbors.next && onPick(neighbors.next.id)} disabled={!neighbors.next} className="min-w-0 max-w-[40%]">
+          <span className="truncate">{neighbors.next?.name ?? "Last"}</span>
+          <ChevronRight className="size-4 shrink-0" />
+        </Button>
+      </div>
       <p className="mt-2 text-xs text-ink-3">
         {officialCount === 0 && timedCount > 0 && "Times are from the app, not the timing company. "}
         {officialCount > 0 && officialCount < timedCount && "Times not marked official are from the app. "}
@@ -750,6 +818,13 @@ function SmallStat({ value, label, align = "left" }: { value: ReactNode; label: 
       <span className="mt-1 block text-[11px] font-medium tracking-[0.06em] text-ink-2 uppercase">{label}</span>
     </div>
   );
+}
+
+/** 9–12 as class years; anything else as "7th grade". */
+function gradeWord(grade: number | null): string | null {
+  if (grade === null) return null;
+  const words: Record<number, string> = { 9: "Freshman", 10: "Sophomore", 11: "Junior", 12: "Senior" };
+  return words[grade] ?? `${grade}${ordinal(grade)} grade`;
 }
 
 const ordinal = (n: number) => (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th");
