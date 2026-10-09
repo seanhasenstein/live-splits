@@ -361,7 +361,7 @@ function RaceBoard({
                 <td className={`px-3 py-2 align-top font-medium sm:px-4 ${row.reached < 0 ? "" : "text-ink"}`}>
                   {/* Place in its own column so a wrapped name hangs under its first line, not under the number. */}
                   <span className="flex items-start gap-2">
-                    {hasOfficial && <span className="tnum w-6 shrink-0 text-right text-ink-3">{row.officialPlace ?? ""}</span>}
+                    {hasOfficial && <span className="tnum w-6 shrink-0 py-1 text-right text-ink-3">{row.officialPlace ?? ""}</span>}
                     <span className="min-w-0">
                       {editing ? (
                         <button type="button" onClick={() => setStatusFor(row.athleteId)} className="-mx-1.5 rounded px-1.5 py-1 text-left hover:bg-gold-soft" title="Set DNS / DNR / DNF">
@@ -521,11 +521,11 @@ function RaceBoard({
           }}
           overdue={staff ? overdue : () => false}
           teamRank={(() => {
-            if (finishIndex < 0) return null;
-            const t = rows.find((x) => x.athleteId === athleteSheet);
-            const mine = t ? elapsedAt(t, finishIndex) : null;
-            if (mine === null) return null;
-            return { rank: finishTimes.filter((x) => x < mine).length + 1, of: finishTimes.length };
+            // `rows` is already in race order (furthest along, then fastest); anyone out of the race sits at the end.
+            const inRace = rows.filter((r) => !(r.status || (r.officialStatus && r.officialStatus !== "finished")));
+            const idx = inRace.findIndex((r) => r.athleteId === athleteSheet);
+            if (idx < 0 || inRace[idx].reached < 0) return null;
+            return { rank: idx + 1, of: inRace.length };
           })()}
           raceClockMs={!isFinished && gunTimeMs !== null && nowMs > 0 ? nowMs - gunTimeMs : null}
           history={race.history.byAthlete[athleteSheet]}
@@ -648,25 +648,37 @@ function AthleteSheet({
             </>
           )}
         </div>
-        {raceClockMs !== null && finish === null && !status && (
+        {/* The other big number: place once they've finished, the race clock while they're out there. */}
+        {row?.officialPlace != null ? (
           <div className="text-right">
-            <div className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">Race clock</div>
-            <Time className="text-xl font-semibold text-ink">{formatElapsed(raceClockMs).replace(/\.\d$/, "")}</Time>
+            <div className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">Place</div>
+            <div className="text-4xl font-semibold tracking-tight text-ink">
+              {row.officialPlace}
+              <span className="text-xl">{ordinal(row.officialPlace)}</span>
+            </div>
           </div>
+        ) : (
+          raceClockMs !== null &&
+          finish === null &&
+          !status && (
+            <div className="text-right">
+              <div className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">Race clock</div>
+              <Time className="text-4xl font-semibold tracking-tight text-ink">{formatElapsed(raceClockMs).replace(/\.\d$/, "")}</Time>
+            </div>
+          )
         )}
       </div>
-      {(row?.officialPlace != null || teamRank || (last && last.finishMs !== null) || (raceClockMs !== null && finish === null && !status)) && (
-        <div className="mb-4 flex flex-wrap gap-x-5 gap-y-2">
-          {row?.officialPlace != null && <Stat value={`${row.officialPlace}${ordinal(row.officialPlace)}`} label="place" />}
-          {teamRank && <Stat value={`${teamRank.rank}${ordinal(teamRank.rank)}`} label={`of ${teamRank.of} on the team`} />}
-          {last && last.finishMs !== null && (
-            <div>
-              <Time className="block text-xl font-semibold">{finish !== null ? <DeltaText ms={finish - last.finishMs} /> : <span className="text-ink-2">{formatElapsed(last.finishMs)}</span>}</Time>
-              <span className="block text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">{finish !== null ? "vs last meet" : "last meet"}</span>
-            </div>
-          )}
+      {(teamRank || (last && last.finishMs !== null) || (raceClockMs !== null && finish === null && !status && lastSeen)) && (
+        <div className="mb-4 flex flex-wrap gap-x-6 gap-y-2">
+          {teamRank && <Stat value={`${teamRank.rank}${ordinal(teamRank.rank)} of ${teamRank.of}`} label={finish !== null ? "on the team" : "on the team · right now"} />}
           {raceClockMs !== null && finish === null && !status && lastSeen && (
             <Stat value={`${formatElapsed(Math.max(0, raceClockMs - lastSeen.at)).replace(/\.\d$/, "")} ago`} label={`passed ${lastSeen.label}`} />
+          )}
+          {last && last.finishMs !== null && (
+            <div>
+              <Time className="block text-2xl leading-none font-semibold">{finish !== null ? <DeltaText ms={finish - last.finishMs} /> : <span className="text-ink-2">{formatElapsed(last.finishMs)}</span>}</Time>
+              <span className="mt-1 block text-[11px] font-medium tracking-[0.08em] text-ink-2 uppercase">{finish !== null ? "vs last meet" : "last meet"}</span>
+            </div>
           )}
         </div>
       )}
