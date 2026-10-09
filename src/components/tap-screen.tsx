@@ -47,6 +47,8 @@ const DOUBLE_TAP_MS = 1000;
 const HOLD_MS = 600;
 /** A capture taken on this phone stays open for more names this long (a pack crossing together). */
 const CAPTURE_OPEN_MS = 12_000;
+/** An empty capture this phone took is offered to the next name for this long; after that, pick its chip. */
+const PENDING_OPEN_MS = 2 * 60_000;
 /** How long a capture chip stays in the bottom bar after it was taken. */
 const CHIP_TTL_MS = 3 * 60_000;
 const INTRO_KEY = "ls_record_intro_seen";
@@ -56,16 +58,24 @@ const LARGE_KEY = "ls_record_large";
 /** How many of this device's latest taps the bottom strip shows. */
 const RECENT_N = 3;
 type CompareMode = "last" | "course" | "off";
-const TOAST_MS = 4000;
+const TOAST_MS = 2500;
 const FLASH_MS = 400;
 
 /**
- * When the tap happened, as epoch ms. Date.now() in the handler is within a
- * frame of the touch; the event's performance-clock timestamp is not used
- * because iOS pauses that clock while the phone sleeps.
+ * When the tap happened, as epoch ms. The finger landing (pointerdown) is the
+ * moment that matters; the click fires on the lift, which for a deliberate
+ * press can be hundreds of ms later. The event's performance-clock timestamp
+ * isn't used because iOS pauses that clock while the phone sleeps.
  */
+let lastPointerDownMs = 0;
+const notePointerDown = () => {
+  lastPointerDownMs = Date.now();
+};
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const eventTimeMs = (_e: SyntheticEvent) => Date.now();
+const eventTimeMs = (_e: SyntheticEvent) => {
+  const now = Date.now();
+  return lastPointerDownMs && now - lastPointerDownMs < 1500 ? lastPointerDownMs : now;
+};
 
 export function TapScreen({ meetId, meetName, session, initial, timeZone, hasCourse, canGun, races, athletes }: Props) {
   useWakeLock();
@@ -451,6 +461,8 @@ function RaceTapper({
   const [toast, setToast] = useState<string | null>(null);
   const [flashId, setFlashId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  /** When the Replace/Keep card opened, so the second half of a double tap can't hit Replace. */
+  const confirmOpenedAt = useRef(0);
   // Press and hold a tile for DNS / DNF. The click that follows a hold is swallowed.
   const [holdId, setHoldId] = useState<string | null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -510,8 +522,9 @@ function RaceTapper({
     setSelectedSlotId(null);
     setRecent([]);
   }
+  const offset = clock.sync?.offsetMs ?? 0;
   // The chips on screen, and the one the manager picked (a selection dies with its chip).
-  const shownSlots = useMemo(() => (cp?.slots ?? []).filter((x) => x.athleteIds.length === 0 || nowMs === 0 || nowMs - x.timeMs < CHIP_TTL_MS), [cp, nowMs]);
+  const shownSlots = useMemo(() => (cp?.slots ?? []).filter((x) => x.athleteIds.length === 0 || nowMs === 0 || nowMs + offset - x.timeMs < CHIP_TTL_MS), [cp, nowMs, offset]);
   const selectedSlot = selectedSlotId ? shownSlots.find((x) => x.tapId === selectedSlotId) : undefined;
 
   const showToast = useCallback((text: string) => {
@@ -532,18 +545,19 @@ function RaceTapper({
   );
 
   const base = { checkpointId: checkpoint.id, athleteId: null, targetTapId: null, timeMs: null, estimate: false, missed: false, note: null };
-  const offset = clock.sync?.offsetMs ?? 0;
 
   // Captures taken on this phone: only these auto-collect a pack. Another manager's capture
   // at the same checkpoint must be picked on purpose (tap its chip).
   const myCaptures = useRef(new Set<string>());
+  const lastCaptureAt = useRef(0);
   const capture = (e: SyntheticEvent) => {
     const deviceTimeMs = eventTimeMs(e);
+    if (deviceTimeMs - lastCaptureAt.current < DOUBLE_TAP_MS) return; // a double-tapped Capture is one capture
+    lastCaptureAt.current = deviceTimeMs;
     setSelectedSlotId(null);
-    void send({ ...base, type: "capture", deviceTimeMs }).then((tapId) => {
-      myCaptures.current.add(tapId);
-      setLastAction({ tapId, label: "capture" });
-    });
+    const tapId = send({ ...base, type: "capture", deviceTimeMs });
+    myCaptures.current.add(tapId);
+    setLastAction({ tapId, label: "capture" });
     flash("capture");
     showToast(`Captured ${fmt(deviceTimeMs + offset)}`);
   };
@@ -551,30 +565,33 @@ function RaceTapper({
   const record = (e: SyntheticEvent, athleteId: string, replacing: Mark | null) => {
     const deviceTimeMs = eventTimeMs(e);
     setConfirmId(null);
-    if (replacing) void send({ ...base, type: "void", targetTapId: replacing.tapId, deviceTimeMs });
+    if (replacing) send({ ...base, type: "void", targetTapId: replacing.tapId, deviceTimeMs });
     // Which capture (if any) this name belongs to: a chip the manager picked (while it's still
-    // showing), else the oldest empty one, else this phone's newest capture if a pack is still
-    // filling, else none (record now). A replace is a correction ("they passed just now"), so
-    // it only uses a chip picked on purpose.
+    // showing), else the oldest empty capture this phone took recently, else this phone's newest
+    // capture if a pack is still filling, else none (record now). Another phone's capture, or an
+    // old one, is only used when its chip is picked on purpose. Replacing a real time is a
+    // correction ("they passed just now"), so that only uses a picked chip too; filling in a
+    // "missed" is just recording them.
+    const correction = !!replacing && !replacing.missed && !(gunTimeMs && replacing.timeMs !== null && replacing.timeMs < gunTimeMs);
     const selected = selectedSlot;
     const newest = cp?.slots.at(-1);
-    const packOpen = newest && myCaptures.current.has(newest.tapId) && deviceTimeMs + offset - newest.timeMs < CAPTURE_OPEN_MS;
-    const slot: Slot | undefined = selected ?? (replacing ? undefined : (cp?.pending[0] ?? (packOpen ? newest : undefined)));
-    const promise = slot
-      ? send({ ...base, type: "assign", athleteId, targetTapId: slot.tapId, deviceTimeMs })
-      : send({ ...base, type: "name_tap", athleteId, deviceTimeMs });
+    const nowServer = deviceTimeMs + offset;
+    const myPending = cp?.pending.find((p) => myCaptures.current.has(p.tapId) && nowServer - p.timeMs < PENDING_OPEN_MS);
+    const packOpen = newest && myCaptures.current.has(newest.tapId) && nowServer - newest.timeMs < CAPTURE_OPEN_MS;
+    const slot: Slot | undefined = selected ?? (correction ? undefined : (myPending ?? (packOpen ? newest : undefined)));
+    const tapId = slot ? send({ ...base, type: "assign", athleteId, targetTapId: slot.tapId, deviceTimeMs }) : send({ ...base, type: "name_tap", athleteId, deviceTimeMs });
     // A replaced time that came from a capture leaves that capture empty; drop it so the
     // next name tapped doesn't silently inherit the old time. Undo restores by time, not slot.
     if (replacing?.fromSlotId && replacing.fromSlotId !== slot?.tapId) {
       const old = cp?.slots.find((x) => x.tapId === replacing.fromSlotId);
-      if (old && old.athleteIds.every((id) => id === athleteId)) void send({ ...base, type: "void", targetTapId: old.tapId, deviceTimeMs: deviceTimeMs + 1 });
+      if (old && old.athleteIds.every((id) => id === athleteId)) send({ ...base, type: "void", targetTapId: old.tapId, deviceTimeMs: deviceTimeMs + 1 });
     }
     const restore = replacing && replacing.timeMs !== null ? { athleteId, timeMs: replacing.timeMs, estimate: replacing.estimate } : undefined;
-    void promise.then((tapId) => setLastAction({ tapId, label: athletes[athleteId] ?? "tap", restore }));
+    setLastAction({ tapId, label: athletes[athleteId] ?? "tap", restore });
     setRecent((r) => [{ athleteId, timeMs: slot ? slot.timeMs : deviceTimeMs + offset }, ...r.filter((x) => x.athleteId !== athleteId)].slice(0, RECENT_N));
     flash(athleteId);
     const how = slot ? (selected ? " · from the chip" : cp?.pending.some((p) => p.tapId === slot.tapId) ? " · from capture" : " · with the pack") : "";
-    showToast(`${replacing ? "Replaced" : "Recorded"} ${athletes[athleteId]} ${fmt(slot ? slot.timeMs : deviceTimeMs + offset)}${how}`);
+    showToast(`${correction ? "Replaced" : "Recorded"} ${athletes[athleteId]} ${fmt(slot ? slot.timeMs : deviceTimeMs + offset)}${how}`);
   };
 
   const onName = (e: SyntheticEvent, athleteId: string) => {
@@ -587,18 +604,22 @@ function RaceTapper({
     lastTapAt.current.set(athleteId, now);
     if (now - last < DOUBLE_TAP_MS) return; // double-tap guard
     const existing = cp?.byAthlete.get(athleteId);
-    if (existing && !existing.missed) setConfirmId(athleteId);
-    else record(e, athleteId, existing ?? null);
+    // A real time asks before being replaced; "missed" or a tap from before the gun is just filled in.
+    const real = !!existing && !existing.missed && !(gunTimeMs && existing.timeMs !== null && existing.timeMs < gunTimeMs);
+    if (real) {
+      confirmOpenedAt.current = now;
+      setConfirmId(athleteId);
+    } else record(e, athleteId, existing ?? null);
   };
 
   const undo = (e: SyntheticEvent) => {
     if (!lastAction) return;
     const t = eventTimeMs(e);
-    void send({ ...base, type: "void", targetTapId: lastAction.tapId, deviceTimeMs: t });
+    send({ ...base, type: "void", targetTapId: lastAction.tapId, deviceTimeMs: t });
     if (lastAction.restore) {
       // The replaced time was voided; give it back as a typed time.
       const { athleteId, timeMs, estimate } = lastAction.restore;
-      void send({ ...base, type: "name_tap", athleteId, timeMs, estimate, deviceTimeMs: t + 1 });
+      send({ ...base, type: "name_tap", athleteId, timeMs, estimate, deviceTimeMs: t + 1 });
       showToast(`Undid replace · ${athletes[athleteId]} back to ${fmt(timeMs)}`);
     } else {
       showToast(`Undid ${lastAction.label}`);
@@ -608,8 +629,8 @@ function RaceTapper({
   };
 
   const deleteSlot = (e: SyntheticEvent, slot: Slot) => {
-    void send({ ...base, type: "void", targetTapId: slot.tapId, deviceTimeMs: eventTimeMs(e) });
-    if (lastAction?.tapId === slot.tapId) setLastAction(null);
+    send({ ...base, type: "void", targetTapId: slot.tapId, deviceTimeMs: eventTimeMs(e) });
+    setLastAction(null); // a void can't be undone; don't leave Undo pointing at something else
     showToast(`Deleted ${fmt(slot.timeMs)}`);
   };
 
@@ -700,35 +721,7 @@ function RaceTapper({
           onLarge={(v) => setLargePref(v ? "1" : null)}
         />
       </div>
-      {hereDone && (
-        <div className="mx-3 mt-2 rounded-lg border border-brand/30 bg-brand-soft px-3 py-2 text-sm text-ink">
-          <div className="flex items-center justify-between gap-3">
-            <span>
-              {nextCp ? (
-                <>
-                  Everyone&rsquo;s {checkpoint.kind === "finish" ? "in" : "through"} <b>{checkpoint.label}</b>.
-                </>
-              ) : (
-                allDoneText
-              )}
-              {gapsBehind.length > 0 && ` ${gapsBehind.join("; ")} — mark them missed on Live results.`}
-            </span>
-            {nextCp ? (
-              <Button size="sm" onClick={() => onSwitch({ raceId: race.id, checkpointId: nextCp.id })}>
-                Go to {nextCp.label}
-                <ArrowRight className="size-3.5" />
-              </Button>
-            ) : (
-              <LinkButton href={`/meets/${meetId}/results?race=${race.id}`} size="sm">
-                Live results
-                <ArrowRight className="size-3.5" />
-              </LinkButton>
-            )}
-          </div>
-          {!nextCp && gapsBehind.length === 0 && <p className="mt-1 text-xs text-ink-2">Need to change something? Switch checkpoints above, or use Fix times on Live results.</p>}
-        </div>
-      )}
-      <div className={`grid flex-1 content-start gap-2 p-3 pb-48 ${large ? "grid-cols-1" : "grid-cols-2"}`}>
+      <div className={`grid flex-1 content-start gap-2 p-3 ${hereDone ? "pb-72" : "pb-48"} ${large ? "grid-cols-1" : "grid-cols-2"}`}>
         {!loaded && <p className="col-span-full text-sm text-ink-3">Loading…</p>}
         {ordered.map((id) => {
           const mark = cp?.byAthlete.get(id);
@@ -763,7 +756,14 @@ function RaceTapper({
                   Replace <Time className="font-semibold">{fmt(mark?.timeMs ?? null)}</Time>?
                 </span>
                 <div className="mt-1.5 flex gap-1.5">
-                  <Button size="sm" onClick={(e) => record(e, id, mark ?? null)} className="flex-1">
+                  <Button
+                    size="sm"
+                    onClick={(e) => {
+                      if (Date.now() - confirmOpenedAt.current < DOUBLE_TAP_MS) return; // the second half of a double tap
+                      record(e, id, mark ?? null);
+                    }}
+                    className="flex-1"
+                  >
                     Replace
                   </Button>
                   <Button size="sm" variant="secondary" onClick={() => setConfirmId(null)} className="flex-1">
@@ -782,7 +782,10 @@ function RaceTapper({
               key={id}
               type="button"
               onClick={(e) => onName(e, id)}
-              onPointerDown={() => holdStart(id)}
+              onPointerDown={() => {
+                notePointerDown();
+                holdStart(id);
+              }}
               onPointerUp={() => holdEnd(id, true)}
               onPointerLeave={() => holdEnd(id, false)}
               onPointerCancel={() => holdEnd(id, false)}
@@ -876,13 +879,15 @@ function RaceTapper({
               const m = state.get(c.id)?.byAthlete.get(id);
               if (m && !m.missed) after = c.id;
             });
-            void send({ ...base, type: "status", status, athleteId: id, checkpointId: after, deviceTimeMs: eventTimeMs(e) });
+            const tapId = send({ ...base, type: "status", status, athleteId: id, checkpointId: after, deviceTimeMs: eventTimeMs(e) });
+            setLastAction({ tapId, label: `${STATUS_LABEL[status]} for ${athletes[id]}` });
             setHoldId(null);
             showToast(`${athletes[id]}: ${STATUS_LABEL[status]}`);
           }}
           onClear={(e) => {
             const cur = statuses.get(holdId);
-            if (cur) void send({ ...base, type: "void", targetTapId: cur.tapId, deviceTimeMs: eventTimeMs(e) });
+            if (cur) send({ ...base, type: "void", targetTapId: cur.tapId, deviceTimeMs: eventTimeMs(e) });
+            setLastAction(null);
             setHoldId(null);
             showToast(`${athletes[holdId]}: back in the race`);
           }}
@@ -893,22 +898,43 @@ function RaceTapper({
         />
       )}
 
+      {/* Read-only: taps go straight through it to the tiles beneath. Undo lives in the bar. */}
       {toast && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-36 z-20 flex justify-center px-3">
-          <Toast
-            title={toast}
-            action={
-              lastAction ? (
-                <Button size="sm" variant="secondary" onClick={undo}>
-                  Undo
-                </Button>
-              ) : undefined
-            }
-          />
+        <div className="pointer-events-none fixed inset-x-0 bottom-36 z-20 flex justify-center px-3 [&>*]:pointer-events-none">
+          <Toast title={toast} />
         </div>
       )}
 
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-bg/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
+        {/* Lives in the fixed bar (not above the grid) so appearing never moves a tile under a thumb. */}
+      {hereDone && (
+        <div className="mx-3 mt-2 rounded-lg border border-brand/30 bg-brand-soft px-3 py-2 text-sm text-ink">
+          <div className="flex items-center justify-between gap-3">
+            <span>
+              {nextCp ? (
+                <>
+                  Everyone&rsquo;s {checkpoint.kind === "finish" ? "in" : "through"} <b>{checkpoint.label}</b>.
+                </>
+              ) : (
+                allDoneText
+              )}
+              {gapsBehind.length > 0 && ` ${gapsBehind.join("; ")} — mark them missed on Live results.`}
+            </span>
+            {nextCp ? (
+              <Button size="sm" onClick={() => onSwitch({ raceId: race.id, checkpointId: nextCp.id })}>
+                Go to {nextCp.label}
+                <ArrowRight className="size-3.5" />
+              </Button>
+            ) : (
+              <LinkButton href={`/meets/${meetId}/results?race=${race.id}`} size="sm">
+                Live results
+                <ArrowRight className="size-3.5" />
+              </LinkButton>
+            )}
+          </div>
+          {!nextCp && gapsBehind.length === 0 && <p className="mt-1 text-xs text-ink-2">Need to change something? Switch checkpoints above, or use Fix times on Live results.</p>}
+        </div>
+      )}
         {recent.length > 0 && (
           <p className="truncate px-3 pt-1.5 text-xs text-ink-2">
             <span className="text-ink-3">Last </span>
@@ -935,6 +961,7 @@ function RaceTapper({
           </Button>
           <button
             type="button"
+            onPointerDown={notePointerDown}
             onClick={capture}
             className={`flex h-16 flex-1 flex-col items-center justify-center rounded-lg shadow-card select-none ${
               flashId === "capture" ? "bg-brand text-brand-ink" : "bg-ink text-bg active:bg-ink/80"
@@ -1198,6 +1225,13 @@ function CaptureChips({
   onDelete: (e: SyntheticEvent, slot: Slot) => void;
 }) {
   const shown = slots;
+  // Deleting a capture can't be undone: the × asks once ("Delete?") and forgets after a moment.
+  const [armed, setArmed] = useState<string | null>(null);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(null), 3000);
+    return () => clearTimeout(t);
+  }, [armed]);
   if (shown.length === 0) return null;
   const firstName = (id: string) => (athletes[id] ?? "?").split(" ")[0];
   return (
@@ -1217,9 +1251,22 @@ function CaptureChips({
               <span className="text-xs">{empty ? "waiting" : s.athleteIds.map(firstName).join(", ")}</span>
             </button>
             {empty ? (
-              <button type="button" onClick={(e) => onDelete(e, s)} aria-label="Delete this capture" className="rounded p-1 text-ink-3 hover:text-danger">
-                <X className="size-3.5" />
-              </button>
+              armed === s.tapId ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    setArmed(null);
+                    onDelete(e, s);
+                  }}
+                  className="rounded bg-danger px-1.5 py-0.5 text-xs font-medium text-white"
+                >
+                  Delete?
+                </button>
+              ) : (
+                <button type="button" onClick={() => setArmed(s.tapId)} aria-label="Delete this capture" className="rounded p-1 text-ink-3 hover:text-danger">
+                  <X className="size-3.5" />
+                </button>
+              )
             ) : (
               <span className="w-1.5" />
             )}

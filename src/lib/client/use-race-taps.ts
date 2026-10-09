@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getClockSync } from "@/lib/client/clock";
+import { offsetForTap } from "@/lib/client/clock";
 import { outboxAdd, outboxAll, outboxRemove, type OutboxTap } from "@/lib/client/outbox";
 import type { TapLike } from "@/lib/replay";
 import type { OfficialTimes } from "@/lib/results/import";
@@ -271,20 +271,19 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
   }, [flush]);
 
   /** Queue a tap: local first, then delivered in the background. */
+  /** Queue a tap. Returns its id at once (the write to IndexedDB and the send happen in the background). */
   const send = useCallback(
-    async (input: Omit<TapInput, "clientTapId" | "deviceTimeMs" | "clockOffsetMs" | "raceId"> & { deviceTimeMs?: number }) => {
-      const sync = getClockSync();
+    (input: Omit<TapInput, "clientTapId" | "deviceTimeMs" | "clockOffsetMs" | "raceId"> & { deviceTimeMs?: number }): string => {
       const tap: OutboxTap = {
         clientTapId: crypto.randomUUID(),
         raceId,
         deviceTimeMs: input.deviceTimeMs ?? Date.now(),
-        clockOffsetMs: sync?.offsetMs ?? 0,
+        clockOffsetMs: offsetForTap(),
         ...input,
         queuedAt: Date.now(),
       };
       setOutbox((prev) => new Map(prev).set(tap.clientTapId, tap));
-      await outboxAdd(tap);
-      void flush();
+      void outboxAdd(tap).then(() => flush());
       return tap.clientTapId;
     },
     [raceId, flush],

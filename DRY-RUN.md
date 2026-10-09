@@ -55,7 +55,7 @@
    text or PDF), official times on every screen, Adjust → gun from official
    results, and the App vs official report.
 3. ~~Record-screen round from the Nightfall notes~~ — done Oct 6:
-   - Packs: one Capture time can take several names (tapped within 12 s of this phone's own capture, or
+   - Packs: one Capture time can take several names (tapped within 12 s of this phone's own capture, or into this phone's own waiting capture, or
      after selecting its chip); capture chips live in the bottom bar.
    - Order the names: previous checkpoint (default after the first), last
      race, season best, one earlier race, coach's order (drag on the race

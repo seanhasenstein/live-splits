@@ -29,16 +29,26 @@ function load(): ClockSync | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     const saved = raw ? (JSON.parse(raw) as ClockSync) : null;
-    // A sync from an earlier day says nothing about this device's clock now.
+    // A sync from an earlier day says nothing about this device's clock now; it's refreshed on load.
     if (saved && Date.now() - saved.syncedAt < STALE_MS) current = saved;
+    else if (saved) lastKnown = saved;
   } catch {
     // storage unavailable; stay in memory only
   }
   return current;
 }
 
+/** An older sync, kept for stamping taps when a fresh one can't be had: phone clocks drift seconds a day, so it beats assuming zero. */
+let lastKnown: ClockSync | null = null;
+
+/** The offset to stamp a tap with: the current sync, else the last one this device ever had, else 0. */
+export function offsetForTap(): number {
+  return (current ?? lastKnown)?.offsetMs ?? 0;
+}
+
 function store(sync: ClockSync) {
   current = sync;
+  lastKnown = sync;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sync));
   } catch {
