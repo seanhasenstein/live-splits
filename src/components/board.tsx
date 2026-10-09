@@ -593,6 +593,10 @@ function AthleteSheet({
   const finishIndex = race.checkpoints.findIndex((c) => c.kind === "finish");
   const finish = finishIndex >= 0 ? t(finishIndex) : null;
   const projected = finishIndex >= 0 ? projectAt(finishIndex) : null;
+  // Which times are the timing company's: all, some (a live feed matched part of the race), or none.
+  const officialCount = row ? row.cells.filter((c) => c.official !== null).length : 0;
+  const timedCount = row ? row.cells.filter((c) => c.official !== null || c.absoluteMs !== null).length : 0;
+  const finishOfficial = finishIndex >= 0 && row?.cells[finishIndex]?.official !== null && row?.cells[finishIndex]?.official !== undefined;
   // Out of the race: the status is the headline, not a footnote.
   const status: { short: string; long: string } | null =
     row?.officialStatus && row.officialStatus !== "finished"
@@ -621,7 +625,9 @@ function AthleteSheet({
             </>
           ) : (
             <>
-              <div className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">{finish !== null ? "Finish" : projected !== null ? "Projected finish" : "Finish"}</div>
+              <div className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
+                {finish !== null ? (finishOfficial ? "Finish · official" : "Finish · unofficial") : projected !== null ? "Projected finish" : "Finish"}
+              </div>
               <Time className="text-4xl font-semibold tracking-tight text-ink">{finish !== null ? formatElapsed(finish) : projected !== null ? `~${formatElapsed(projected).replace(/\.\d$/, "")}` : "—"}</Time>
             </>
           )}
@@ -676,7 +682,11 @@ function AthleteSheet({
           );
         })}
       </div>
-      {!last && <p className="mt-2 text-xs text-ink-3">No earlier results this season to compare with.</p>}
+      <p className="mt-2 text-xs text-ink-3">
+        {officialCount === 0 && timedCount > 0 && "Times are from the app, not the timing company. "}
+        {officialCount > 0 && officialCount < timedCount && "Times not marked official are from the app. "}
+        {!last && "No earlier results this season to compare with."}
+      </p>
     </Sheet>
   );
 }
