@@ -533,7 +533,7 @@ function RaceBoard({
           meetName={meetName}
           row={rows.find((r) => r.athleteId === athleteSheet)}
           name={athletes[athleteSheet] ?? "?"}
-          who={[gradeWord(grades[athleteSheet] ?? null), race.levels[athleteSheet]].filter(Boolean).join(" · ")}
+          grade={grades[athleteSheet] ?? null}
           neighbors={(() => {
             const i = rows.findIndex((r) => r.athleteId === athleteSheet);
             const prev = i > 0 ? rows[i - 1].athleteId : null;
@@ -547,11 +547,19 @@ function RaceBoard({
           }}
           overdue={staff ? overdue : () => false}
           teamRank={(() => {
-            // `rows` is already in race order (furthest along, then fastest); anyone out of the race sits at the end.
-            const inRace = rows.filter((r) => !(r.status || (r.officialStatus && r.officialStatus !== "finished")));
-            const idx = inRace.findIndex((r) => r.athleteId === athleteSheet);
-            if (idx < 0 || inRace[idx].reached < 0) return null;
-            return { rank: idx + 1, of: inRace.length };
+            // Position within the runner's own group (same gender and level), in race order: `rows` is
+            // already sorted furthest-along-then-fastest, with anyone out of the race at the end.
+            const level = race.levels[athleteSheet];
+            const gender = genders[athleteSheet];
+            const group = rows.filter(
+              (r) => race.levels[r.athleteId] === level && (!combined || genders[r.athleteId] === gender) && !(r.status || (r.officialStatus && r.officialStatus !== "finished")),
+            );
+            const idx = group.findIndex((r) => r.athleteId === athleteSheet);
+            if (idx < 0 || group[idx].reached < 0) return null;
+            // "Varsity" reads as "varsity" mid-sentence; an abbreviation like "JV" keeps its caps.
+            const levelWord = level ? (/^[A-Z][a-z]+$/.test(level) ? level.toLowerCase() : level) : "";
+            const team = `${combined ? (gender === "F" ? "girls " : gender === "M" ? "boys " : "") : ""}${levelWord} team`.replace(/\s+/g, " ").trim();
+            return { rank: idx + 1, of: group.length, team };
           })()}
           raceClockMs={!isFinished && gunTimeMs !== null && nowMs > 0 ? nowMs - gunTimeMs : null}
           history={race.history.byAthlete[athleteSheet]}
@@ -604,7 +612,7 @@ function AthleteSheet({
   meetName,
   row,
   name,
-  who,
+  grade,
   neighbors,
   onPick,
   projectAt,
@@ -618,8 +626,7 @@ function AthleteSheet({
   meetName: string;
   row: Row | undefined;
   name: string;
-  /** "Sophomore · JV" */
-  who: string;
+  grade: number | null;
   /** The runners either side in the table, for walking the team without closing. */
   neighbors: { prev: { id: string; name: string } | null; next: { id: string; name: string } | null };
   onPick: (id: string) => void;
@@ -627,8 +634,8 @@ function AthleteSheet({
   projectAt: (i: number) => number | null;
   overdue: (projected: number) => boolean;
   history: LineupHistory["byAthlete"][string] | undefined;
-  /** Position among our finishers in this race, e.g. { rank: 3, of: 7 }. */
-  teamRank: { rank: number; of: number } | null;
+  /** Position within the runner's gender + level group, e.g. { rank: 3, of: 7, team: "varsity team" }. */
+  teamRank: { rank: number; of: number; team: string } | null;
   /** Elapsed race time right now (ms), while the race runs. */
   raceClockMs: number | null;
   onClose: () => void;
@@ -657,12 +664,7 @@ function AthleteSheet({
             long: `${STATUS_LONG[row.status.status]}${row.status.afterCheckpointId ? ` · after ${race.checkpoints.find((c) => c.id === row.status!.afterCheckpointId)?.label ?? ""}` : ""}`,
           }
         : null;
-  const subtitle = (
-    <>
-      {race.name} · {meetName}
-      {who && <span className="block">{who}</span>}
-    </>
-  );
+  const subtitle = `${race.name} · ${meetName}`;
   const finishMeters = finishIndex >= 0 ? race.checkpoints[finishIndex].meters : 0;
   const avgPace = finish !== null && finishMeters > 0 ? paceMsPerMile(finish, finishMeters) : null;
   const share = async () => {
@@ -686,7 +688,12 @@ function AthleteSheet({
 
   return (
     <Sheet
-      title={<span className="text-xl font-semibold tracking-tight">{name}</span>}
+      title={
+        <span className="flex items-baseline gap-2">
+          <span className="text-xl font-semibold tracking-tight">{name}</span>
+          {grade !== null && <span className="text-[13px] font-normal text-ink-3">Grade {grade}</span>}
+        </span>
+      }
       subtitle={subtitle}
       actions={
         <button type="button" onClick={share} aria-label="Share" title="Share" className="rounded-md p-1 text-ink-3 hover:bg-surface-2 hover:text-ink">
@@ -740,7 +747,7 @@ function AthleteSheet({
         <div className="mt-5 mb-4 flex items-end justify-between gap-x-6 gap-y-3 border-t border-line pt-3">
           <div className="flex flex-wrap gap-x-6 gap-y-3">
             {teamRank && (
-              <SmallStat value={`${teamRank.rank}${ordinal(teamRank.rank)} of ${teamRank.of}`} label={finish !== null ? "on the team" : lastSeen ? `on the team at ${lastSeen.label}` : "on the team"} />
+              <SmallStat value={`${teamRank.rank}${ordinal(teamRank.rank)} of ${teamRank.of}`} label={finish !== null ? `on the ${teamRank.team}` : lastSeen ? `on the ${teamRank.team} at ${lastSeen.label}` : `on the ${teamRank.team}`} />
             )}
             {last && last.finishMs !== null && (
               <SmallStat
@@ -824,11 +831,6 @@ function SmallStat({ value, label, align = "left" }: { value: ReactNode; label: 
       <span className="mt-1 block text-[11px] font-medium tracking-[0.06em] text-ink-2 uppercase">{label}</span>
     </div>
   );
-}
-
-/** As results sheets print it: "Grade 10". */
-function gradeWord(grade: number | null): string | null {
-  return grade === null ? null : `Grade ${grade}`;
 }
 
 const ordinal = (n: number) => (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th");
