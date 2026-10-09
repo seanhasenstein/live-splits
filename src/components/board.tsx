@@ -556,9 +556,7 @@ function RaceBoard({
             );
             const idx = group.findIndex((r) => r.athleteId === athleteSheet);
             if (idx < 0 || group[idx].reached < 0) return null;
-            // "Varsity" reads as "varsity" mid-sentence; an abbreviation like "JV" keeps its caps.
-            const levelWord = level ? (/^[A-Z][a-z]+$/.test(level) ? level.toLowerCase() : level) : "";
-            const team = `${combined ? (gender === "F" ? "girls " : gender === "M" ? "boys " : "") : ""}${levelWord} team`.replace(/\s+/g, " ").trim();
+            const team = `${combined ? (gender === "F" ? "girls " : gender === "M" ? "boys " : "") : ""}${level ?? ""}`.trim() || "team";
             return { rank: idx + 1, of: group.length, team };
           })()}
           raceClockMs={!isFinished && gunTimeMs !== null && nowMs > 0 ? nowMs - gunTimeMs : null}
@@ -634,7 +632,7 @@ function AthleteSheet({
   projectAt: (i: number) => number | null;
   overdue: (projected: number) => boolean;
   history: LineupHistory["byAthlete"][string] | undefined;
-  /** Position within the runner's gender + level group, e.g. { rank: 3, of: 7, team: "varsity team" }. */
+  /** Position within the runner's gender + level group, e.g. { rank: 3, of: 7, team: "girls varsity" }. */
   teamRank: { rank: number; of: number; team: string } | null;
   /** Elapsed race time right now (ms), while the race runs. */
   raceClockMs: number | null;
@@ -691,7 +689,7 @@ function AthleteSheet({
       title={
         <span className="flex items-baseline gap-2">
           <span className="text-xl font-semibold tracking-tight">{name}</span>
-          {grade !== null && <span className="text-[13px] font-normal text-ink-3">Grade {grade}</span>}
+          {grade !== null && <span className="text-[13px] font-normal text-ink-3">Gr {grade}</span>}
         </span>
       }
       subtitle={subtitle}
@@ -747,7 +745,7 @@ function AthleteSheet({
         <div className="mt-5 mb-4 flex items-end justify-between gap-x-6 gap-y-3 border-t border-line pt-3">
           <div className="flex flex-wrap gap-x-6 gap-y-3">
             {teamRank && (
-              <SmallStat value={`${teamRank.rank}${ordinal(teamRank.rank)} of ${teamRank.of}`} label={finish !== null ? `on the ${teamRank.team}` : lastSeen ? `on the ${teamRank.team} at ${lastSeen.label}` : `on the ${teamRank.team}`} />
+              <SmallStat value={`${teamRank.rank}${ordinal(teamRank.rank)} of ${teamRank.of}`} label={finish === null && lastSeen ? `${teamRank.team} at ${lastSeen.label}` : teamRank.team} />
             )}
             {last && last.finishMs !== null && (
               <SmallStat
