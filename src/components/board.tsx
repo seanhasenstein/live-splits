@@ -670,18 +670,21 @@ function AthleteSheet({
       </div>
       {/* Secondary stats: a size down from the headline pair, with room above. */}
       {(teamRank || (last && last.finishMs !== null) || (raceClockMs !== null && finish === null && !status && lastSeen)) && (
-        <div className="mt-5 mb-4 flex flex-wrap gap-x-6 gap-y-3 border-t border-line pt-3">
-          {teamRank && (
-            <SmallStat value={`${teamRank.rank}${ordinal(teamRank.rank)} of ${teamRank.of}`} label={finish !== null ? "on the team" : lastSeen ? `on the team · as of ${lastSeen.label}` : "on the team"} />
-          )}
+        <div className="mt-5 mb-4 flex items-end justify-between gap-x-6 gap-y-3 border-t border-line pt-3">
+          <div className="flex flex-wrap gap-x-6 gap-y-3">
+            {teamRank && (
+              <SmallStat value={`${teamRank.rank}${ordinal(teamRank.rank)} of ${teamRank.of}`} label={finish !== null ? "on the team" : lastSeen ? `on the team · as of ${lastSeen.label}` : "on the team"} />
+            )}
+            {last && last.finishMs !== null && (
+              <SmallStat
+                value={finish !== null ? <DeltaText ms={finish - last.finishMs} /> : <span className="text-ink-2">{formatElapsed(last.finishMs)}</span>}
+                label={finish !== null ? "vs last meet" : "last meet"}
+              />
+            )}
+          </div>
+          {/* Under the race clock, like the clock itself. */}
           {raceClockMs !== null && finish === null && !status && lastSeen && (
-            <SmallStat value={`${formatElapsed(Math.max(0, raceClockMs - lastSeen.at)).replace(/\.\d$/, "")} ago`} label={`passed ${lastSeen.label}`} />
-          )}
-          {last && last.finishMs !== null && (
-            <SmallStat
-              value={finish !== null ? <DeltaText ms={finish - last.finishMs} /> : <span className="text-ink-2">{formatElapsed(last.finishMs)}</span>}
-              label={finish !== null ? "vs last meet" : "last meet"}
-            />
+            <SmallStat value={`${formatElapsed(Math.max(0, raceClockMs - lastSeen.at)).replace(/\.\d$/, "")} ago`} label={`passed ${lastSeen.label}`} align="right" />
           )}
         </div>
       )}
@@ -737,9 +740,9 @@ function AthleteSheet({
   );
 }
 
-function SmallStat({ value, label }: { value: ReactNode; label: string }) {
+function SmallStat({ value, label, align = "left" }: { value: ReactNode; label: string; align?: "left" | "right" }) {
   return (
-    <div>
+    <div className={align === "right" ? "shrink-0 text-right" : ""}>
       <Time className="block text-lg leading-none font-semibold text-ink">{value}</Time>
       <span className="mt-1 block text-[11px] font-medium tracking-[0.06em] text-ink-2 uppercase">{label}</span>
     </div>
