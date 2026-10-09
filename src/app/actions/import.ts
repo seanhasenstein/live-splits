@@ -23,10 +23,13 @@ export async function loadResultsAction(meetId: string, _prev: LoadState, formDa
   const kind = String(formData.get("kind") ?? "url");
   try {
     if (kind === "url") {
-      const url = String(formData.get("url") ?? "").trim();
-      if (!url) return { error: "Paste a results link." };
-      const contests = await fromUrl(url);
-      return { contests, raw: JSON.stringify(contests), sourceUrl: url };
+      // One link per line; each may yield one contest (a feed) or many (a meet page).
+      const urls = [...new Set(String(formData.get("url") ?? "").split(/\s+/).map((u) => u.trim()).filter(Boolean))];
+      if (urls.length === 0) return { error: "Paste a results link." };
+      if (urls.length > 10) return { error: "That's a lot of links; ten at a time, please." };
+      const contests: ParsedContest[] = [];
+      for (const url of urls) contests.push(...(await fromUrl(url)));
+      return { contests, raw: JSON.stringify(contests), sourceUrl: urls.join(" ") };
     }
     if (kind === "text") {
       const text = String(formData.get("text") ?? "");

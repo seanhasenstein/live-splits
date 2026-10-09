@@ -94,7 +94,8 @@ export async function fromUrl(url: string): Promise<ParsedContest[]> {
   } catch {
     throw new SourceError("That doesn't look like a link.");
   }
-  if (u.host === RACE_RESULT_HOST) return [await fromRaceResultUrl(u.toString())];
+  // A bare feed link has no contest name; the key in the URL at least tells two apart.
+  if (u.host === RACE_RESULT_HOST) return [await fromRaceResultUrl(u.toString(), `RACE RESULT contest ${u.pathname.split("/").filter(Boolean).at(-1)?.slice(0, 6) ?? ""}`.trim())];
   if (BADGER_HOSTS.has(u.host)) return fromBadgerStateUrl(u.toString());
   throw new SourceError(`No importer for ${u.host} yet. Paste the results as text or upload the PDF instead.`);
 }

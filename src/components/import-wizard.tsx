@@ -35,8 +35,15 @@ export function ImportWizard({ meetId, races, athletes, teamAliases, resultsUrl 
             ]}
           />
           {kind === "url" && (
-            <Field label="Results link" hint="A Badger State Timing meet page, or a RACE RESULT feed link (api.raceresult.com/…).">
-              <Input name="url" type="url" defaultValue={resultsUrl ?? ""} placeholder="https://www.badgerstatetiming.live/…" required />
+            <Field label="Results links" hint="A Badger State Timing meet page (every race at once), or RACE RESULT feed links (api.raceresult.com/…), one per line — several for a combined race.">
+              <textarea
+                name="url"
+                defaultValue={resultsUrl ?? ""}
+                placeholder="https://www.badgerstatetiming.live/…"
+                required
+                rows={2}
+                className="control w-full rounded-md border border-line-strong bg-surface px-3 py-2 font-mono text-sm text-ink"
+              />
             </Field>
           )}
           {kind === "text" && (
