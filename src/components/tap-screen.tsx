@@ -288,7 +288,7 @@ function RaceTapper({
 }) {
   const clock = useClock();
   const checkpoint = race.checkpoints[cpIndex];
-  const { taps, gunTimeMs, official, officialLive, finished, staleMinutes, send, online, signedOut, rejected, loaded, unsent, refresh } = useRaceTaps(race.id, race.gunTimeMs, checkpoint.id);
+  const { taps, gunTimeMs, official, officialLive, finished, staleMinutes, send, online, signedOut, rejected, loaded, unsent, refresh, adoptGun } = useRaceTaps(race.id, race.gunTimeMs, checkpoint.id);
   const isFinished = race.finished || finished;
   const officialAt = (athleteId: string): number | null => {
     const o = official[athleteId];
@@ -321,25 +321,39 @@ function RaceTapper({
   const total = race.athleteIds.length;
   const outstanding = (i: number) => counts[i].n + counts[i].out < total;
   const hereDone = loaded && total > 0 && !isFinished && !outstanding(cpIndex);
-  // Somewhere else still waiting on runners: later checkpoints first, then earlier ones.
-  const nextCp = hereDone ? (race.checkpoints.find((_, i) => i > cpIndex && outstanding(i)) ?? race.checkpoints.find((_, i) => i < cpIndex && outstanding(i))) : undefined;
-  const nextIsBack = !!nextCp && race.checkpoints.indexOf(nextCp) < cpIndex;
+  // A later checkpoint still waiting on runners. (An earlier one with gaps isn't "runners out":
+  // everyone through here has passed it, so those are missed taps, a job for Fix times.)
+  const nextCp = hereDone ? race.checkpoints.find((_, i) => i > cpIndex && outstanding(i)) : undefined;
+  const gapsBehind = hereDone
+    ? race.checkpoints.flatMap((c, i) => {
+        if (i >= cpIndex || !outstanding(i)) return [];
+        const n = total - counts[i].n - counts[i].out;
+        return [`${c.label} is missing ${n} time${n === 1 ? "" : "s"}`];
+      })
+    : [];
   // Everything's in: say how it ended.
-  const finishCount = race.checkpoints.length ? counts[race.checkpoints.length - 1] : undefined;
+  const lastCp = race.checkpoints.at(-1);
+  const hasTimeAtLast = (id: string) => {
+    const o = official[id];
+    const m = lastCp ? state.get(lastCp.id)?.byAthlete.get(id) : undefined;
+    return (lastCp && o ? (o.byCheckpoint[lastCp.id] ?? (lastCp.kind === "finish" ? o.finishMs : null)) !== null : false) || (!!m && !m.missed);
+  };
   const outByStatus = race.athleteIds.reduce(
     (acc, id) => {
       const st = statuses.get(id)?.status;
-      if (st && !(official[id] && official[id].status === "finished")) acc[st] += 1;
+      // A time at the end outranks an app status (a DNF with a finish is a bookkeeping slip, not a DNF).
+      if (st && !hasTimeAtLast(id) && !(official[id] && official[id].status === "finished")) acc[st] += 1;
       return acc;
     },
     { dns: 0, dnr: 0, dnf: 0 },
   );
   const allDoneText = (() => {
-    if (!finishCount) return "";
+    if (!lastCp) return "";
+    const done = lastCp.kind === "finish" ? "finished" : `through ${lastCp.label}`;
     const out = Object.values(outByStatus).reduce((a, b) => a + b, 0);
-    if (out === 0) return "Everyone has finished.";
+    if (out === 0) return `Everyone has ${done}.`;
     const parts = (["dnf", "dns", "dnr"] as const).filter((k) => outByStatus[k] > 0).map((k) => `${outByStatus[k]} ${STATUS_LABEL[k]}`);
-    return `Everyone's accounted for: ${finishCount.n} finished, ${parts.join(", ")}.`;
+    return `Everyone's accounted for: ${race.athleteIds.filter(hasTimeAtLast).length} ${done}, ${parts.join(", ")}.`;
   })();
 
   // Grid order. A manager's pick is remembered on this device; otherwise the previous
@@ -419,7 +433,8 @@ function RaceTapper({
         // Official times are elapsed from the gun; app marks are re-based the same way when there is a gun.
         prevTime: (id) => {
           const prevCp = cpIndex > 0 ? race.checkpoints[cpIndex - 1] : undefined;
-          const o = prevCp ? (official[id]?.byCheckpoint[prevCp.id] ?? (prevCp.kind === "finish" ? official[id]?.finishMs : undefined)) : undefined;
+          // Official times are elapsed from the gun; without a gun they can't be compared to app taps, so app only.
+          const o = gunTimeMs && prevCp ? (official[id]?.byCheckpoint[prevCp.id] ?? (prevCp.kind === "finish" ? official[id]?.finishMs : undefined)) : undefined;
           if (o != null) return o;
           const m = prev?.byAthlete.get(id);
           if (!m || m.missed || m.timeMs === null) return null;
@@ -611,7 +626,7 @@ function RaceTapper({
       />
       <div className="sticky top-14 z-10 space-y-2 border-b border-line bg-bg/95 px-3 py-2.5 backdrop-blur">
         <div className="flex items-center gap-2">
-          <RaceStatusBar name={race.name} finished={isFinished} gunTimeMs={gunTimeMs} now={clock.now} official={Object.keys(official).length ? (officialLive ? "live" : "imported") : "none"} />
+          <RaceStatusBar name={race.name} finished={isFinished} gunTimeMs={gunTimeMs} now={clock.now} official={officialLive ? "live" : Object.keys(official).length ? "imported" : "none"} />
           <ClockWarning sync={clock.sync} error={clock.error} />
           {signedOut ? (
             <Link href="/join">
@@ -639,7 +654,14 @@ function RaceTapper({
           counts: Object.fromEntries(counts.map((c) => [c.id, c.n])),
         })}
         {!gunTimeMs && !isFinished && canGun && (
-          <StartRaceControl raceId={race.id} onStarted={() => refresh()} onConflict={() => refresh()} />
+          <StartRaceControl
+            raceId={race.id}
+            onStarted={(gun) => {
+              adoptGun(gun);
+              void refresh();
+            }}
+            onConflict={() => refresh()}
+          />
         )}
         <CheckpointCounts counts={counts} total={race.athleteIds.length} loaded={loaded} finished={isFinished} activeId={checkpoint.id} />
       </div>
@@ -680,15 +702,16 @@ function RaceTapper({
             <span>
               {nextCp ? (
                 <>
-                  Everyone&rsquo;s {checkpoint.kind === "finish" ? "in" : "through"} <b>{checkpoint.label}</b>.{nextIsBack && ` ${nextCp.label} still has runners out.`}
+                  Everyone&rsquo;s {checkpoint.kind === "finish" ? "in" : "through"} <b>{checkpoint.label}</b>.
                 </>
               ) : (
                 allDoneText
               )}
+              {gapsBehind.length > 0 && ` ${gapsBehind.join("; ")} — mark them missed on Live results.`}
             </span>
             {nextCp ? (
               <Button size="sm" onClick={() => onSwitch({ raceId: race.id, checkpointId: nextCp.id })}>
-                {nextIsBack ? "Back to" : "Go to"} {nextCp.label}
+                Go to {nextCp.label}
                 <ArrowRight className="size-3.5" />
               </Button>
             ) : (
@@ -698,7 +721,7 @@ function RaceTapper({
               </LinkButton>
             )}
           </div>
-          {!nextCp && <p className="mt-1 text-xs text-ink-2">Need to change something? Switch checkpoints above, or use Fix times on Live results.</p>}
+          {!nextCp && gapsBehind.length === 0 && <p className="mt-1 text-xs text-ink-2">Need to change something? Switch checkpoints above, or use Fix times on Live results.</p>}
         </div>
       )}
       <div className={`grid flex-1 content-start gap-2 p-3 pb-48 ${large ? "grid-cols-1" : "grid-cols-2"}`}>

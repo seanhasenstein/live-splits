@@ -247,7 +247,7 @@ function AdjustSheet({
       <div className="space-y-3">
         {error && <Alert tone="danger">{error}</Alert>}
 
-        {gunTimeMs !== null && (
+        {(gunTimeMs !== null || finished) && (
           <Option
             title={finished ? "Reopen the race" : "Mark the race finished"}
             description={

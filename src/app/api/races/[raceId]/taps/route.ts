@@ -29,7 +29,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
   // `?at=<checkpointId>` is the record screen saying where it is; remembered on the session
   // so the results page can show who's covering each checkpoint. Refreshed at most every 20 s.
   const at = url.searchParams.get("at");
-  if (session && at && race.checkpoints.some((c) => c.id === at)) {
+  if (session && at && can(session, "tap", meet) && race.checkpoints.some((c) => c.id === at)) {
     const p = session.presence;
     if (!p || p.raceId !== race._id || p.checkpointId !== at || Date.now() - p.at.getTime() > 20_000) {
       await collection(db, "sessions").updateOne({ _id: session._id }, { $set: { presence: { raceId: race._id, checkpointId: at, at: new Date() } } });

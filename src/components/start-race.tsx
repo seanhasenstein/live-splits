@@ -32,11 +32,15 @@ export function StartRaceControl({
     onArmedChange?.(v);
   };
 
-  // Disarm on its own; a forgotten armed button is a misfire waiting to happen.
+  // Disarm on its own; a forgotten armed button is a misfire waiting to happen. Unmounting
+  // while armed (someone else fired the gun) must also tell the parent it's no longer armed.
   useEffect(() => {
     if (!armed) return;
     const t = setTimeout(() => setArmed(false), 15000);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      onArmedChange?.(false);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [armed]);
 

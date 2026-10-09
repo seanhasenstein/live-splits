@@ -45,6 +45,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
   /** When each tap first arrived here (epoch ms); the board flashes times younger than a few seconds. */
   const [seenAt, setSeenAt] = useState<Map<string, number>>(() => new Map());
   const firstLoadDone = useRef(false);
+  const quietRefetch = useRef(false);
   const atRef = useRef(at);
   useEffect(() => {
     atRef.current = at;
@@ -76,7 +77,9 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
         setOfficialLive(!!body.officialLive);
       } else if (liveRef.current && !body.officialLive) {
         // The live feed just ended (imported, or finished): fetch the real official times next.
+        // That refetch re-sends every tap; none of them is news.
         since.current = 0;
+        quietRefetch.current = true;
         setOfficialLive(false);
       }
       liveRef.current = !!body.officialLive;
@@ -87,7 +90,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
           return next;
         });
         // Only taps that arrive after the first load count as "fresh"; the first load isn't news.
-        if (firstLoadDone.current) {
+        if (firstLoadDone.current && !quietRefetch.current) {
           setSeenAt((prev) => {
             const fresh = body.taps.filter((t) => !prev.has(t.clientTapId));
             if (fresh.length === 0) return prev;
@@ -99,6 +102,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
         }
       }
       firstLoadDone.current = true;
+      quietRefetch.current = false;
       setOnline(true);
       setLoaded(true);
     } catch {
@@ -148,6 +152,12 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
   }, [poll]);
 
 
+
+  /** A gun this device just fired: show it now rather than after the next poll. */
+  const adoptGun = useCallback((gun: number) => {
+    setGunTimeMs(gun);
+    stateRef.current = { ...stateRef.current, gunTimeMs: gun };
+  }, []);
 
   // --- outbox --------------------------------------------------------------
   const flushAgain = useRef(false);
@@ -302,5 +312,6 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
     loaded,
     unsent,
     refresh: poll,
+    adoptGun,
   };
 }

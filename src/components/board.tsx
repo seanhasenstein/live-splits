@@ -59,11 +59,14 @@ export function Board({ meetId, meetName, session, initialRaceId, timeZone, race
   const [raceId, setRaceId] = useState(() => (races.some((r) => r.id === initialRaceId) ? initialRaceId! : (races[0]?.id ?? "")));
   const race = races.find((r) => r.id === raceId) ?? races[0];
 
+  // The deep-linked athlete opens once, for the race the link named; switching races drops it from the URL.
+  const [pendingAthlete, setPendingAthlete] = useState(initialAthleteId);
   useEffect(() => {
     const url = new URL(window.location.href);
     url.searchParams.set("race", raceId);
+    if (raceId !== initialRaceId) url.searchParams.delete("athlete");
     window.history.replaceState(window.history.state, "", url);
-  }, [raceId]);
+  }, [raceId, initialRaceId]);
 
   if (!race) {
     return (
@@ -84,7 +87,20 @@ export function Board({ meetId, meetName, session, initialRaceId, timeZone, race
         {races.length > 1 && (
           <Segmented value={race.id} onChange={setRaceId} options={races.map((r) => ({ value: r.id, label: r.name }))} className="mb-3 lg:max-w-md" />
         )}
-        <RaceBoard key={race.id} meetId={meetId} meetName={meetName} race={race} timeZone={timeZone} athletes={athletes} genders={genders} grades={grades} initialAthleteId={initialAthleteId} canFix={canFix} canTap={canTap} />
+        <RaceBoard
+          key={race.id}
+          meetId={meetId}
+          meetName={meetName}
+          race={race}
+          timeZone={timeZone}
+          athletes={athletes}
+          genders={genders}
+          grades={grades}
+          initialAthleteId={race.id === initialRaceId ? pendingAthlete : null}
+          onInitialAthleteShown={() => setPendingAthlete(null)}
+          canFix={canFix}
+          canTap={canTap}
+        />
       </main>
     </>
   );
@@ -103,6 +119,7 @@ function RaceBoard({
   genders,
   grades,
   initialAthleteId,
+  onInitialAthleteShown,
   canFix,
   canTap,
 }: {
@@ -114,6 +131,7 @@ function RaceBoard({
   genders: Record<string, "F" | "M" | "X">;
   grades: Record<string, number | null>;
   initialAthleteId: string | null;
+  onInitialAthleteShown: () => void;
   canFix: boolean;
   canTap: boolean;
 }) {
@@ -130,6 +148,10 @@ function RaceBoard({
   const [statusFor, setStatusFor] = useState<string | null>(null);
   // The open runner's sheet is in the URL (?athlete=) so it can be shared and reopened.
   const [athleteSheet, setAthleteSheetState] = useState<string | null>(initialAthleteId && race.athleteIds.includes(initialAthleteId) ? initialAthleteId : null);
+  useEffect(() => {
+    if (initialAthleteId) onInitialAthleteShown();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const setAthleteSheet = (id: string | null) => {
     setAthleteSheetState(id);
     const url = new URL(window.location.href);
@@ -137,12 +159,16 @@ function RaceBoard({
     else url.searchParams.delete("athlete");
     window.history.replaceState(window.history.state, "", url);
   };
-  // Coarse clock so freshly arrived times can stop glowing after a few seconds.
+  // Server-corrected clock, ticking once a second while the race runs (fresh glow, race clock, overdue).
+  const running = gunTimeMs !== null && !isFinished;
   const [nowMs, setNowMs] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    if (!running) return;
+    const tick = () => setNowMs(clock.now() ?? Date.now());
+    tick();
+    const t = setInterval(tick, 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [running, clock]);
   const isFresh = (tapId: string | undefined) => {
     const at = tapId ? seenAt.get(tapId) : undefined;
     return at !== undefined && nowMs > 0 && nowMs - at < FRESH_MS;
@@ -165,6 +191,9 @@ function RaceBoard({
     (ms: number | null) => (ms === null ? "—" : gunTimeMs ? formatElapsed(ms - gunTimeMs) : formatClock(ms, timeZone)),
     [gunTimeMs, timeZone],
   );
+
+  // A sheet for someone no longer in this race (lineup edited underneath it) just isn't shown.
+  const openAthlete = athleteSheet && race.athleteIds.includes(athleteSheet) ? athleteSheet : null;
 
   // Every runner in race order; `rows` is the filtered view of it. The athlete sheet and team
   // positions read from the full set so a filter never blanks a sheet or changes a rank.
@@ -243,7 +272,15 @@ function RaceBoard({
     const n = clock.now();
     return n !== null && gunTimeMs !== null && n - gunTimeMs - projected > OVERDUE_MS;
   };
-  const finishTimes = finishIndex < 0 ? [] : rows.map((r) => elapsedAt(r, finishIndex)).filter((t): t is number => t !== null).sort((a, b) => a - b);
+  // Finish times of runners still in the race, for the team line (a combined race needs the Girls/Boys filter first).
+  const finishTimes =
+    finishIndex < 0 || (combined && who === "all")
+      ? []
+      : rows
+          .filter((r) => !(r.status || (r.officialStatus && r.officialStatus !== "finished")))
+          .map((r) => elapsedAt(r, finishIndex))
+          .filter((t): t is number => t !== null)
+          .sort((a, b) => a - b);
   const teamLine =
     finishTimes.length >= 5
       ? `Top 5 avg ${formatElapsed(Math.round(finishTimes.slice(0, 5).reduce((a, b) => a + b, 0) / 5))} · 1–5 spread ${formatElapsed(finishTimes[4] - finishTimes[0])} · ${finishTimes.length} finished`
@@ -255,7 +292,7 @@ function RaceBoard({
     <>
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-1">
-          <RaceStatusBar finished={isFinished} gunTimeMs={gunTimeMs} now={clock.now} official={hasOfficial ? (officialLive ? "live" : "imported") : "none"} />
+          <RaceStatusBar finished={isFinished} gunTimeMs={gunTimeMs} now={clock.now} official={officialLive ? "live" : hasOfficial ? "imported" : "none"} />
           {hasOfficial && !isFinished && !gunTimeMs && <Badge tone="brand">Official results</Badge>}
           {staleMinutes > 0 && <Badge tone="gold">updated {staleMinutes} min ago</Badge>}
           {!online && (
@@ -527,40 +564,41 @@ function RaceBoard({
         </div>
       )}
 
-      {athleteSheet && (
+      {openAthlete && (
         <AthleteSheet
           race={race}
           meetName={meetName}
-          row={allRows.find((r) => r.athleteId === athleteSheet)}
-          name={athletes[athleteSheet] ?? "?"}
-          grade={grades[athleteSheet] ?? null}
+          row={allRows.find((r) => r.athleteId === openAthlete)}
+          name={athletes[openAthlete] ?? "?"}
+          grade={grades[openAthlete] ?? null}
           neighbors={(() => {
-            const i = rows.findIndex((r) => r.athleteId === athleteSheet);
+            const i = rows.findIndex((r) => r.athleteId === openAthlete);
             const prev = i > 0 ? rows[i - 1].athleteId : null;
             const next = i >= 0 && i < rows.length - 1 ? rows[i + 1].athleteId : null;
             return { prev: prev ? { id: prev, name: athletes[prev] ?? "?" } : null, next: next ? { id: next, name: athletes[next] ?? "?" } : null };
           })()}
           onPick={setAthleteSheet}
           projectAt={(i) => {
-            const r = allRows.find((x) => x.athleteId === athleteSheet);
+            const r = allRows.find((x) => x.athleteId === openAthlete);
             return r ? projectAt(r, i) : null;
           }}
           overdue={staff ? overdue : () => false}
           teamRank={(() => {
             // Position within the runner's own group (same gender and level), in race order: `rows` is
             // already sorted furthest-along-then-fastest, with anyone out of the race at the end.
-            const level = race.levels[athleteSheet];
-            const gender = genders[athleteSheet];
+            const level = race.levels[openAthlete];
+            const gender = genders[openAthlete];
             const group = allRows.filter(
               (r) => race.levels[r.athleteId] === level && (!combined || genders[r.athleteId] === gender) && !(r.status || (r.officialStatus && r.officialStatus !== "finished")),
             );
-            const idx = group.findIndex((r) => r.athleteId === athleteSheet);
+            const idx = group.findIndex((r) => r.athleteId === openAthlete);
             if (idx < 0 || group[idx].reached < 0) return null;
             const team = `${gender === "F" ? "girls " : gender === "M" ? "boys " : ""}${level ?? ""} team`.replace(/\s+/g, " ").trim();
             return { rank: idx + 1, of: group.length, team };
           })()}
           raceClockMs={!isFinished && gunTimeMs !== null && nowMs > 0 ? nowMs - gunTimeMs : null}
-          history={race.history.byAthlete[athleteSheet]}
+          onShared={showToast}
+          history={race.history.byAthlete[openAthlete]}
           onClose={() => setAthleteSheet(null)}
         />
       )}
@@ -618,6 +656,7 @@ function AthleteSheet({
   history,
   teamRank,
   raceClockMs,
+  onShared,
   onClose,
 }: {
   race: RaceInfo;
@@ -636,6 +675,8 @@ function AthleteSheet({
   teamRank: { rank: number; of: number; team: string } | null;
   /** Elapsed race time right now (ms), while the race runs. */
   raceClockMs: number | null;
+  /** A toast, for the clipboard fallback. */
+  onShared: (msg: string) => void;
   onClose: () => void;
 }) {
   const last = lastFinished(history);
@@ -666,14 +707,23 @@ function AthleteSheet({
   const finishMeters = finishIndex >= 0 ? race.checkpoints[finishIndex].meters : 0;
   const avgPace = finish !== null && finishMeters > 0 ? paceMsPerMile(finish, finishMeters) : null;
   const share = async () => {
-    const parts = race.checkpoints.map((c, i) => {
+    const parts = race.checkpoints.flatMap((c, i) => {
       const v = t(i);
-      return v !== null ? `${c.label} ${formatElapsed(v)}` : null;
+      return v !== null ? [`${c.label} ${formatElapsed(v)}`] : [];
     });
-    const text = `${name} — ${race.name}, ${meetName}: ${finish !== null ? formatElapsed(finish) : status ? status.short : "in progress"}${row?.officialPlace != null ? `, ${row.officialPlace}${ordinal(row.officialPlace)}` : ""} · ${parts.filter(Boolean).join(" · ")}`;
+    const headline = finish !== null ? formatElapsed(finish) : status ? status.short : raceClockMs !== null ? "in progress" : parts.length ? "" : "not started";
+    const text = [`${name} — ${race.name}, ${meetName}`, headline, row?.officialPlace != null ? `${row.officialPlace}${ordinal(row.officialPlace)} place` : "", ...parts]
+      .filter(Boolean)
+      .join(" · ");
     try {
-      if (navigator.share) await navigator.share({ title: name, text, url: window.location.href });
-      else await navigator.clipboard.writeText(`${text}\n${window.location.href}`);
+      if (navigator.share) {
+        await navigator.share({ title: name, text, url: window.location.href });
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(`${text}\n${window.location.href}`);
+        onShared("Link copied");
+      } else {
+        onShared("Copy the address bar to share this");
+      }
     } catch {
       // dismissed
     }

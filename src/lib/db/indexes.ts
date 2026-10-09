@@ -36,7 +36,11 @@ export const INDEXES: Partial<Record<CollectionName, IndexDescription[]>> = {
     { key: { clientTapId: 1 }, unique: true },
   ],
   users: [{ key: { schoolId: 1, email: 1 }, unique: true }],
-  sessions: [{ key: { tokenHash: 1 }, unique: true }],
+  sessions: [
+    { key: { tokenHash: 1 }, unique: true },
+    // Who's recording where: polled every few seconds per race.
+    { key: { "presence.raceId": 1, "presence.at": 1 }, partialFilterExpression: { "presence.raceId": { $type: "string" } } },
+  ],
   pins: [{ key: { userId: 1 } }],
 };
 

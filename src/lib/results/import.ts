@@ -158,11 +158,11 @@ export async function commitImport(meet: Meet, plans: ImportPlan[], raw: string,
       if (athlete) await upsertResult(athlete, null, null);
     }
 
-    // Official results mean the race is over: stop the clock if nobody has yet.
-    await collection(db, "races").updateOne(
-      { _id: race._id },
-      { $set: { officialImportId: importDoc._id, finishedAt: race.finishedAt ?? now, updatedAt: now, updatedBy: actor } },
-    );
+    // Official results mean the race is over: stop the clock if nobody has yet, at the last
+    // official finish when the gun is known (so the card's elapsed time is the race's, not the import's).
+    const lastFinish = Math.max(0, ...contest.entries.map((e) => e.finishMs ?? 0));
+    const finishedAt = race.finishedAt ?? (race.gunTimeMs !== null && lastFinish > 0 ? new Date(race.gunTimeMs + lastFinish) : now);
+    await collection(db, "races").updateOne({ _id: race._id }, { $set: { officialImportId: importDoc._id, finishedAt, updatedAt: now, updatedBy: actor } });
   }
   return { importId: importDoc._id };
 }

@@ -18,13 +18,20 @@ async function main() {
     { sport: "xc", "settings.raceCategories.id": { $ne: "mixed" } },
     { $push: { "settings.raceCategories": { id: "mixed", label: "Mixed", gender: null } } },
   );
-  // Races imported before imports stopped the clock: mark them finished at the import time.
-  const r8 = await collection(db, "races").updateMany({ officialImportId: { $ne: null }, finishedAt: null }, [{ $set: { finishedAt: "$updatedAt" } }]);
+  // Races imported before imports stopped the clock: finished at the last official finish (gun known), else the import time.
+  let r8 = 0;
+  for (const race of await collection(db, "races").find({ officialImportId: { $ne: null }, finishedAt: null }).toArray()) {
+    const results = await collection(db, "results").find({ raceId: race._id, deletedAt: null }).toArray();
+    const last = Math.max(0, ...results.map((r) => (r.mark?.type === "time" ? r.mark.value : 0)));
+    const finishedAt = race.gunTimeMs !== null && last > 0 ? new Date(race.gunTimeMs + last) : race.updatedAt;
+    await collection(db, "races").updateOne({ _id: race._id }, { $set: { finishedAt } });
+    r8 += 1;
+  }
   const r3 = await collection(db, "schools").updateMany(
     { "settings.teamAliases": { $exists: false } },
     { $set: { "settings.teamAliases": ["Sheboygan Lutheran", "Sheboygan Area Lutheran", "Sheboygan Area Lutheran HS"] } },
   );
-  console.log(`races.finishedAt: ${r1.modifiedCount}, races.officialImportId: ${r2.modifiedCount}, races.liveFeed: ${r4.modifiedCount}, meets.resultsUrl: ${r5.modifiedCount}, schools.viewerLink: ${r6.modifiedCount}, programs.mixedCategory: ${r7.modifiedCount}, races.finishedByImport: ${r8.modifiedCount}, schools.teamAliases: ${r3.modifiedCount}`);
+  console.log(`races.finishedAt: ${r1.modifiedCount}, races.officialImportId: ${r2.modifiedCount}, races.liveFeed: ${r4.modifiedCount}, meets.resultsUrl: ${r5.modifiedCount}, schools.viewerLink: ${r6.modifiedCount}, programs.mixedCategory: ${r7.modifiedCount}, races.finishedByImport: ${r8}, schools.teamAliases: ${r3.modifiedCount}`);
 }
 
 main()
