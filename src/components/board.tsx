@@ -689,7 +689,7 @@ function AthleteSheet({
       title={
         <span className="flex items-baseline gap-2">
           <span className="text-xl font-semibold tracking-tight">{name}</span>
-          {grade !== null && <span className="text-[13px] font-normal text-ink-3">Gr {grade}</span>}
+          {grade !== null && <span className="text-[13px] font-normal text-ink-3">{grade}</span>}
         </span>
       }
       subtitle={subtitle}
@@ -804,14 +804,23 @@ function AthleteSheet({
         })}
       </div>
       <div className="mt-4 flex items-center justify-between gap-2">
-        <Button variant="secondary" size="sm" onClick={() => neighbors.prev && onPick(neighbors.prev.id)} disabled={!neighbors.prev} className="min-w-0 max-w-[48%]">
-          <ChevronLeft className="size-4 shrink-0" />
-          <span className="truncate">{neighbors.prev?.name ?? "First"}</span>
-        </Button>
-        <Button variant="secondary" size="sm" onClick={() => neighbors.next && onPick(neighbors.next.id)} disabled={!neighbors.next} className="min-w-0 max-w-[48%]">
-          <span className="truncate">{neighbors.next?.name ?? "Last"}</span>
-          <ChevronRight className="size-4 shrink-0" />
-        </Button>
+        {/* At either end the button simply isn't there; the space stays so the other one doesn't jump. */}
+        {neighbors.prev ? (
+          <Button variant="secondary" size="sm" onClick={() => onPick(neighbors.prev!.id)} className="min-w-0 max-w-[48%]">
+            <ChevronLeft className="size-4 shrink-0" />
+            <span className="truncate">{neighbors.prev.name}</span>
+          </Button>
+        ) : (
+          <span />
+        )}
+        {neighbors.next ? (
+          <Button variant="secondary" size="sm" onClick={() => onPick(neighbors.next!.id)} className="min-w-0 max-w-[48%]">
+            <span className="truncate">{neighbors.next.name}</span>
+            <ChevronRight className="size-4 shrink-0" />
+          </Button>
+        ) : (
+          <span />
+        )}
       </div>
       <p className="mt-2 text-xs text-ink-3">
         {officialCount === 0 && timedCount > 0 && "Times are from the app, not the timing company. "}
