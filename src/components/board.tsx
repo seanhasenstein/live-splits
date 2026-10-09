@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Pencil } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { CheckpointCounts, DeltaText, RaceStatusBar } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
 import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
@@ -351,7 +351,11 @@ function RaceBoard({
               </tr>
             )}
             {rows.map((row) => (
-              <tr key={row.athleteId} className={row.reached < 0 ? "text-ink-3" : ""}>
+              <tr
+                key={row.athleteId}
+                onClick={editing ? undefined : () => setAthleteSheet(row.athleteId)}
+                className={`${row.reached < 0 ? "text-ink-3" : ""} ${editing ? "" : "cursor-pointer hover:bg-surface-2 active:bg-surface-2"}`}
+              >
                 <td className={`px-3 py-2 align-top font-medium sm:px-4 ${row.reached < 0 ? "" : "text-ink"}`}>
                   {/* Place in its own column so a wrapped name hangs under its first line, not under the number. */}
                   <span className="flex items-start gap-2">
@@ -362,9 +366,8 @@ function RaceBoard({
                           {athletes[row.athleteId]}
                         </button>
                       ) : (
-                        <button type="button" onClick={() => setAthleteSheet(row.athleteId)} className="-mx-1.5 inline-flex items-center gap-0.5 rounded px-1.5 py-1 text-left hover:bg-surface-2" title="Splits, pace and comparison">
+                        <button type="button" onClick={() => setAthleteSheet(row.athleteId)} className="-mx-1.5 rounded px-1.5 py-1 text-left">
                           {athletes[row.athleteId]}
-                          <ChevronRight className="size-3.5 shrink-0 text-ink-3" aria-hidden />
                         </button>
                       )}
                       {row.status ? (
@@ -491,7 +494,7 @@ function RaceBoard({
       )}
 
       <p className="mt-3 text-xs text-ink-3">
-        {!editing && "Tap a name for that runner's splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a ~ time marked projected is a guess from the runner's last split${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : "Official times replace app taps where imported. ")}{" "}
+        {!editing && "Tap a runner for their splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a ~ time marked projected is a guess from the runner's last split${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : "Official times replace app taps where imported. ")}{" "}
         {view === "splits"
           ? "Splits are the time since the previous checkpoint; beneath each, the pace per mile and the change from the previous segment (+ slower, − faster). The finish column also shows the finish time."
           : "Cumulative time from the gun, with the split beneath and the pace change from the previous segment (+ slower, − faster)."}{" "}
