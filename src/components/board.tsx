@@ -5,7 +5,7 @@ import { type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, u
 import { Pencil } from "lucide-react";
 import { CheckpointCounts, DeltaText, RaceStatusBar } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
-import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
+import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Sheet, Stat, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type AthleteStatus, type CheckpointState, expectedAt, type Mark, replay, replayStatuses, type Slot, STATUS_LABEL, STATUS_LONG } from "@/lib/replay";
@@ -520,6 +520,14 @@ function RaceBoard({
             return r ? projectAt(r, i) : null;
           }}
           overdue={staff ? overdue : () => false}
+          teamRank={(() => {
+            if (finishIndex < 0) return null;
+            const t = rows.find((x) => x.athleteId === athleteSheet);
+            const mine = t ? elapsedAt(t, finishIndex) : null;
+            if (mine === null) return null;
+            return { rank: finishTimes.filter((x) => x < mine).length + 1, of: finishTimes.length };
+          })()}
+          raceClockMs={!isFinished && gunTimeMs !== null && nowMs > 0 ? nowMs - gunTimeMs : null}
           history={race.history.byAthlete[athleteSheet]}
           onClose={() => setAthleteSheet(null)}
         />
@@ -573,6 +581,8 @@ function AthleteSheet({
   projectAt,
   overdue,
   history,
+  teamRank,
+  raceClockMs,
   onClose,
 }: {
   race: RaceInfo;
@@ -583,6 +593,10 @@ function AthleteSheet({
   projectAt: (i: number) => number | null;
   overdue: (projected: number) => boolean;
   history: LineupHistory["byAthlete"][string] | undefined;
+  /** Position among our finishers in this race, e.g. { rank: 3, of: 7 }. */
+  teamRank: { rank: number; of: number } | null;
+  /** Elapsed race time right now (ms), while the race runs. */
+  raceClockMs: number | null;
   onClose: () => void;
 }) {
   const last = lastFinished(history);
@@ -597,6 +611,8 @@ function AthleteSheet({
   const officialCount = row ? row.cells.filter((c) => c.official !== null).length : 0;
   const timedCount = row ? row.cells.filter((c) => c.official !== null || c.absoluteMs !== null).length : 0;
   const finishOfficial = finishIndex >= 0 && row?.cells[finishIndex]?.official !== null && row?.cells[finishIndex]?.official !== undefined;
+  // Where they were last seen on the course.
+  const lastSeen = row && row.reached >= 0 && t(row.reached) !== null ? { label: race.checkpoints[row.reached].label, at: t(row.reached)! } : null;
   // Out of the race: the status is the headline, not a footnote.
   const status: { short: string; long: string } | null =
     row?.officialStatus && row.officialStatus !== "finished"
@@ -607,7 +623,7 @@ function AthleteSheet({
             long: `${STATUS_LONG[row.status.status]}${row.status.afterCheckpointId ? ` · after ${race.checkpoints.find((c) => c.id === row.status!.afterCheckpointId)?.label ?? ""}` : ""}`,
           }
         : null;
-  const subtitle = [race.name, meetName, row?.officialPlace !== null && row?.officialPlace !== undefined ? `${row.officialPlace}${ordinal(row.officialPlace)} place` : null].filter(Boolean).join(" · ");
+  const subtitle = `${race.name} · ${meetName}`;
   const refAt = (i: number): number | null => {
     if (!last) return null;
     const c = race.checkpoints[i];
@@ -616,7 +632,7 @@ function AthleteSheet({
 
   return (
     <Sheet title={name} subtitle={subtitle} onClose={onClose}>
-      <div className="mb-4 flex items-end justify-between gap-3">
+      <div className="mb-3 flex items-end justify-between gap-3">
         <div>
           {status && finish === null ? (
             <>
@@ -632,13 +648,28 @@ function AthleteSheet({
             </>
           )}
         </div>
-        {last && last.finishMs !== null && (
+        {raceClockMs !== null && finish === null && !status && (
           <div className="text-right">
-            <div className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">vs last meet</div>
-            <Time className="text-xl font-semibold">{finish !== null ? <DeltaText ms={finish - last.finishMs} /> : <span className="text-ink-2">{formatElapsed(last.finishMs)}</span>}</Time>
+            <div className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">Race clock</div>
+            <Time className="text-xl font-semibold text-ink">{formatElapsed(raceClockMs).replace(/\.\d$/, "")}</Time>
           </div>
         )}
       </div>
+      {(row?.officialPlace != null || teamRank || (last && last.finishMs !== null) || (raceClockMs !== null && finish === null && !status)) && (
+        <div className="mb-4 flex flex-wrap gap-x-5 gap-y-2">
+          {row?.officialPlace != null && <Stat value={`${row.officialPlace}${ordinal(row.officialPlace)}`} label="place" />}
+          {teamRank && <Stat value={`${teamRank.rank}${ordinal(teamRank.rank)}`} label={`of ${teamRank.of} on the team`} />}
+          {last && last.finishMs !== null && (
+            <div>
+              <Time className="block text-xl font-semibold">{finish !== null ? <DeltaText ms={finish - last.finishMs} /> : <span className="text-ink-2">{formatElapsed(last.finishMs)}</span>}</Time>
+              <span className="block text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">{finish !== null ? "vs last meet" : "last meet"}</span>
+            </div>
+          )}
+          {raceClockMs !== null && finish === null && !status && lastSeen && (
+            <Stat value={`${formatElapsed(Math.max(0, raceClockMs - lastSeen.at)).replace(/\.\d$/, "")} ago`} label={`passed ${lastSeen.label}`} />
+          )}
+        </div>
+      )}
       <div className="divide-y divide-line rounded-lg border border-line">
         {/* Flex with fixed right-hand columns: Safari's grid skips re-layout when a cell's content changes under an open sheet. */}
         <div className="flex items-center gap-x-3 px-3 py-1.5 text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
