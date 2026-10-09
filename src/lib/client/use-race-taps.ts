@@ -44,6 +44,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
   const [recording, setRecording] = useState<Recording[]>([]);
   /** When each tap first arrived here (epoch ms); the board flashes times younger than a few seconds. */
   const [seenAt, setSeenAt] = useState<Map<string, number>>(() => new Map());
+  const firstLoadDone = useRef(false);
   const atRef = useRef(at);
   useEffect(() => {
     atRef.current = at;
@@ -85,15 +86,19 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
           for (const t of body.taps) next.set(t.clientTapId, t);
           return next;
         });
-        setSeenAt((prev) => {
-          const fresh = body.taps.filter((t) => !prev.has(t.clientTapId));
-          if (fresh.length === 0) return prev;
-          const next = new Map(prev);
-          const now = Date.now();
-          for (const t of fresh) next.set(t.clientTapId, now);
-          return next;
-        });
+        // Only taps that arrive after the first load count as "fresh"; the first load isn't news.
+        if (firstLoadDone.current) {
+          setSeenAt((prev) => {
+            const fresh = body.taps.filter((t) => !prev.has(t.clientTapId));
+            if (fresh.length === 0) return prev;
+            const next = new Map(prev);
+            const now = Date.now();
+            for (const t of fresh) next.set(t.clientTapId, now);
+            return next;
+          });
+        }
       }
+      firstLoadDone.current = true;
       setOnline(true);
       setLoaded(true);
     } catch {

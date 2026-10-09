@@ -237,7 +237,7 @@ function RaceBoard({
     <>
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-1">
-          <RaceStatusBar finished={isFinished} gunTimeMs={gunTimeMs} now={clock.now} official={hasOfficial ? (officialLive ? "live" : "imported") : undefined} />
+          <RaceStatusBar finished={isFinished} gunTimeMs={gunTimeMs} now={clock.now} official={hasOfficial ? (officialLive ? "live" : "imported") : "none"} />
           {hasOfficial && !isFinished && !gunTimeMs && <Badge tone="brand">Official results</Badge>}
           {staleMinutes > 0 && <Badge tone="gold">updated {staleMinutes} min ago</Badge>}
           {!online && (
@@ -415,7 +415,7 @@ function RaceBoard({
                   const cellNode = (
                     <>
                       {projected !== null ? (
-                        <span className={`block ${staff && overdue(projected) ? "text-gold-text" : "text-ink-3"}`}>
+                        <span className={`block ${staff && overdue(projected) ? "text-gold-text/75" : "text-ink-3"}`}>
                           <Time className="block">~{formatElapsed(projected).replace(/\.\d$/, "")}</Time>
                           <span className="block text-[10px] tracking-wide uppercase">{staff && overdue(projected) ? "overdue" : "projected"}</span>
                         </span>
@@ -660,7 +660,7 @@ function AthleteSheet({
                 if (p === null) return <Time className="w-16 shrink-0 text-right font-semibold text-ink">{cell?.missed ? "missed" : here !== null ? formatElapsed(here) : "—"}</Time>;
                 const late = overdue(p);
                 return (
-                  <span className={`w-16 shrink-0 text-right ${late ? "text-gold-text" : "text-ink-3"}`}>
+                  <span className={`w-16 shrink-0 text-right ${late ? "text-gold-text/75" : "text-ink-3"}`}>
                     <Time className="block">~{formatElapsed(p).replace(/\.\d$/, "")}</Time>
                     <span className="block text-[10px] tracking-wide uppercase">{late ? "overdue" : "projected"}</span>
                   </span>

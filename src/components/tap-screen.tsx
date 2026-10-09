@@ -612,7 +612,7 @@ function RaceTapper({
       />
       <div className="sticky top-14 z-10 space-y-2 border-b border-line bg-bg/95 px-3 py-2.5 backdrop-blur">
         <div className="flex items-center gap-2">
-          <RaceStatusBar name={race.name} finished={isFinished} gunTimeMs={gunTimeMs} now={clock.now} official={Object.keys(official).length ? (officialLive ? "live" : "imported") : undefined} />
+          <RaceStatusBar name={race.name} finished={isFinished} gunTimeMs={gunTimeMs} now={clock.now} official={Object.keys(official).length ? (officialLive ? "live" : "imported") : "none"} />
           <ClockWarning sync={clock.sync} error={clock.error} />
           {signedOut ? (
             <Link href="/join">
