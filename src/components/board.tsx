@@ -177,12 +177,8 @@ function RaceBoard({
     <>
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-1">
-          <RaceStatusBar finished={isFinished} gunTimeMs={gunTimeMs} now={clock.now} />
-          {hasOfficial && (
-            <Badge tone="brand" dot={officialLive} pulse={officialLive}>
-              {officialLive ? "Official results · live" : "Official results"}
-            </Badge>
-          )}
+          <RaceStatusBar finished={isFinished} gunTimeMs={gunTimeMs} now={clock.now} official={hasOfficial ? (officialLive ? "live" : "imported") : undefined} />
+          {hasOfficial && !isFinished && !gunTimeMs && <Badge tone="brand">Official results</Badge>}
           {staleMinutes > 0 && <Badge tone="gold">updated {staleMinutes} min ago</Badge>}
           {!online && (
             <Badge tone="danger" dot>

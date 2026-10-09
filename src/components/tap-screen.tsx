@@ -282,7 +282,7 @@ function RaceTapper({
 }) {
   const clock = useClock();
   const checkpoint = race.checkpoints[cpIndex];
-  const { taps, gunTimeMs, official, finished, staleMinutes, send, online, signedOut, rejected, loaded, unsent } = useRaceTaps(race.id, race.gunTimeMs);
+  const { taps, gunTimeMs, official, officialLive, finished, staleMinutes, send, online, signedOut, rejected, loaded, unsent } = useRaceTaps(race.id, race.gunTimeMs);
   const isFinished = race.finished || finished;
   const officialAt = (athleteId: string): number | null => {
     const o = official[athleteId];
@@ -596,7 +596,7 @@ function RaceTapper({
       />
       <div className="sticky top-14 z-10 space-y-2 border-b border-line bg-bg/95 px-3 py-2.5 backdrop-blur">
         <div className="flex items-center gap-2">
-          <RaceStatusBar name={race.name} finished={isFinished} gunTimeMs={gunTimeMs} now={clock.now} />
+          <RaceStatusBar name={race.name} finished={isFinished} gunTimeMs={gunTimeMs} now={clock.now} official={Object.keys(official).length ? (officialLive ? "live" : "imported") : undefined} />
           <ClockWarning sync={clock.sync} error={clock.error} />
           {signedOut ? (
             <Link href="/join">

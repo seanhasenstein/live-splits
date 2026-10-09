@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Flag } from "lucide-react";
+import { Award, Check, Flag } from "lucide-react";
 import { useEffect, useState } from "react";
 import { LiveDot, Stat, Time } from "@/components/ui";
 import { formatElapsed } from "@/lib/time";
@@ -15,12 +15,15 @@ export function RaceStatusBar({
   finished,
   gunTimeMs,
   now,
+  official,
 }: {
   /** Race name, shown in the bar when given. */
   name?: string;
   finished: boolean;
   gunTimeMs: number | null;
   now: () => number | null;
+  /** Official times are on the board: imported, or arriving live from the timing company's feed. */
+  official?: "imported" | "live";
 }) {
   const [, tick] = useState(0);
   useEffect(() => {
@@ -39,6 +42,7 @@ export function RaceStatusBar({
         </span>
         {prefix}
         <span className="shrink-0 text-sm font-semibold">Race finished</span>
+        {official && <OfficialPill live={official === "live"} className="bg-brand-ink/20 text-brand-ink" />}
       </div>
     );
   }
@@ -60,6 +64,7 @@ export function RaceStatusBar({
       {prefix}
       <span className="shrink-0 text-sm font-semibold">In progress</span>
       <Time className="shrink-0 text-2xl font-semibold tracking-tight text-ink">{n === null ? "—" : formatElapsed(n - gunTimeMs)}</Time>
+      {official && <OfficialPill live={official === "live"} className="bg-danger/15 text-danger" />}
     </div>
   );
 }
@@ -99,6 +104,16 @@ export function CheckpointCounts({
         );
       })}
     </div>
+  );
+}
+
+/** Sits at the right end of the status bar, as loud as the state itself. */
+function OfficialPill({ live, className }: { live: boolean; className: string }) {
+  return (
+    <span className={`ml-auto flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold tracking-[0.06em] uppercase ${className}`}>
+      {live ? <LiveDot className="bg-current" /> : <Award className="size-3.5" />}
+      {live ? "Official · live" : "Official results"}
+    </span>
   );
 }
 
