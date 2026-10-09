@@ -685,7 +685,16 @@ function AthleteSheet({
   };
 
   return (
-    <Sheet title={<span className="text-xl font-semibold tracking-tight">{name}</span>} subtitle={subtitle} onClose={onClose}>
+    <Sheet
+      title={<span className="text-xl font-semibold tracking-tight">{name}</span>}
+      subtitle={subtitle}
+      actions={
+        <button type="button" onClick={share} aria-label="Share" title="Share" className="rounded-md p-1 text-ink-3 hover:bg-surface-2 hover:text-ink">
+          <Share className="size-5" />
+        </button>
+      }
+      onClose={onClose}
+    >
       <div className="mt-2 mb-3 flex items-end justify-between gap-3">
         <div>
           {status && finish === null ? (
@@ -790,14 +799,11 @@ function AthleteSheet({
         })}
       </div>
       <div className="mt-4 flex items-center justify-between gap-2">
-        <Button variant="secondary" size="sm" onClick={() => neighbors.prev && onPick(neighbors.prev.id)} disabled={!neighbors.prev} className="min-w-0 max-w-[40%]">
+        <Button variant="secondary" size="sm" onClick={() => neighbors.prev && onPick(neighbors.prev.id)} disabled={!neighbors.prev} className="min-w-0 max-w-[48%]">
           <ChevronLeft className="size-4 shrink-0" />
           <span className="truncate">{neighbors.prev?.name ?? "First"}</span>
         </Button>
-        <Button variant="subtle" size="sm" onClick={share} aria-label="Share">
-          <Share className="size-4" />
-        </Button>
-        <Button variant="secondary" size="sm" onClick={() => neighbors.next && onPick(neighbors.next.id)} disabled={!neighbors.next} className="min-w-0 max-w-[40%]">
+        <Button variant="secondary" size="sm" onClick={() => neighbors.next && onPick(neighbors.next.id)} disabled={!neighbors.next} className="min-w-0 max-w-[48%]">
           <span className="truncate">{neighbors.next?.name ?? "Last"}</span>
           <ChevronRight className="size-4 shrink-0" />
         </Button>
@@ -820,11 +826,9 @@ function SmallStat({ value, label, align = "left" }: { value: ReactNode; label: 
   );
 }
 
-/** 9–12 as class years; anything else as "7th grade". */
+/** As results sheets print it: "Grade 10". */
 function gradeWord(grade: number | null): string | null {
-  if (grade === null) return null;
-  const words: Record<number, string> = { 9: "Freshman", 10: "Sophomore", 11: "Junior", 12: "Senior" };
-  return words[grade] ?? `${grade}${ordinal(grade)} grade`;
+  return grade === null ? null : `Grade ${grade}`;
 }
 
 const ordinal = (n: number) => (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th");

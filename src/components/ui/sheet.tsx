@@ -5,7 +5,7 @@ import { type ReactNode, useEffect } from "react";
 import { createPortal } from "react-dom";
 
 /** Bottom sheet on phones, centered dialog on wide screens. */
-export function Sheet({ title, subtitle, onClose, children }: { title: ReactNode; subtitle?: ReactNode; onClose: () => void; children: ReactNode }) {
+export function Sheet({ title, subtitle, actions, onClose, children }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
@@ -27,9 +27,12 @@ export function Sheet({ title, subtitle, onClose, children }: { title: ReactNode
             <div className="text-base font-semibold text-ink">{title}</div>
             {subtitle && <div className="mt-0.5 text-[13px] text-ink-2">{subtitle}</div>}
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="-mr-1 rounded-md p-1 text-ink-3 hover:bg-surface-2 hover:text-ink">
-            <X className="size-5" />
-          </button>
+          <div className="-mr-1 flex shrink-0 items-center gap-1">
+            {actions}
+            <button type="button" onClick={onClose} aria-label="Close" className="rounded-md p-1 text-ink-3 hover:bg-surface-2 hover:text-ink">
+              <X className="size-5" />
+            </button>
+          </div>
         </div>
         <div className="min-h-0 overflow-y-auto px-4 pb-4">{children}</div>
       </div>
