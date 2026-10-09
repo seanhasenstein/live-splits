@@ -284,7 +284,7 @@ function RaceBoard({
         <p className="mb-3 text-[13px] text-ink-2">
           <span className="font-medium text-ink">Recording now</span>
           {race.checkpoints
-            .map((c) => ({ c, who: recording.filter((r) => r.checkpointId === c.id).map((r) => r.name) }))
+            .map((c) => ({ c, who: [...new Set(recording.filter((r) => r.checkpointId === c.id).map((r) => r.name))] }))
             .filter(({ who }) => who.length > 0)
             .map(({ c, who }) => (
               <span key={c.id}>
@@ -396,8 +396,9 @@ function RaceBoard({
                   const cellNode = (
                     <>
                       {projected !== null ? (
-                        <span title="Projected from their last split">
-                          <Time className="block text-ink-3">~{formatElapsed(projected).replace(/\.\d$/, "")}</Time>
+                        <span className="block text-ink-3">
+                          <Time className="block">~{formatElapsed(projected).replace(/\.\d$/, "")}</Time>
+                          <span className="block text-[10px] tracking-wide uppercase">projected</span>
                         </span>
                       ) : (
                         <Time className={`block ${cell.missed ? "italic" : last && here !== null && view !== "splits" ? "font-semibold" : ""}`}>
@@ -476,7 +477,7 @@ function RaceBoard({
       )}
 
       <p className="mt-3 text-xs text-ink-3">
-        * edited &nbsp; ~ estimate &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : "Official times replace app taps where imported. ")}{" "}
+        * edited &nbsp; ~ estimate{!isFinished && " · a ~ time marked projected is a guess from the runner's last split"} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : "Official times replace app taps where imported. ")}{" "}
         {view === "splits"
           ? "Splits are the time since the previous checkpoint; beneath each, the pace per mile and the change from the previous segment (+ slower, − faster). The finish column also shows the finish time."
           : "Cumulative time from the gun, with the split beneath and the pace change from the previous segment (+ slower, − faster)."}{" "}
