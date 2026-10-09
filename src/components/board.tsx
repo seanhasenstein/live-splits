@@ -266,7 +266,8 @@ function RaceBoard({
       label: c.label,
       n: rows.filter(has).length,
       out: rows.filter((r) => !has(r) && (!expectedAt(r.status, i, race.checkpoints) || (!!r.officialStatus && r.officialStatus !== "finished"))).length,
-      missed: rows.filter((r) => !has(r) && r.cells[i].missed && expectedAt(r.status, i, race.checkpoints)).length,
+      // Not also counted as out: an official DNS/DNF outranks an app "missed".
+      missed: rows.filter((r) => !has(r) && r.cells[i].missed && expectedAt(r.status, i, race.checkpoints) && !(r.officialStatus && r.officialStatus !== "finished")).length,
     };
   });
 

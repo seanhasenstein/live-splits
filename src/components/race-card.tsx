@@ -206,7 +206,8 @@ function AdjustSheet({
     start(async () => {
       const result = await clearGunTimeAction(raceId);
       if (result.error) setError(result.error);
-      else onChanged({ gunTimeMs: null, finishedAt: null });
+      // An imported race stays finished without its gun (the server keeps finishedAt).
+      else onChanged({ gunTimeMs: null, ...(hasOfficial ? {} : { finishedAt: null }) });
     });
 
   const previewOfficial = () =>

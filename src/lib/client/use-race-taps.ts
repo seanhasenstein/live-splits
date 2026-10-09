@@ -218,7 +218,10 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
         const body = (await res.json()) as { accepted: string[]; gunTimeMs: number | null };
         await outboxRemove(body.accepted);
         if (rid === raceId) {
-          setGunTimeMs(body.gunTimeMs);
+          // Same guard as the poll: a response from before this device fired the gun must not unset it.
+          const gun = body.gunTimeMs === null && adoptedAt.current && Date.now() - adoptedAt.current < 15_000 ? stateRef.current.gunTimeMs : body.gunTimeMs;
+          setGunTimeMs(gun);
+          stateRef.current = { ...stateRef.current, gunTimeMs: gun };
           // Keep showing accepted taps until the next poll returns them from the server.
           const accepted = new Set(body.accepted);
           setServerTaps((prev) => {
