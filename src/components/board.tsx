@@ -108,7 +108,7 @@ export function Board({ meetId, meetName, session, initialRaceId, timeZone, race
 }
 
 /** One board cell: official time if imported, else the app's mark. `elapsedMs` is from the gun (null without one). */
-type Cell = { mark: Mark | undefined; official: number | null; elapsedMs: number | null; absoluteMs: number | null; missed: boolean };
+type Cell = { mark: Mark | undefined; official: number | null; elapsedMs: number | null; absoluteMs: number | null; missed: boolean; beforeGun?: boolean };
 type Row = { athleteId: string; marks: (Mark | undefined)[]; cells: Cell[]; reached: number; officialStatus: string | null; officialPlace: number | null; status: AthleteStatus | undefined };
 
 function RaceBoard({
@@ -208,7 +208,7 @@ function RaceBoard({
   }, []);
 
   const fmt = useCallback(
-    (ms: number | null) => (ms === null ? "—" : gunTimeMs ? formatElapsed(ms - gunTimeMs) : formatClock(ms, timeZone)),
+    (ms: number | null) => (ms === null ? "—" : gunTimeMs ? (ms < gunTimeMs ? "before gun" : formatElapsed(ms - gunTimeMs)) : formatClock(ms, timeZone)),
     [gunTimeMs, timeZone],
   );
 
@@ -225,9 +225,11 @@ function RaceBoard({
       const cells = race.checkpoints.map((c, i): Cell => {
         const m = marks[i];
         const o = off?.byCheckpoint[c.id] ?? (c.kind === "finish" ? (off?.finishMs ?? null) : null);
-        if (o !== null && o !== undefined) return { mark: m, official: o, elapsedMs: o, absoluteMs: null, missed: false };
+        if (o !== null && o !== undefined) return { mark: m, official: o, elapsedMs: o, absoluteMs: null, missed: false, beforeGun: false };
         const abs = m && !m.missed && m.timeMs !== null ? m.timeMs : null;
-        return { mark: m, official: null, elapsedMs: abs !== null && gunTimeMs ? abs - gunTimeMs : null, absoluteMs: abs, missed: !!m?.missed };
+        // A tap from before the gun (race restarted) isn't a time: shown as "before gun", counted as nothing.
+        const beforeGun = abs !== null && !!gunTimeMs && abs < gunTimeMs;
+        return { mark: m, official: null, elapsedMs: abs !== null && gunTimeMs && !beforeGun ? abs - gunTimeMs : null, absoluteMs: beforeGun ? null : abs, missed: !!m?.missed, beforeGun };
       });
       let reached = -1;
       cells.forEach((cell, i) => {
@@ -484,7 +486,7 @@ function RaceBoard({
                   const prevPace = prevSplit !== null ? paceMsPerMile(prevSplit, race.checkpoints[i - 1].meters - (i > 1 ? race.checkpoints[i - 2].meters : 0)) : null;
                   const last = i === row.cells.length - 1;
                   const cumulative = cell.official !== null ? formatElapsed(cell.official) : cell.absoluteMs !== null ? fmt(cell.absoluteMs) : "—";
-                  const shown = cell.missed ? "missed" : view === "splits" && i > 0 ? (split === null ? "—" : formatElapsed(split)) : cumulative;
+                  const shown = cell.missed ? "missed" : cell.beforeGun ? "before gun" : view === "splits" && i > 0 ? (split === null ? "—" : formatElapsed(split)) : cumulative;
                   const flag = cell.official !== null ? "" : m && !cell.missed && shown !== "—" ? (m.estimate ? "~" : m.edited ? "*" : "") : "";
                   const projected = here === null && !cell.missed ? projectAt(row, i) : null;
                   const fresh = isFresh(m?.tapId);
@@ -496,7 +498,7 @@ function RaceBoard({
                           <span className="block text-[10px] tracking-wide uppercase">{staff && overdue(projected) ? "overdue" : "projected"}</span>
                         </span>
                       ) : (
-                        <Time className={`block ${cell.missed ? "italic" : last && here !== null && view !== "splits" ? "font-semibold" : ""}`}>
+                        <Time className={`block ${cell.missed || cell.beforeGun ? "italic" : last && here !== null && view !== "splits" ? "font-semibold" : ""}`}>
                           {shown}
                           {flag}
                         </Time>

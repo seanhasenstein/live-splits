@@ -307,7 +307,7 @@ function RaceTapper({
       const o = official[id];
       const hasOfficial = o ? (o.byCheckpoint[c.id] ?? (c.kind === "finish" ? o.finishMs : null)) !== null : false;
       const m = state.get(c.id)?.byAthlete.get(id);
-      return hasOfficial || (!!m && !m.missed);
+      return hasOfficial || (!!m && !m.missed && !(gunTimeMs && m.timeMs !== null && m.timeMs < gunTimeMs));
     };
     const missed = (id: string) => !has(id) && !!state.get(c.id)?.byAthlete.get(id)?.missed;
     return {
@@ -399,7 +399,7 @@ function RaceTapper({
   const cumAt = (index: number, id: string): number | null => {
     if (index < 0) return 0;
     const m = state.get(race.checkpoints[index].id)?.byAthlete.get(id);
-    return m && !m.missed && m.timeMs !== null && gunTimeMs ? m.timeMs - gunTimeMs : null;
+    return m && !m.missed && m.timeMs !== null && gunTimeMs && m.timeMs >= gunTimeMs ? m.timeMs - gunTimeMs : null;
   };
   const tileTimes = (id: string) => {
     const here = cumAt(cpIndex, id);
@@ -525,8 +525,9 @@ function RaceTapper({
     setTimeout(() => setFlashId((f) => (f === id ? null : f)), FLASH_MS);
   };
 
+  // A tap from before the gun (the race was restarted) isn't a split; say so rather than show a negative time.
   const fmt = useCallback(
-    (ms: number | null) => (ms === null ? "—" : gunTimeMs ? formatElapsed(ms - gunTimeMs) : formatClock(ms, timeZone)),
+    (ms: number | null) => (ms === null ? "—" : gunTimeMs ? (ms < gunTimeMs ? "before gun" : formatElapsed(ms - gunTimeMs)) : formatClock(ms, timeZone)),
     [gunTimeMs, timeZone],
   );
 
@@ -751,7 +752,8 @@ function RaceTapper({
               </div>
             );
           }
-          const done = !!mark && !mark.missed;
+          const beforeGun = !!mark && !mark.missed && !!gunTimeMs && mark.timeMs !== null && mark.timeMs < gunTimeMs;
+          const done = !!mark && !mark.missed && !beforeGun;
           const status = statuses.get(id);
           const out = !!status && !done && !expectedAt(status, cpIndex, race.checkpoints);
           if (confirmId === id) {
