@@ -13,7 +13,7 @@ import { useLocalValue } from "@/lib/client/use-local-value";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
 import { type OrderMode, lastFinished, orderAthletes, orderKey, parseOrderMode } from "@/lib/order";
-import { paceMsPerMile } from "@/lib/pace";
+import { paceMsPerMile, projectElapsed } from "@/lib/pace";
 import { type AthleteStatus, expectedAt, type Mark, replay, replayStatuses, type Slot, type SlotWithNames, STATUS_LABEL, STATUS_LONG, type TapLike } from "@/lib/replay";
 import type { LineupHistory, PriorResult } from "@/lib/results/history";
 import { formatClock, formatElapsed } from "@/lib/time";
@@ -397,15 +397,14 @@ function RaceTapper({
       if (prevSegment !== null && segMeters > 0 && prevSegMeters > 0) paceDelta = paceMsPerMile(segment, segMeters) - paceMsPerMile(prevSegment, prevSegMeters);
     }
     // When they're due here, at the pace of their last recorded segment (none for anyone out of the race).
-    let due: number | null = null;
-    if (here === null && gunTimeMs && !isFinished && expectedAt(statuses.get(id), cpIndex, race.checkpoints)) {
-      let lastIdx = -1;
-      for (let i = cpIndex - 1; i >= 0; i--) if (cumAt(i, id) !== null) { lastIdx = i; break; }
-      const lastCum = lastIdx >= 0 ? cumAt(lastIdx, id) : null;
-      const before = lastIdx > 0 ? cumAt(lastIdx - 1, id) : lastIdx === 0 ? 0 : null;
-      const lastMeters = lastIdx >= 0 ? race.checkpoints[lastIdx].meters - (lastIdx > 0 ? race.checkpoints[lastIdx - 1].meters : 0) : 0;
-      if (lastCum !== null && before !== null && lastMeters > 0) due = lastCum + ((lastCum - before) / lastMeters) * (checkpoint.meters - race.checkpoints[lastIdx].meters);
-    }
+    const due =
+      here === null && gunTimeMs && !isFinished && expectedAt(statuses.get(id), cpIndex, race.checkpoints)
+        ? projectElapsed(
+            race.checkpoints.map((c) => c.meters),
+            race.checkpoints.map((_, j) => cumAt(j, id)),
+            cpIndex,
+          )
+        : null;
     return { here, prevCum: cpIndex > 0 ? prevCum : null, segment, paceDelta, due };
   };
 

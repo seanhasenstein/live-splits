@@ -12,7 +12,7 @@ import { type AthleteStatus, type CheckpointState, expectedAt, type Mark, replay
 import type { AthleteRaceStatus } from "@/lib/db/schema";
 import { lastFinished } from "@/lib/order";
 import type { LineupHistory } from "@/lib/results/history";
-import { METERS_PER_MILE, paceMsPerMile } from "@/lib/pace";
+import { METERS_PER_MILE, paceMsPerMile, projectElapsed } from "@/lib/pace";
 import { formatClock, formatElapsed, parseElapsed } from "@/lib/time";
 
 type RaceInfo = {
@@ -226,15 +226,12 @@ function RaceBoard({
    * Only for checkpoints after their last real time, and never for anyone out of the race.
    */
   const projectAt = (row: Row, i: number): number | null => {
-    if (isFinished || row.reached < 0 || i <= row.reached) return null;
-    if (row.status || (row.officialStatus && row.officialStatus !== "finished")) return null;
-    const here = elapsedAt(row, row.reached);
-    if (here === null) return null;
-    const before = row.reached > 0 ? elapsedAt(row, row.reached - 1) : 0;
-    const segMeters = race.checkpoints[row.reached].meters - (row.reached > 0 ? race.checkpoints[row.reached - 1].meters : 0);
-    if (before === null || segMeters <= 0) return null;
-    const pacePerMeter = (here - before) / segMeters;
-    return here + pacePerMeter * (race.checkpoints[i].meters - race.checkpoints[row.reached].meters);
+    if (isFinished || row.status || (row.officialStatus && row.officialStatus !== "finished")) return null;
+    return projectElapsed(
+      race.checkpoints.map((c) => c.meters),
+      race.checkpoints.map((_, j) => elapsedAt(row, j)),
+      i,
+    );
   };
   // "Overdue" is a cue for the people who can do something about it; viewers just see the projection.
   const staff = canFix || canTap;
