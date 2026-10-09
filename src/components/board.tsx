@@ -5,7 +5,7 @@ import { type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, u
 import { Pencil } from "lucide-react";
 import { CheckpointCounts, DeltaText, RaceStatusBar } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
-import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
+import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, LiveDot, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type AthleteStatus, type CheckpointState, expectedAt, type Mark, replay, replayStatuses, type Slot, STATUS_LABEL, STATUS_LONG } from "@/lib/replay";
@@ -662,7 +662,10 @@ function AthleteSheet({
           finish === null &&
           !status && (
             <div className="text-right">
-              <div className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">Race clock</div>
+              <div className="flex items-center justify-end gap-1.5 text-[11px] font-semibold tracking-[0.08em] text-danger uppercase">
+                <LiveDot />
+                Race clock
+              </div>
               <Time className="text-4xl font-semibold tracking-tight text-ink">{formatElapsed(raceClockMs).replace(/\.\d$/, "")}</Time>
             </div>
           )
