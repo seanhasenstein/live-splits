@@ -295,26 +295,31 @@ function RaceBoard({
             {rows.map((row) => (
               <tr key={row.athleteId} className={row.reached < 0 ? "text-ink-3" : ""}>
                 <td className={`px-3 py-2 align-top font-medium sm:px-4 ${row.reached < 0 ? "" : "text-ink"}`}>
-                  {row.officialPlace !== null && <span className="tnum mr-1.5 text-ink-3">{row.officialPlace}</span>}
-                  {editing ? (
-                    <button type="button" onClick={() => setStatusFor(row.athleteId)} className="rounded px-1.5 py-1 text-left hover:bg-gold-soft" title="Set DNS / DNR / DNF">
-                      {athletes[row.athleteId]}
-                    </button>
-                  ) : (
-                    athletes[row.athleteId]
-                  )}
-                  {row.status ? (
-                    <span className="mt-0.5 block">
-                      <Badge tone="neutral">{STATUS_LABEL[row.status.status]}</Badge>
+                  {/* Place in its own column so a wrapped name hangs under its first line, not under the number. */}
+                  <span className="flex items-start gap-2">
+                    {hasOfficial && <span className="tnum w-6 shrink-0 text-right text-ink-3">{row.officialPlace ?? ""}</span>}
+                    <span className="min-w-0">
+                      {editing ? (
+                        <button type="button" onClick={() => setStatusFor(row.athleteId)} className="-mx-1.5 rounded px-1.5 py-1 text-left hover:bg-gold-soft" title="Set DNS / DNR / DNF">
+                          {athletes[row.athleteId]}
+                        </button>
+                      ) : (
+                        athletes[row.athleteId]
+                      )}
+                      {row.status ? (
+                        <span className="mt-0.5 block">
+                          <Badge tone="neutral">{STATUS_LABEL[row.status.status]}</Badge>
+                        </span>
+                      ) : (
+                        row.officialStatus &&
+                        row.officialStatus !== "finished" && (
+                          <span className="mt-0.5 block">
+                            <Badge tone="neutral">{row.officialStatus.toUpperCase()}</Badge>
+                          </span>
+                        )
+                      )}
                     </span>
-                  ) : (
-                    row.officialStatus &&
-                    row.officialStatus !== "finished" && (
-                      <span className="mt-0.5 block">
-                        <Badge tone="neutral">{row.officialStatus.toUpperCase()}</Badge>
-                      </span>
-                    )
-                  )}
+                  </span>
                 </td>
                 {row.cells.map((cell, i) => {
                   if (row.status && !expectedAt(row.status, i, race.checkpoints) && cell.official === null && cell.absoluteMs === null && !cell.missed) {
