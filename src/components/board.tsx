@@ -42,6 +42,8 @@ type Props = {
 
 /** A time that just arrived glows this long. */
 const FRESH_MS = 4000;
+/** A projection this far in the past reads "overdue". */
+const OVERDUE_MS = 60_000;
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const eventTimeMs = (_e: SyntheticEvent) => Date.now();
@@ -199,16 +201,26 @@ function RaceBoard({
     return c ? (c.official ?? c.elapsedMs) : null;
   };
   const finishIndex = race.checkpoints.findIndex((c) => c.kind === "finish");
-  /** While the race runs: where they'd finish at their last segment's pace. */
-  const projectFinish = (row: Row): number | null => {
-    if (isFinished || finishIndex < 0 || row.reached < 0 || row.reached >= finishIndex) return null;
+  /**
+   * While the race runs: when they'd reach checkpoint `i` at their last segment's pace.
+   * Only for checkpoints after their last real time, and never for anyone out of the race.
+   */
+  const projectAt = (row: Row, i: number): number | null => {
+    if (isFinished || row.reached < 0 || i <= row.reached) return null;
+    if (row.status || (row.officialStatus && row.officialStatus !== "finished")) return null;
     const here = elapsedAt(row, row.reached);
     if (here === null) return null;
     const before = row.reached > 0 ? elapsedAt(row, row.reached - 1) : 0;
     const segMeters = race.checkpoints[row.reached].meters - (row.reached > 0 ? race.checkpoints[row.reached - 1].meters : 0);
     if (before === null || segMeters <= 0) return null;
     const pacePerMeter = (here - before) / segMeters;
-    return here + pacePerMeter * (race.checkpoints[finishIndex].meters - race.checkpoints[row.reached].meters);
+    return here + pacePerMeter * (race.checkpoints[i].meters - race.checkpoints[row.reached].meters);
+  };
+  const projectFinish = (row: Row) => (finishIndex < 0 ? null : projectAt(row, finishIndex));
+  /** Past their projected time by more than a minute: worth a look. */
+  const overdue = (projected: number) => {
+    const n = clock.now();
+    return n !== null && gunTimeMs !== null && n - gunTimeMs - projected > OVERDUE_MS;
   };
   const finishTimes = finishIndex < 0 ? [] : rows.map((r) => elapsedAt(r, finishIndex)).filter((t): t is number => t !== null).sort((a, b) => a - b);
   const teamLine =
@@ -391,14 +403,14 @@ function RaceBoard({
                   const cumulative = cell.official !== null ? formatElapsed(cell.official) : cell.absoluteMs !== null ? fmt(cell.absoluteMs) : "—";
                   const shown = cell.missed ? "missed" : view === "splits" && i > 0 ? (split === null ? "—" : formatElapsed(split)) : cumulative;
                   const flag = cell.official !== null ? "" : m && !cell.missed && shown !== "—" ? (m.estimate ? "~" : m.edited ? "*" : "") : "";
-                  const projected = last && here === null && !cell.missed ? projectFinish(row) : null;
+                  const projected = here === null && !cell.missed ? projectAt(row, i) : null;
                   const fresh = isFresh(m?.tapId);
                   const cellNode = (
                     <>
                       {projected !== null ? (
-                        <span className="block text-ink-3">
+                        <span className={`block ${overdue(projected) ? "text-gold-text" : "text-ink-3"}`}>
                           <Time className="block">~{formatElapsed(projected).replace(/\.\d$/, "")}</Time>
-                          <span className="block text-[10px] tracking-wide uppercase">projected</span>
+                          <span className="block text-[10px] tracking-wide uppercase">{overdue(projected) ? "overdue" : "projected"}</span>
                         </span>
                       ) : (
                         <Time className={`block ${cell.missed ? "italic" : last && here !== null && view !== "splits" ? "font-semibold" : ""}`}>
@@ -477,7 +489,7 @@ function RaceBoard({
       )}
 
       <p className="mt-3 text-xs text-ink-3">
-        * edited &nbsp; ~ estimate{!isFinished && " · a ~ time marked projected is a guess from the runner's last split"} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : "Official times replace app taps where imported. ")}{" "}
+        * edited &nbsp; ~ estimate{!isFinished && " · a ~ time marked projected is a guess from the runner's last split; overdue means they're more than a minute past it"} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : "Official times replace app taps where imported. ")}{" "}
         {view === "splits"
           ? "Splits are the time since the previous checkpoint; beneath each, the pace per mile and the change from the previous segment (+ slower, − faster). The finish column also shows the finish time."
           : "Cumulative time from the gun, with the split beneath and the pace change from the previous segment (+ slower, − faster)."}{" "}

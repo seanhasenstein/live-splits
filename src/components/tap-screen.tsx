@@ -396,7 +396,17 @@ function RaceTapper({
       const prevSegMeters = prevCp.meters - (cpIndex > 1 ? race.checkpoints[cpIndex - 2].meters : 0);
       if (prevSegment !== null && segMeters > 0 && prevSegMeters > 0) paceDelta = paceMsPerMile(segment, segMeters) - paceMsPerMile(prevSegment, prevSegMeters);
     }
-    return { here, prevCum: cpIndex > 0 ? prevCum : null, segment, paceDelta };
+    // When they're due here, at the pace of their last recorded segment (none for anyone out of the race).
+    let due: number | null = null;
+    if (here === null && gunTimeMs && !isFinished && expectedAt(statuses.get(id), cpIndex, race.checkpoints)) {
+      let lastIdx = -1;
+      for (let i = cpIndex - 1; i >= 0; i--) if (cumAt(i, id) !== null) { lastIdx = i; break; }
+      const lastCum = lastIdx >= 0 ? cumAt(lastIdx, id) : null;
+      const before = lastIdx > 0 ? cumAt(lastIdx - 1, id) : lastIdx === 0 ? 0 : null;
+      const lastMeters = lastIdx >= 0 ? race.checkpoints[lastIdx].meters - (lastIdx > 0 ? race.checkpoints[lastIdx - 1].meters : 0) : 0;
+      if (lastCum !== null && before !== null && lastMeters > 0) due = lastCum + ((lastCum - before) / lastMeters) * (checkpoint.meters - race.checkpoints[lastIdx].meters);
+    }
+    return { here, prevCum: cpIndex > 0 ? prevCum : null, segment, paceDelta, due };
   };
 
   // This device's latest taps here, newest first, for the strip above the buttons.
@@ -738,7 +748,7 @@ function RaceTapper({
           }
           const flashing = flashId === id;
           const muted = flashing ? "text-brand-ink/80" : done ? "text-ink-3" : "text-ink-2";
-          const { prevCum, segment, paceDelta, here } = tileTimes(id);
+          const { prevCum, segment, paceDelta, here, due } = tileTimes(id);
           const vsRef = here !== null && refHere !== null ? here - refHere : null;
           return (
             <button
@@ -762,19 +772,32 @@ function RaceTapper({
                   <Badge tone="neutral">{STATUS_LABEL[status.status]}</Badge>
                 </span>
               ) : !mark ? (
-                (prevCum !== null || refHere !== null) && (
+                (prevCum !== null || refHere !== null || due !== null) && (
                   <span className={`mt-0.5 block truncate ${large ? "text-sm" : "text-xs"} ${muted}`}>
-                    {prevCum !== null && prevCp && (
-                      <>
-                        {prevCp.label} <Time className="font-medium">{formatElapsed(prevCum)}</Time>
-                      </>
-                    )}
-                    {prevCum !== null && refHere !== null && " · "}
-                    {refHere !== null && (
-                      <>
-                        {compareLabel} <Time className="font-medium">{formatElapsed(refHere)}</Time>
-                      </>
-                    )}
+                    {[
+                      prevCum !== null && prevCp ? (
+                        <span key="prev">
+                          {prevCp.label} <Time className="font-medium">{formatElapsed(prevCum)}</Time>
+                        </span>
+                      ) : null,
+                      due !== null ? (
+                        <span key="due">
+                          due <Time className="font-medium">~{formatElapsed(due).replace(/\.\d$/, "")}</Time>
+                        </span>
+                      ) : null,
+                      refHere !== null ? (
+                        <span key="ref">
+                          {compareLabel} <Time className="font-medium">{formatElapsed(refHere)}</Time>
+                        </span>
+                      ) : null,
+                    ]
+                      .filter(Boolean)
+                      .map((node, i) => (
+                        <span key={i}>
+                          {i > 0 && " · "}
+                          {node}
+                        </span>
+                      ))}
                   </span>
                 )
               ) : (
