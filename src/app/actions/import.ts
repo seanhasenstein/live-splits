@@ -129,7 +129,8 @@ export async function commitImportAction(meetId: string, payloadJson: string): P
     if (!race || !contest) return { error: "A race or contest in the import no longer exists." };
     if (!p.assignments.every((a) => contest.entries[a.entryIndex])) return { error: "An assignment points at a results row that doesn't exist." };
     // Only a combined race takes more than one contest (boys + girls).
-    if (genderOf(race) !== null && plans.some((q) => q.race._id === race._id)) return { error: `${race.name} isn't a combined race, so it can take only one set of results.` };
+    const gender = genderOf(race);
+    if ((gender === "F" || gender === "M") && plans.some((q) => q.race._id === race._id)) return { error: `${race.name} isn't a combined race, so it can take only one set of results.` };
     // Our runners in the results who weren't on the lineup ran anyway: add them, at their roster level.
     const lineup = new Set(race.lineup.map((l) => l.athleteId));
     const extra = [...new Set(p.assignments.map((a) => a.athleteId))].filter((id) => !lineup.has(id));

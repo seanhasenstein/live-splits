@@ -102,6 +102,9 @@ test("parses division results split out by hand: ordinal places, overall-place c
     "DNF 	— Sam Smith 	FR Oconto",
     "DNF = Did Not Finish",
     "16th 	33 Robert Smith Jr. 	11 Ozaukee 	18:30",
+    "17th 	34 Bob Ray 	SR St. Mary 2 	18:31 	15",
+    "18th 	35 JOHN SMITH JR 	11 Kewaunee 	18:32",
+    "DNF 	Sam Who 	11",
   ].join("\n");
   const c = parseResultsText(text);
   expect(c.entries.map((e) => [e.place, e.name, e.grade, e.team, e.finishMs, e.status])).toEqual([
@@ -110,6 +113,9 @@ test("parses division results split out by hand: ordinal places, overall-place c
     [15, "Ezra Nowak", 10, "Coleman", 18 * 60000 + 25000, "finished"],
     [null, "Sam Smith", 9, "Oconto", null, "dnf"],
     [16, "Robert Smith Jr.", 11, "Ozaukee", 18 * 60000 + 30000, "finished"],
+    [17, "Bob Ray", 12, "St. Mary 2", 18 * 60000 + 31000, "finished"],
+    [18, "JOHN SMITH JR", 11, "Kewaunee", 18 * 60000 + 32000, "finished"],
+    [null, "Sam Who", 11, "", null, "dnf"],
   ]);
   expect(c.splitLabels).toEqual([]);
 });
@@ -130,4 +136,9 @@ test("guesses the race from a contest or file name", () => {
   // A race named just "JV" against a plain "Junior Varsity Boys" contest.
   expect(guessRace("Junior Varsity Boys 5000m", [races[1], { id: "j", name: "JV", gender: null }])).toBe("j");
   expect(guessRace("Varsity Boys 5000m", [{ id: "j", name: "JV", gender: null }, races[1]])).toBe("bv");
+  // "Junior" alone is not JV; a meet name with it doesn't poison every contest.
+  expect(guessRace("Junior High Boys 2 Mile", races)).toBeNull();
+  expect(guessRace("Boys Varsity - Junior Academy Invite", races)).toBe("bv");
+  expect(guessRace("Boys Open 5K", races)).toBeNull();
+  expect(guessRace("Boys Frosh/Soph 5K", races)).toBeNull();
 });

@@ -141,16 +141,19 @@ export function parseResultsText(text: string, contestName = "Pasted results"): 
     // Times are the trailing tokens that look like m:ss.t; an optional points integer may follow.
     const rest = tokens.slice(1);
     let end = rest.length;
-    if (/^\(?\d+\)?$/.test(rest[end - 1] ?? "")) end--; // points, "(13)" for a displacer
+    if (status === "finished" && /^\(?\d+\)?$/.test(rest[end - 1] ?? "")) end--; // points, "(13)" for a displacer; only finishers score
     let start = end;
     while (start > 0 && TIME_RE.test(rest[start - 1])) start--;
     const times = rest.slice(start, end).map((t) => parseElapsed(t) ?? 0);
     let before = rest.slice(0, start);
     // An overall-place column before the name: a bare number (or a dash), then name words, then the grade.
     if (/^(\d+|[-–—])$/.test(before[0] ?? "") && before.length > 2 && !isGradeToken(before[1]) && before.slice(1).some(isGradeToken)) before = before.slice(1);
-    // "<name words> <grade> <team words>": a numeric grade wins over a class year ("Smith Jr. 11 Team").
+    // "<name words> <grade> <team words>": the first grade-like token, except that a number right
+    // after a class year is the grade and the class year a name suffix ("SMITH JR 11 Team"); a number
+    // later in the team name ("SR St. Mary 2") isn't.
+    const yearIdx = before.findIndex((t) => isGradeToken(t) && !/^\d/.test(t));
     const numericIdx = before.findIndex((t) => /^\d{1,2}$/.test(t));
-    const gradeIdx = numericIdx >= 0 ? numericIdx : before.findIndex(isGradeToken);
+    const gradeIdx = numericIdx >= 0 && (yearIdx < 0 || numericIdx < yearIdx || numericIdx === yearIdx + 1) ? numericIdx : yearIdx;
     // Team-score rows and other numeric lines have no times; a DNF/DNS row without one still needs a grade
     // to count, so a legend line ("DNF = Did Not Finish") doesn't become a runner.
     if (times.length === 0 && (status === "finished" || gradeIdx < 0)) continue;
