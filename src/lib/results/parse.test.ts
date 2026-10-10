@@ -105,6 +105,7 @@ test("parses division results split out by hand: ordinal places, overall-place c
     "17th 	34 Bob Ray 	SR St. Mary 2 	18:31 	15",
     "18th 	35 JOHN SMITH JR 	11 Kewaunee 	18:32",
     "DNF 	Sam Who 	11",
+    "DNF 	John Smith 	11 Team 	5:30 	0",
   ].join("\n");
   const c = parseResultsText(text);
   expect(c.entries.map((e) => [e.place, e.name, e.grade, e.team, e.finishMs, e.status])).toEqual([
@@ -116,7 +117,9 @@ test("parses division results split out by hand: ordinal places, overall-place c
     [17, "Bob Ray", 12, "St. Mary 2", 18 * 60000 + 31000, "finished"],
     [18, "JOHN SMITH JR", 11, "Kewaunee", 18 * 60000 + 32000, "finished"],
     [null, "Sam Who", 11, "", null, "dnf"],
+    [null, "John Smith", 11, "Team", null, "dnf"],
   ]);
+  expect(c.entries.at(-1)?.splits).toEqual({ "Split 1": 330000 });
   expect(c.splitLabels).toEqual([]);
 });
 
@@ -141,4 +144,7 @@ test("guesses the race from a contest or file name", () => {
   expect(guessRace("Boys Varsity - Junior Academy Invite", races)).toBe("bv");
   expect(guessRace("Boys Open 5K", races)).toBeNull();
   expect(guessRace("Boys Frosh/Soph 5K", races)).toBeNull();
+  expect(guessRace("Boys Fr/So 5K", races)).toBeNull();
+  expect(guessRace("Boys 9th Grade 5K", races)).toBeNull();
+  expect(guessRace("Boys JV2 5K", races)).toBe("jv");
 });

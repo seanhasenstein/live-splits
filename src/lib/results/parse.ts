@@ -141,7 +141,8 @@ export function parseResultsText(text: string, contestName = "Pasted results"): 
     // Times are the trailing tokens that look like m:ss.t; an optional points integer may follow.
     const rest = tokens.slice(1);
     let end = rest.length;
-    if (status === "finished" && /^\(?\d+\)?$/.test(rest[end - 1] ?? "")) end--; // points, "(13)" for a displacer; only finishers score
+    // Points, "(13)" for a displacer: after a finish, or after a DNF's last split; "DNF Sam Who 11" keeps its grade.
+    if (/^\(?\d+\)?$/.test(rest[end - 1] ?? "") && (status === "finished" || TIME_RE.test(rest[end - 2] ?? ""))) end--;
     let start = end;
     while (start > 0 && TIME_RE.test(rest[start - 1])) start--;
     const times = rest.slice(start, end).map((t) => parseElapsed(t) ?? 0);
@@ -160,9 +161,10 @@ export function parseResultsText(text: string, contestName = "Pasted results"): 
     const nameWords = gradeIdx >= 0 ? before.slice(0, gradeIdx) : before;
     const team = gradeIdx >= 0 ? before.slice(gradeIdx + 1).join(" ") : null;
     if (nameWords.length === 0) continue;
-    const labels = splitLabels ?? times.slice(0, -1).map((_, i) => `Split ${i + 1}`);
     const finished = status === "finished";
+    // Every time but the finish is a mat split; a non-finisher's times are all splits.
     const matTimes = finished ? times.slice(0, Math.max(0, times.length - 1)) : times;
+    const labels = splitLabels ?? matTimes.map((_, i) => `Split ${i + 1}`);
     const splits: Record<string, number> = {};
     matTimes.forEach((ms, i) => {
       if (labels[i]) splits[labels[i]] = ms;

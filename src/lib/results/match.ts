@@ -60,10 +60,10 @@ function raceWords(name: string): string[] {
 function levelsOf(words: string[]): Set<string> {
   const text = ` ${words.join(" ")} `;
   const levels = new Set<string>();
-  if (/ (jv|junior varsity|jr varsity|junior v) /.test(text)) levels.add("jv");
+  if (/ (jv\d?|jv [a-c]|jv[a-c]|junior varsity|jr varsity|junior v) /.test(text)) levels.add("jv");
   else if (/ varsity /.test(text)) levels.add("varsity");
   if (/ (ms|jh|middle school|junior high|jr high) /.test(text)) levels.add("ms");
-  if (/ (open|frosh|soph|freshman|freshmen|sophomore|sophomores) /.test(text)) levels.add("open");
+  if (/ (open|frosh|soph|fr so|f s|freshman|freshmen|sophomore|sophomores|c team|reserve|\d{1,2}(st|nd|rd|th) grade|grade \d{1,2}) /.test(text)) levels.add("open");
   return levels;
 }
 
