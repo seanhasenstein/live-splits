@@ -177,7 +177,47 @@ export async function fromUrl(url: string): Promise<ParsedContest[]> {
   throw new SourceError(`No importer for ${u.host} yet. Paste the results as text or upload the PDF instead.`);
 }
 
+/**
+ * pdf-parse's build news up a DOMMatrix while loading, and takes it from
+ * @napi-rs/canvas, whose native binary isn't shipped to the serverless build.
+ * Text extraction never draws, so inert stand-ins are enough.
+ */
+function polyfillCanvasGlobals() {
+  const g = globalThis as Record<string, unknown>;
+  if (!g.DOMMatrix) {
+    g.DOMMatrix = class DOMMatrix {
+      a = 1;
+      b = 0;
+      c = 0;
+      d = 1;
+      e = 0;
+      f = 0;
+      constructor(init?: number[]) {
+        if (init?.length === 6) [this.a, this.b, this.c, this.d, this.e, this.f] = init;
+      }
+      translate() {
+        return this;
+      }
+      scale() {
+        return this;
+      }
+      invertSelf() {
+        return this;
+      }
+      multiplySelf() {
+        return this;
+      }
+      preMultiplySelf() {
+        return this;
+      }
+    };
+  }
+  if (!g.Path2D) g.Path2D = class Path2D { addPath() {} };
+  if (!g.ImageData) g.ImageData = class ImageData {};
+}
+
 export async function fromPdf(data: Uint8Array, contestName: string): Promise<ParsedContest> {
+  polyfillCanvasGlobals();
   const { PDFParse } = await import("pdf-parse");
   const text = (await new PDFParse({ data }).getText()).text;
   return parseResultsText(text, contestName);
