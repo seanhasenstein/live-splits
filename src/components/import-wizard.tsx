@@ -4,7 +4,7 @@ import { useActionState, useMemo, useState, useTransition } from "react";
 import { commitImportAction, loadResultsAction, type LoadState } from "@/app/actions/import";
 import { Alert, Badge, Button, Card, CardBody, CardHeader, Field, Input, SectionLabel, Segmented, Select, Time } from "@/components/ui";
 import type { Athlete } from "@/lib/db/schema";
-import { isOurTeam, matchAthlete } from "@/lib/results/match";
+import { guessRace, isOurTeam, matchAthlete } from "@/lib/results/match";
 import type { ParsedContest } from "@/lib/results/parse";
 import { formatElapsed } from "@/lib/time";
 
@@ -81,11 +81,6 @@ type Plan = {
   dns: Record<string, boolean>;
 };
 
-function guessRace(contestName: string, races: RaceInfo[]): string {
-  const n = contestName.toLowerCase();
-  return races.find((r) => n.includes(r.name.toLowerCase()))?.id ?? races[0]?.id ?? "";
-}
-
 function Mapping({ meetId, loaded, races, athletes, teamAliases }: { meetId: string; loaded: LoadState; races: RaceInfo[]; athletes: RosterAthlete[]; teamAliases: string[] }) {
   const contests = loaded.contests!;
   const [plans, setPlans] = useState<Record<number, Plan | null>>(() => {
@@ -94,13 +89,17 @@ function Mapping({ meetId, loaded, races, athletes, teamAliases }: { meetId: str
     // contest). Smallest first, keep a contest unless its runners of ours already appear in
     // a kept contest for that race: the division results win over the combined ones, while
     // a boys contest and a girls contest both feeding one combined JV race are both kept.
+    // With several contests to choose from, one whose name fits none of the races (a middle
+    // school race at a high school meet) starts skipped; a lone contest just goes to the first race.
+    const raceFor = (name: string) => guessRace(name, races) ?? (contests.length === 1 ? (races[0]?.id ?? null) : null);
     const kept = new Set<number>();
     const seenByRace = new Map<string, Set<string>>();
     [...contests.keys()]
       .filter((ci) => contests[ci].entries.some((e) => isOurTeam(e.team, teamAliases)))
       .sort((a, b) => contests[a].entries.length - contests[b].entries.length)
       .forEach((ci) => {
-        const raceId = guessRace(contests[ci].name, races);
+        const raceId = raceFor(contests[ci].name);
+        if (raceId === null) return;
         const seen = seenByRace.get(raceId) ?? new Set<string>();
         const names = contests[ci].entries.filter((e) => isOurTeam(e.team, teamAliases)).map((e) => e.name.toLowerCase());
         if (names.some((n) => seen.has(n))) return;
@@ -119,7 +118,7 @@ function Mapping({ meetId, loaded, races, athletes, teamAliases }: { meetId: str
         const m = matchAthlete(e, athletes as Athlete[]);
         picks[i] = m.athlete?._id ?? "";
       }
-      out[ci] = { raceId: guessRace(c.name, races), picks, dns: {} };
+      out[ci] = { raceId: raceFor(c.name)!, picks, dns: {} };
     });
     return out;
   });
@@ -127,6 +126,18 @@ function Mapping({ meetId, loaded, races, athletes, teamAliases }: { meetId: str
   const [pending, start] = useTransition();
 
   const commit = () => {
+    // Every flagged runner needs an answer first: a wrong guess is a result on the wrong athlete.
+    for (const [ci, plan] of Object.entries(plans)) {
+      if (!plan) continue;
+      const open = Object.entries(plan.picks).filter(([, v]) => v === "").map(([i]) => contests[Number(ci)].entries[Number(i)].name);
+      if (open.length > 0) return setError(`Say who ${open.join(", ")} ${open.length === 1 ? "is" : "are"} (or mark them not one of ours) in ${contests[Number(ci)].name}.`);
+    }
+    const targeted = new Map<string, number>();
+    for (const plan of Object.values(plans)) if (plan) targeted.set(plan.raceId, (targeted.get(plan.raceId) ?? 0) + 1);
+    for (const [raceId, n] of targeted) {
+      const race = races.find((r) => r.id === raceId);
+      if (n > 1 && race && race.gender !== null && race.gender !== "X") return setError(`${race.name} isn't a combined race; pick one set of results for it and skip the other.`);
+    }
     const payloadPlans = Object.entries(plans).flatMap(([ci, plan]) => {
       if (!plan) return [];
       const contest = contests[Number(ci)];
@@ -147,6 +158,7 @@ function Mapping({ meetId, loaded, races, athletes, teamAliases }: { meetId: str
     const slim = used.map((ci) => contests[ci]);
     const remap = new Map(used.map((ci, i) => [ci, i]));
     const plansSlim = payloadPlans.map((p) => ({ ...p, contestIndex: remap.get(p.contestIndex)! }));
+    setError(null);
     start(async () => {
       const result = await commitImportAction(meetId, JSON.stringify({ raw: JSON.stringify(slim), sourceUrl: loaded.sourceUrl ?? null, contests: slim, plans: plansSlim }));
       if (result?.error) setError(result.error);
@@ -218,7 +230,11 @@ function ContestCard({
       <Card>
         <CardHeader
           title={contest.name}
-          description={`${contest.entries.length} runners · ${ours.length === 0 ? "none from our team" : `${ours.length} of ours · skipped (another contest covers this race)`}`}
+          description={`${contest.entries.length} runners · ${
+            ours.length === 0
+              ? "none from our team"
+              : `${ours.length} of ours · skipped (${guessRace(contest.name, races) === null ? "doesn't look like one of this meet's races" : "another contest covers this race"})`
+          }`}
           action={
             <Button
               size="sm"
@@ -226,7 +242,7 @@ function ContestCard({
               onClick={() => {
                 const picks: Record<number, string> = {};
                 for (const { e, i } of ours) picks[i] = matchAthlete(e, athletes as Athlete[]).athlete?._id ?? "";
-                onChange({ raceId: guessRace(contest.name, races), picks, dns: {} });
+                onChange({ raceId: guessRace(contest.name, races) ?? races[0]?.id ?? "", picks, dns: {} });
               }}
             >
               Include

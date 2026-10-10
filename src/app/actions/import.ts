@@ -3,10 +3,10 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { can, getSession, sessionActor } from "@/lib/auth/session";
-import { getMeet, listRaces } from "@/lib/data";
+import { getMeet, getProgram, listRaces } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
-import { Id } from "@/lib/db/schema";
+import { Id, type Race } from "@/lib/db/schema";
 import { commitImport, type ImportPlan } from "@/lib/results/import";
 import type { ParsedContest } from "@/lib/results/parse";
 import { parseResultsText } from "@/lib/results/parse";
@@ -28,7 +28,15 @@ export async function loadResultsAction(meetId: string, _prev: LoadState, formDa
       if (urls.length === 0) return { error: "Paste a results link." };
       if (urls.length > 10) return { error: "That's a lot of links; ten at a time, please." };
       const contests: ParsedContest[] = [];
-      for (const url of urls) contests.push(...(await fromUrl(url)));
+      for (const url of urls) {
+        try {
+          contests.push(...(await fromUrl(url)));
+        } catch (err) {
+          // Say which link failed when there are several.
+          if (urls.length > 1 && err instanceof SourceError) throw new SourceError(`${url}: ${err.message}`);
+          throw err;
+        }
+      }
       return { contests, raw: JSON.stringify(contests), sourceUrl: urls.join(" ") };
     }
     if (kind === "text") {
@@ -107,17 +115,21 @@ export async function commitImportAction(meetId: string, payloadJson: string): P
   if (!parsed.success) return { error: "Invalid import" };
   const payload = parsed.data;
   const contests = payload.contests as ParsedContest[];
-  const races = await listRaces(meet._id);
+  const [races, program] = await Promise.all([listRaces(meet._id), getProgram(meet.schoolId, "xc")]);
+  const genderOf = (race: Race) => program?.settings.raceCategories.find((c) => c.id === race.raceCategoryId)?.gender ?? null;
   const actor = sessionActor(session!);
   const db = await getDb();
 
   const plans: ImportPlan[] = [];
   const seenByRace = new Map<string, Set<string>>();
+  const lineupAdds = new Map<string, Race["lineup"]>();
   for (const p of payload.plans) {
     const race = races.find((r) => r._id === p.raceId);
     const contest = contests[p.contestIndex];
     if (!race || !contest) return { error: "A race or contest in the import no longer exists." };
     if (!p.assignments.every((a) => contest.entries[a.entryIndex])) return { error: "An assignment points at a results row that doesn't exist." };
+    // Only a combined race takes more than one contest (boys + girls).
+    if (genderOf(race) !== null && plans.some((q) => q.race._id === race._id)) return { error: `${race.name} isn't a combined race, so it can take only one set of results.` };
     // Our runners in the results who weren't on the lineup ran anyway: add them, at their roster level.
     const lineup = new Set(race.lineup.map((l) => l.athleteId));
     const extra = [...new Set(p.assignments.map((a) => a.athleteId))].filter((id) => !lineup.has(id));
@@ -127,7 +139,7 @@ export async function commitImportAction(meetId: string, payloadJson: string): P
       const added = roster.map((r) => ({ athleteId: r.athleteId, levelId: race.levelIds.includes(r.defaultLevelId) ? r.defaultLevelId : race.levelIds[0] }));
       race.lineup = [...race.lineup, ...added];
       added.forEach((l) => lineup.add(l.athleteId));
-      await collection(db, "races").updateOne({ _id: race._id }, { $push: { lineup: { $each: added } }, $set: { updatedAt: new Date(), updatedBy: actor } });
+      lineupAdds.set(race._id, [...(lineupAdds.get(race._id) ?? []), ...added]);
     }
     const seen = seenByRace.get(race._id) ?? new Set<string>();
     seenByRace.set(race._id, seen);
@@ -138,6 +150,10 @@ export async function commitImportAction(meetId: string, payloadJson: string): P
     plans.push({ race, contest, assignments: p.assignments, dnsAthleteIds: p.dnsAthleteIds.filter((id) => lineup.has(id) && !seen.has(id)) });
   }
 
+  // Nothing is written until every plan has checked out.
+  for (const [raceId, added] of lineupAdds) {
+    await collection(db, "races").updateOne({ _id: raceId }, { $push: { lineup: { $each: added } }, $set: { updatedAt: new Date(), updatedBy: actor } });
+  }
   for (const p of payload.plans) {
     for (const { athleteId, alias } of p.newAliases) {
       await collection(db, "athletes").updateOne({ _id: athleteId, schoolId: meet.schoolId }, { $addToSet: { aliases: alias }, $set: { updatedAt: new Date(), updatedBy: actor } });

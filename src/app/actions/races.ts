@@ -11,7 +11,7 @@ import { newId } from "@/lib/db/client";
 import { Id } from "@/lib/db/schema";
 import { RacePayload } from "@/lib/race-form";
 import { distanceValue } from "@/lib/distance";
-import { gunFromOfficial } from "@/lib/results/import";
+import { getOfficialTimes, gunFromOfficial } from "@/lib/results/import";
 import { fromUrl, isLiveFeedUrl, SourceError } from "@/lib/results/sources";
 import { recordTaps, TapError } from "@/lib/taps";
 import { zonedTimeToEpochMs } from "@/lib/time";
@@ -271,7 +271,10 @@ export async function setGunFromOfficialAction(raceId: string): Promise<FormStat
         note: `from official results: median of ${est.samples} finishers`,
       },
     ]);
-    await collection(await getDb(), "races").updateOne({ _id: race._id }, { $set: { gunTimeSource: "official_results" } });
+    // With official results the race ended at the last official finish, now that the gun is known.
+    const lastFinish = Math.max(0, ...Object.values(await getOfficialTimes(race)).map((o) => o.finishMs ?? 0));
+    const finishedAt = race.officialImportId && lastFinish > 0 ? new Date(est.gunTimeMs + lastFinish) : race.finishedAt;
+    await collection(await getDb(), "races").updateOne({ _id: race._id }, { $set: { gunTimeSource: "official_results", finishedAt } });
     return { gunTimeMs: result.race.gunTimeMs ?? undefined };
   } catch (err) {
     if (err instanceof TapError) return { error: err.message };
@@ -289,7 +292,14 @@ export async function findLiveFeedsAction(raceId: string, url: string): Promise<
   if (!race || !meet || !can(session, "gun", meet)) return { error: "Not allowed" };
   try {
     const contests = await fromUrl(url);
-    const options = contests.flatMap((c) => (c.source.url ? [{ name: c.name, url: c.source.url, entries: c.entries.length }] : []));
+    const seen = new Set<string>();
+    const options = contests.flatMap((c) => {
+      // XM meet pages list each race under two Arrow links; one is enough.
+      const key = `${c.name}|${c.entries.length}`;
+      if (!c.source.url || seen.has(key)) return [];
+      seen.add(key);
+      return [{ name: c.name, url: c.source.url, entries: c.entries.length }];
+    });
     if (options.length === 0) return { error: "That link has no live feed the app can poll. Use the timing company's results page or a RACE RESULT contest link." };
     return { options };
   } catch (err) {

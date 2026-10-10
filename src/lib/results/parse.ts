@@ -52,8 +52,8 @@ const toGrade = (raw: unknown): number | null => {
   return Number.isInteger(n) && n >= 1 && n <= 13 ? n : null;
 };
 
-/** A grade column value: "9"–"12", or a class year "FR"/"SO"/"JR"/"SR". */
-const isGradeToken = (t: string) => /^\d{1,2}$/.test(t) || /^(FR|SO|JR|SR)\.?$/i.test(t);
+/** A grade column value: "9"–"12", or a class year printed in capitals ("JR"; "Jr." is a name suffix). */
+const isGradeToken = (t: string) => /^\d{1,2}$/.test(t) || /^(FR|SO|JR|SR)\.?$/.test(t);
 
 /** RACE RESULT per-contest JSON (api.raceresult.com/<event>/<key>): columns Place, Bib, Firstname, Lastname, Team, Grade, <mat>, <mat>_Rank, Finish. */
 export function parseRaceResultJson(rows: Record<string, unknown>[], contestName: string, url?: string, options: { live?: boolean } = {}): ParsedContest {
@@ -145,12 +145,15 @@ export function parseResultsText(text: string, contestName = "Pasted results"): 
     let start = end;
     while (start > 0 && TIME_RE.test(rest[start - 1])) start--;
     const times = rest.slice(start, end).map((t) => parseElapsed(t) ?? 0);
-    if (times.length === 0 && status === "finished") continue; // team-score rows and other numeric lines have no times
     let before = rest.slice(0, start);
     // An overall-place column before the name: a bare number (or a dash), then name words, then the grade.
     if (/^(\d+|[-–—])$/.test(before[0] ?? "") && before.length > 2 && !isGradeToken(before[1]) && before.slice(1).some(isGradeToken)) before = before.slice(1);
-    // "<name words> <grade> <team words>": grade is the first grade-like token.
-    const gradeIdx = before.findIndex(isGradeToken);
+    // "<name words> <grade> <team words>": a numeric grade wins over a class year ("Smith Jr. 11 Team").
+    const numericIdx = before.findIndex((t) => /^\d{1,2}$/.test(t));
+    const gradeIdx = numericIdx >= 0 ? numericIdx : before.findIndex(isGradeToken);
+    // Team-score rows and other numeric lines have no times; a DNF/DNS row without one still needs a grade
+    // to count, so a legend line ("DNF = Did Not Finish") doesn't become a runner.
+    if (times.length === 0 && (status === "finished" || gradeIdx < 0)) continue;
     const nameWords = gradeIdx >= 0 ? before.slice(0, gradeIdx) : before;
     const team = gradeIdx >= 0 ? before.slice(gradeIdx + 1).join(" ") : null;
     if (nameWords.length === 0) continue;
@@ -178,7 +181,7 @@ export function parseResultsText(text: string, contestName = "Pasted results"): 
   return { name: contestName, distanceMeters: null, splitLabels: splitLabels ?? [], entries, source: { kind: "text" } };
 }
 
-const stripTags = (html: string) =>
+export const stripTags = (html: string) =>
   html
     .replace(/<[^>]+>/g, " ")
     .replace(/&amp;/g, "&")

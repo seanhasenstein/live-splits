@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
-import { isOurTeam, matchAthlete, normalizeName } from "./match";
+import { guessRace, isOurTeam, matchAthlete, normalizeName } from "./match";
 import { headerLabels, parseArrowResultsHtml, parseRaceResultJson, parseResultsText } from "./parse";
 
 const dir = `${process.cwd()}/data/results/2026-10-02-nightfall-classic`;
@@ -100,6 +100,8 @@ test("parses division results split out by hand: ordinal places, overall-place c
     "15th 	32 Ezra Nowak 	SO Coleman 	18:25",
     "2nd Sheboygan Lutheran 	1 	3 	8 	11 	12 	(13) 	(15) 	35",
     "DNF 	— Sam Smith 	FR Oconto",
+    "DNF = Did Not Finish",
+    "16th 	33 Robert Smith Jr. 	11 Ozaukee 	18:30",
   ].join("\n");
   const c = parseResultsText(text);
   expect(c.entries.map((e) => [e.place, e.name, e.grade, e.team, e.finishMs, e.status])).toEqual([
@@ -107,6 +109,25 @@ test("parses division results split out by hand: ordinal places, overall-place c
     [14, "Joe Vanic", 12, "Sheboygan Lutheran", 18 * 60000 + 23000, "finished"],
     [15, "Ezra Nowak", 10, "Coleman", 18 * 60000 + 25000, "finished"],
     [null, "Sam Smith", 9, "Oconto", null, "dnf"],
+    [16, "Robert Smith Jr.", 11, "Ozaukee", 18 * 60000 + 30000, "finished"],
   ]);
   expect(c.splitLabels).toEqual([]);
+});
+
+test("guesses the race from a contest or file name", () => {
+  const races = [
+    { id: "gv", name: "Girls Varsity", gender: "F" as const },
+    { id: "bv", name: "Boys Varsity", gender: "M" as const },
+    { id: "jv", name: "Boys & Girls JV", gender: "X" as const },
+  ];
+  expect(guessRace("Girls Varsity - Sm School - 2026 Mishicot Bremser Invite", races)).toBe("gv");
+  expect(guessRace("Boys JV - Lg School - 2026 Mishicot Bremser Invite", races)).toBe("jv");
+  expect(guessRace("Girls JV - Sm School - 2026 Mishicot Bremser Invite", races)).toBe("jv");
+  expect(guessRace("xc-small-school-results-boys-jv-russ-fameree-10-9-26.pdf", races)).toBe("jv");
+  expect(guessRace("xc-small-school-results-girls-varsity-russ-fameree-10-9-26.pdf", races)).toBe("gv");
+  expect(guessRace("Boys MS Combined - 2026 Mishicot Bremser Invite", races)).toBeNull(); // nothing fits
+  expect(guessRace("RACE RESULT contest 12345", races)).toBeNull();
+  // A race named just "JV" against a plain "Junior Varsity Boys" contest.
+  expect(guessRace("Junior Varsity Boys 5000m", [races[1], { id: "j", name: "JV", gender: null }])).toBe("j");
+  expect(guessRace("Varsity Boys 5000m", [{ id: "j", name: "JV", gender: null }, races[1]])).toBe("bv");
 });

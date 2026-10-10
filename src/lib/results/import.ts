@@ -42,7 +42,7 @@ export async function commitImport(meet: Meet, plans: ImportPlan[], raw: string,
     schoolId: meet.schoolId,
     schemaVersion: COLLECTIONS.imports.version,
     meetId: meet._id,
-    raceId: plans.length === 1 ? plans[0].race._id : null,
+    raceId: new Set(plans.map((p) => p.race._id)).size === 1 ? plans[0].race._id : null,
     fileName: sourceUrl,
     contentType: "application/json",
     raw,
@@ -81,6 +81,9 @@ export async function commitImport(meet: Meet, plans: ImportPlan[], raw: string,
   // a combined race (boys + girls JV together) takes two contests, both of which must survive.
   for (const raceId of new Set(plans.map((p) => p.race._id))) {
     await collection(db, "raceEntries").updateMany({ raceId, deletedAt: null }, { $set: { deletedAt: now, updatedAt: now, updatedBy: actor } });
+    // An earlier import's result for someone this one doesn't mention would outlive its field.
+    const keep = plans.filter((p) => p.race._id === raceId).flatMap((p) => [...p.assignments.map((a) => a.athleteId), ...p.dnsAthleteIds]);
+    await collection(db, "results").updateMany({ raceId, deletedAt: null, athleteId: { $nin: keep } }, { $set: { deletedAt: now, updatedAt: now, updatedBy: actor } });
   }
 
   for (const [planIndex, plan] of plans.entries()) {

@@ -345,7 +345,8 @@ function RaceBoard({
         </div>
       </div>
 
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      {/* A combined race has a second filter row; side by side with the counts they overlap, so stack them. */}
+      <div className={`mb-3 flex flex-col gap-3 ${combined ? "" : "sm:flex-row sm:items-end sm:justify-between"}`}>
         <CheckpointCounts counts={counts} total={shownIds.length} loaded={loaded} finished={isFinished} />
         <div className="flex flex-col gap-2 sm:flex-row">
           {combined && (

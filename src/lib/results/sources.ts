@@ -1,5 +1,5 @@
 import "server-only";
-import { type ParsedContest, parseArrowResultsHtml, parseRaceResultJson, parseResultsText } from "./parse";
+import { type ParsedContest, parseArrowResultsHtml, parseRaceResultJson, parseResultsText, stripTags } from "./parse";
 
 /**
  * Turn what a coach hands us (a URL, pasted text, a PDF) into contests.
@@ -10,23 +10,33 @@ import { type ParsedContest, parseArrowResultsHtml, parseRaceResultJson, parseRe
 export class SourceError extends Error {}
 
 const FETCH_TIMEOUT_MS = 15000;
-
-async function getJson<T>(url: string, headers: Record<string, string> = {}): Promise<T> {
-  const res = await fetch(url, { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), cache: "no-store" });
-  if (!res.ok) throw new SourceError(`${new URL(url).host} answered ${res.status}`);
-  return (await res.json()) as T;
-}
-
-async function getText(url: string): Promise<string> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), cache: "no-store" });
-  if (!res.ok) throw new SourceError(`${new URL(url).host} answered ${res.status}`);
-  return res.text();
-}
+const MAX_BODY_BYTES = 8 * 1024 * 1024;
 
 const RACE_RESULT_HOST = "api.raceresult.com";
 const BADGER_HOSTS = new Set(["badgerstatetiming.live", "www.badgerstatetiming.live"]);
 const ARROW_HOSTS = new Set(["arrowliveresults.com", "www.arrowliveresults.com"]);
 const XM_HOSTS = new Set(["xmtiming.com", "www.xmtiming.com"]);
+const ANY_KNOWN_HOST = (h: string) => h === RACE_RESULT_HOST || BADGER_HOSTS.has(h) || ARROW_HOSTS.has(h) || XM_HOSTS.has(h) || h.endsWith(".supabase.co");
+
+/** Fetch from a known host; a redirect must land on a known https host too, and the body is capped. */
+async function getResponse(url: string, headers: Record<string, string> = {}): Promise<Response> {
+  const res = await fetch(url, { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), cache: "no-store" });
+  const landed = new URL(res.url || url);
+  if (landed.protocol !== "https:" || !ANY_KNOWN_HOST(landed.host)) throw new SourceError(`${new URL(url).host} redirected somewhere the app can't read.`);
+  if (!res.ok) throw new SourceError(`${new URL(url).host} answered ${res.status}`);
+  if (Number(res.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) throw new SourceError(`${landed.host} sent too much data.`);
+  return res;
+}
+
+async function getJson<T>(url: string, headers: Record<string, string> = {}): Promise<T> {
+  return (await (await getResponse(url, headers)).json()) as T;
+}
+
+async function getText(url: string): Promise<string> {
+  const text = await (await getResponse(url)).text();
+  if (text.length > MAX_BODY_BYTES) throw new SourceError(`${new URL(url).host} sent too much data.`);
+  return text;
+}
 
 /** Hosts whose race pages can be polled live during a race. */
 export function isLiveFeedUrl(url: string): boolean {
@@ -103,32 +113,47 @@ export async function fromBadgerStateUrl(pageUrl: string): Promise<ParsedContest
  * One Arrow Live Results race page (XM Timing). The page embeds its event id;
  * the rows come from a partial view that the page itself polls.
  */
+/** An Arrow page's event never changes; remembered so live polling fetches only the rows. */
+const arrowEvents = new Map<string, { eventId: string; title: string }>();
+
 export async function fromArrowUrl(pageUrl: string, options: { live?: boolean } = {}): Promise<ParsedContest> {
   const u = checkHost(pageUrl, (h) => ARROW_HOSTS.has(h));
-  const html = await getText(u.toString());
-  const eventId = html.match(/var\s+EventId\s*=\s*(\d+)/)?.[1];
-  if (!eventId) throw new SourceError("That Arrow Live Results page has no event on it.");
-  const title = html.match(/<title>([^<]*)<\/title>/i)?.[1]?.trim() || `Arrow event ${eventId}`;
-  const rows = await getText(`${u.origin}/Results/pvResults?pEventId=${eventId}&pDivision=Overall&pChipTime=false`);
-  return parseArrowResultsHtml(rows, title, u.toString(), options);
+  let event = arrowEvents.get(u.toString());
+  if (!event) {
+    const html = await getText(u.toString());
+    const eventId = html.match(/var\s+EventId\s*=\s*(\d+)/)?.[1];
+    if (!eventId) throw new SourceError("That Arrow Live Results page has no event on it.");
+    const title = stripTags(html.match(/<title>([^<]*)<\/title>/i)?.[1] ?? "").slice(0, 200) || `Arrow event ${eventId}`;
+    event = { eventId, title };
+    arrowEvents.set(u.toString(), event);
+  }
+  const rows = await getText(`${u.origin}/Results/pvResults?pEventId=${event.eventId}&pDivision=Overall&pChipTime=false`);
+  return parseArrowResultsHtml(rows, event.title, u.toString(), options);
 }
 
-/** An XM Timing meet page lists one Arrow page per race; read them all. */
+/** An XM Timing meet page lists one Arrow page per race; read them all, a few at a time. */
 export async function fromXmTimingUrl(pageUrl: string): Promise<ParsedContest[]> {
   const u = checkHost(pageUrl, (h) => XM_HOSTS.has(h));
   const html = await getText(u.toString());
-  const links = [...new Set([...html.matchAll(/https?:\/\/(?:www\.)?arrowliveresults\.com\/[A-Za-z0-9_-]+/g)].map((m) => m[0]))];
+  const links = [...new Set([...html.matchAll(/https?:\/\/(?:www\.)?arrowliveresults\.com\/[A-Za-z0-9_-]+/g)].map((m) => m[0].replace(/^http:/, "https:")))].slice(0, 30);
   if (links.length === 0) throw new SourceError("That XM Timing page has no results links yet.");
-  const out: ParsedContest[] = [];
-  for (const link of links) {
-    try {
-      out.push(await fromArrowUrl(link.replace(/^http:/, "https:")));
-    } catch {
-      // A race not published yet; skip it rather than fail the meet.
+  const out: (ParsedContest | null)[] = new Array(links.length).fill(null);
+  let next = 0;
+  const worker = async () => {
+    while (next < links.length) {
+      const i = next++;
+      try {
+        const contest = await fromArrowUrl(links[i]);
+        if (contest.entries.length > 0) out[i] = contest; // an empty page is a race not run yet
+      } catch {
+        // A race not published yet; skip it rather than fail the meet.
+      }
     }
-  }
-  if (out.length === 0) throw new SourceError("That meet has no published results yet.");
-  return out;
+  };
+  await Promise.all(Array.from({ length: Math.min(4, links.length) }, worker));
+  const contests = out.filter((c): c is ParsedContest => c !== null);
+  if (contests.length === 0) throw new SourceError("That meet has no published results yet.");
+  return contests;
 }
 
 /** A single race feed by its link, for live polling: RACE RESULT or Arrow. */
