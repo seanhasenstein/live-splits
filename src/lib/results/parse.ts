@@ -38,14 +38,22 @@ function placeAndStatus(raw: unknown): { place: number | null; status: ParsedSta
   if (typeof raw === "number") return { place: Number.isInteger(raw) && raw > 0 ? raw : null, status: "finished" };
   const text = String(raw ?? "").trim().toUpperCase();
   if (text in STATUS_WORDS) return { place: null, status: STATUS_WORDS[text] };
-  const n = Number(text);
+  const n = Number(text.replace(/(?<=\d)(st|nd|rd|th)$/i, "")); // "1st", "22nd"
   return Number.isInteger(n) && n > 0 ? { place: n, status: "finished" } : { place: null, status: "finished" };
 }
 
+const YEAR_GRADE: Record<string, number> = { FR: 9, SO: 10, JR: 11, SR: 12 };
+
 const toGrade = (raw: unknown): number | null => {
-  const n = Number(String(raw ?? "").trim());
+  const text = String(raw ?? "").trim();
+  const year = YEAR_GRADE[text.replace(/\.$/, "").toUpperCase()];
+  if (year) return year;
+  const n = Number(text);
   return Number.isInteger(n) && n >= 1 && n <= 13 ? n : null;
 };
+
+/** A grade column value: "9"–"12", or a class year "FR"/"SO"/"JR"/"SR". */
+const isGradeToken = (t: string) => /^\d{1,2}$/.test(t) || /^(FR|SO|JR|SR)\.?$/i.test(t);
 
 /** RACE RESULT per-contest JSON (api.raceresult.com/<event>/<key>): columns Place, Bib, Firstname, Lastname, Team, Grade, <mat>, <mat>_Rank, Finish. */
 export function parseRaceResultJson(rows: Record<string, unknown>[], contestName: string, url?: string, options: { live?: boolean } = {}): ParsedContest {
@@ -106,7 +114,10 @@ export function headerLabels(between: string): string[] {
 
 /**
  * Results pasted as text (or extracted from a PDF): one athlete per line,
- *   "<place|DNF> <name> <grade> <team> <time> <time> ... <finish> [pts]"
+ *   "<place|DNF> [overall place] <name> <grade|FR..SR> <team> <time> <time> ... <finish> [pts|(pts)]"
+ * Places may be ordinals ("1st"); a bare number between the place and the name
+ * is the runner's place in the combined race when results were split into
+ * divisions afterwards, and is skipped.
  * Mat labels come from a header line containing "Name" and "Finish"
  * (e.g. "Pl Name Gr Team Mile 1 Mile 2 Finish Pts"); otherwise "Split 1", "Split 2"….
  */
@@ -130,14 +141,16 @@ export function parseResultsText(text: string, contestName = "Pasted results"): 
     // Times are the trailing tokens that look like m:ss.t; an optional points integer may follow.
     const rest = tokens.slice(1);
     let end = rest.length;
-    if (/^\d+$/.test(rest[end - 1] ?? "")) end--; // points
+    if (/^\(?\d+\)?$/.test(rest[end - 1] ?? "")) end--; // points, "(13)" for a displacer
     let start = end;
     while (start > 0 && TIME_RE.test(rest[start - 1])) start--;
     const times = rest.slice(start, end).map((t) => parseElapsed(t) ?? 0);
-    if (times.length === 0) continue; // team-score rows and other numeric lines have no times
-    const before = rest.slice(0, start);
-    // "<name words> <grade> <team words>": grade is the first bare 1-2 digit token.
-    const gradeIdx = before.findIndex((t) => /^\d{1,2}$/.test(t));
+    if (times.length === 0 && status === "finished") continue; // team-score rows and other numeric lines have no times
+    let before = rest.slice(0, start);
+    // An overall-place column before the name: a bare number (or a dash), then name words, then the grade.
+    if (/^(\d+|[-–—])$/.test(before[0] ?? "") && before.length > 2 && !isGradeToken(before[1]) && before.slice(1).some(isGradeToken)) before = before.slice(1);
+    // "<name words> <grade> <team words>": grade is the first grade-like token.
+    const gradeIdx = before.findIndex(isGradeToken);
     const nameWords = gradeIdx >= 0 ? before.slice(0, gradeIdx) : before;
     const team = gradeIdx >= 0 ? before.slice(gradeIdx + 1).join(" ") : null;
     if (nameWords.length === 0) continue;

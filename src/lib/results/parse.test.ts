@@ -91,3 +91,22 @@ test("parses Arrow Live Results rows", () => {
   expect(parseArrowResultsHtml(arrowRows(""), "Boys Varsity", undefined, { live: true }).entries[1].status).toBe("finished");
   expect(parseArrowResultsHtml(arrowRows("DNF"), "Boys Varsity").entries[1]).toMatchObject({ status: "dnf", finishMs: null });
 });
+
+test("parses division results split out by hand: ordinal places, overall-place column, class years, displacer points", () => {
+  const text = [
+    "P L A C E O V R N A M E 	Y R T E A M 	T I M E 	P T S",
+    "1st 	3 Eddy Giebler 	JR Sheboygan Lutheran 	16:16 	1",
+    "14th 	30 Joe Vanic 	SR Sheboygan Lutheran 	18:23 	(13)",
+    "15th 	32 Ezra Nowak 	SO Coleman 	18:25",
+    "2nd Sheboygan Lutheran 	1 	3 	8 	11 	12 	(13) 	(15) 	35",
+    "DNF 	— Sam Smith 	FR Oconto",
+  ].join("\n");
+  const c = parseResultsText(text);
+  expect(c.entries.map((e) => [e.place, e.name, e.grade, e.team, e.finishMs, e.status])).toEqual([
+    [1, "Eddy Giebler", 11, "Sheboygan Lutheran", 16 * 60000 + 16000, "finished"],
+    [14, "Joe Vanic", 12, "Sheboygan Lutheran", 18 * 60000 + 23000, "finished"],
+    [15, "Ezra Nowak", 10, "Coleman", 18 * 60000 + 25000, "finished"],
+    [null, "Sam Smith", 9, "Oconto", null, "dnf"],
+  ]);
+  expect(c.splitLabels).toEqual([]);
+});
