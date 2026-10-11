@@ -117,6 +117,11 @@ export const Race = tenantDoc({
   /** The import that supplied this race's official results, if any. Official times then take precedence over app taps. */
   officialImportId: Id.nullable(),
   /**
+   * The official sheet scored a bigger field (divisions run together); the import kept our
+   * division's teams and the app ranked them by time. Times are official, places are the app's.
+   */
+  placesDerived: z.boolean().default(false),
+  /**
    * The timing company's live feed for this race (a RACE RESULT contest URL),
    * polled while the race is in progress so official finishes show on the
    * board as they post. Ignored once results are imported.

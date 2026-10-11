@@ -77,6 +77,9 @@ workbook can split them.
   text, or PDF). Official finishes and mat splits then replace app taps on
   every screen; Adjust → "Set the gun from official results" lines the app's
   splits up with the mats; the App vs official page shows the error.
+  When a sheet scored two divisions as one field, the wizard's "Pick our
+  division's teams" keeps those teams and ranks them by time; the race is
+  flagged `placesDerived` and the board says "division place".
   Imported times keep the sheet's precision (whole seconds, tenths,
   hundredths) and are shown no finer than that, or than the program's
   `timePrecision` setting (whole seconds for the Crusaders). The record screen

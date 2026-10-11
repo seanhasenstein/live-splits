@@ -82,6 +82,7 @@ const ParsedContestSchema = z.object({
   ),
   source: z.object({ kind: z.enum(["raceresult", "arrow", "text"]), url: z.string().optional() }),
   precision: z.enum(["seconds", "tenths", "hundredths", "thousandths"]),
+  division: z.object({ teams: z.array(z.string().min(1)).min(1) }).optional(),
 });
 
 const CommitPayload = z.object({

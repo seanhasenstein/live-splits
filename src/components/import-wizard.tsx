@@ -2,10 +2,10 @@
 
 import { useActionState, useMemo, useState, useTransition } from "react";
 import { commitImportAction, loadResultsAction, type LoadState } from "@/app/actions/import";
-import { Alert, Badge, Button, Card, CardBody, CardHeader, Field, Input, SectionLabel, Segmented, Select, Time } from "@/components/ui";
+import { Alert, Badge, Button, Card, CardBody, CardHeader, Checkbox, Field, Input, SectionLabel, Segmented, Select, Time } from "@/components/ui";
 import type { Athlete } from "@/lib/db/schema";
 import { guessRace, isOurTeam, matchAthlete } from "@/lib/results/match";
-import type { ParsedContest } from "@/lib/results/parse";
+import { type ParsedContest, restrictToDivision } from "@/lib/results/parse";
 import { formatElapsed } from "@/lib/time";
 
 /** gender null = a combined race (boys and girls together), which takes one contest per gender. */
@@ -79,6 +79,8 @@ type Plan = {
   picks: Record<number, string>;
   /** Lineup athletes with no row that should be recorded as DNS. */
   dns: Record<string, boolean>;
+  /** The sheet scored divisions as one field: keep only these teams and let the app rank them. Null: places as printed. */
+  divisionTeams: string[] | null;
 };
 
 function Mapping({ meetId, loaded, races, athletes, teamAliases }: { meetId: string; loaded: LoadState; races: RaceInfo[]; athletes: RosterAthlete[]; teamAliases: string[] }) {
@@ -118,7 +120,7 @@ function Mapping({ meetId, loaded, races, athletes, teamAliases }: { meetId: str
         const m = matchAthlete(e, athletes as Athlete[]);
         picks[i] = m.athlete?._id ?? "";
       }
-      out[ci] = { raceId: raceFor(c.name)!, picks, dns: {} };
+      out[ci] = { raceId: raceFor(c.name)!, picks, dns: {}, divisionTeams: null };
     });
     return out;
   });
@@ -138,12 +140,19 @@ function Mapping({ meetId, loaded, races, athletes, teamAliases }: { meetId: str
       const race = races.find((r) => r.id === raceId);
       if (n > 1 && race && race.gender !== null && race.gender !== "X") return setError(`${race.name} isn't a combined race; pick one set of results for it and skip the other.`);
     }
+    // A contest cut down to a division is sent as that smaller field, with the row picks moved along.
+    const sent = new Map<number, ParsedContest>();
     const payloadPlans = Object.entries(plans).flatMap(([ci, plan]) => {
       if (!plan) return [];
-      const contest = contests[Number(ci)];
+      const restricted = plan.divisionTeams ? restrictToDivision(contests[Number(ci)], plan.divisionTeams) : null;
+      const contest = restricted?.contest ?? contests[Number(ci)];
+      sent.set(Number(ci), contest);
       const assignments = Object.entries(plan.picks)
         .filter(([, athleteId]) => athleteId && athleteId !== NOT_OURS)
-        .map(([entryIndex, athleteId]) => ({ entryIndex: Number(entryIndex), athleteId }));
+        .flatMap(([entryIndex, athleteId]) => {
+          const i = restricted ? restricted.indexMap.get(Number(entryIndex)) : Number(entryIndex);
+          return i === undefined ? [] : [{ entryIndex: i, athleteId }];
+        });
       const newAliases = assignments.flatMap(({ entryIndex, athleteId }) => {
         const a = athletes.find((x) => x._id === athleteId)!;
         const name = contest.entries[entryIndex].name;
@@ -155,7 +164,7 @@ function Mapping({ meetId, loaded, races, athletes, teamAliases }: { meetId: str
     if (payloadPlans.length === 0) return setError("Nothing to import: no contest is mapped to a race.");
     // Send only the contests being imported; the rest of the meet's field would be dead weight.
     const used = [...new Set(payloadPlans.map((p) => p.contestIndex))].sort((a, b) => a - b);
-    const slim = used.map((ci) => contests[ci]);
+    const slim = used.map((ci) => sent.get(ci)!);
     const remap = new Map(used.map((ci, i) => [ci, i]));
     const plansSlim = payloadPlans.map((p) => ({ ...p, contestIndex: remap.get(p.contestIndex)! }));
     setError(null);
@@ -242,7 +251,7 @@ function ContestCard({
               onClick={() => {
                 const picks: Record<number, string> = {};
                 for (const { e, i } of ours) picks[i] = matchAthlete(e, athletes as Athlete[]).athlete?._id ?? "";
-                onChange({ raceId: guessRace(contest.name, races) ?? races[0]?.id ?? "", picks, dns: {} });
+                onChange({ raceId: guessRace(contest.name, races) ?? races[0]?.id ?? "", picks, dns: {}, divisionTeams: null });
               }}
             >
               Include
@@ -338,10 +347,73 @@ function ContestCard({
             </div>
           </div>
         )}
+        <DivisionPicker contest={contest} teamAliases={teamAliases} teams={plan.divisionTeams} onChange={(divisionTeams) => onChange({ ...plan, divisionTeams })} />
         <Time className="block text-xs text-ink-3">
           Official finishes: {ours.filter(({ e }) => e.finishMs !== null).length} · official mat splits: {ours.reduce((n, { e }) => n + Object.keys(e.splits).length, 0)}
         </Time>
       </CardBody>
     </Card>
+  );
+}
+
+/**
+ * For a sheet that scored two divisions as one field: which teams are in ours.
+ * The app then ranks them by time; the sheet's places are dropped.
+ */
+function DivisionPicker({ contest, teamAliases, teams, onChange }: { contest: ParsedContest; teamAliases: string[]; teams: string[] | null; onChange: (teams: string[] | null) => void }) {
+  const [open, setOpen] = useState(false);
+  const counts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const e of contest.entries) if (e.team) m.set(e.team, (m.get(e.team) ?? 0) + 1);
+    return [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [contest]);
+  const ourTeams = counts.filter(([t]) => isOurTeam(t, teamAliases)).map(([t]) => t);
+  if (!open && !teams) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(true);
+          onChange(ourTeams.length ? ourTeams : null);
+        }}
+        className="text-left text-[13px] text-ink-2 underline decoration-line underline-offset-2 hover:text-ink">
+        Divisions ran together and these places are for the whole field? Pick our division&rsquo;s teams.
+      </button>
+    );
+  }
+  const chosen = new Set(teams ?? ourTeams);
+  const preview = restrictToDivision(contest, [...chosen]).contest;
+  const toggle = (t: string) => {
+    const next = new Set(chosen);
+    if (next.has(t)) next.delete(t);
+    else next.add(t);
+    onChange(next.size ? [...next] : null);
+  };
+  return (
+    <div className="rounded-md border border-line bg-surface-2 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-medium text-ink">Our division&rsquo;s teams</div>
+          <div className="text-[13px] text-ink-2">
+            Times stay official; places are ranked by the app within these teams and shown as &ldquo;division place&rdquo;. {preview.entries.length} of {contest.entries.length} runners kept.
+          </div>
+        </div>
+        <Button
+          size="sm"
+          variant="subtle"
+          onClick={() => {
+            setOpen(false);
+            onChange(null);
+          }}
+        >
+          Use the sheet&rsquo;s places
+        </Button>
+      </div>
+      <div className="mt-2 grid gap-1 sm:grid-cols-2">
+        {counts.map(([t, n]) => (
+          <Checkbox key={t} label={`${t} (${n})`} checked={chosen.has(t)} onChange={() => toggle(t)} />
+        ))}
+      </div>
+    </div>
   );
 }

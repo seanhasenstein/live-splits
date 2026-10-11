@@ -33,7 +33,35 @@ export type ParsedContest = {
   source: { kind: "raceresult" | "arrow" | "text"; url?: string };
   /** Decimals the sheet carries: whole seconds, tenths, hundredths. Never shown finer than this. */
   precision: Precision;
+  /** Set when the field was cut down to a division's teams and places recomputed by the app (see restrictToDivision). */
+  division?: { teams: string[] };
 };
+
+/**
+ * A division's results out of a combined race the timing company scored as
+ * one field: keep only these teams and rank the finishers again by time.
+ * Times stay official; places become the app's, and the contest says so.
+ * Ties on the clock share a place, the next place skipping, as the sheets
+ * do. `indexMap` says where each kept entry went, for row assignments made
+ * against the full field.
+ */
+export function restrictToDivision(contest: ParsedContest, teams: string[]): { contest: ParsedContest; indexMap: Map<number, number> } {
+  const keep = new Set(teams.map((t) => t.trim().toLowerCase()));
+  const kept = contest.entries.map((e, i) => ({ e, i })).filter(({ e }) => e.team && keep.has(e.team.trim().toLowerCase()));
+  const finishers = kept.filter(({ e }) => e.status === "finished" && e.finishMs !== null).sort((a, b) => a.e.finishMs! - b.e.finishMs! || a.i - b.i);
+  const place = new Map<number, number>();
+  finishers.forEach(({ e, i }, rank) => {
+    const prev = finishers[rank - 1];
+    place.set(i, prev && prev.e.finishMs === e.finishMs ? place.get(prev.i)! : rank + 1);
+  });
+  // Field order: finishers by place, then everyone else as the sheet had them.
+  const ordered = [...finishers, ...kept.filter(({ e }) => !(e.status === "finished" && e.finishMs !== null))];
+  const indexMap = new Map(ordered.map(({ i }, n) => [i, n]));
+  return {
+    contest: { ...contest, name: `${contest.name} · division`, entries: ordered.map(({ e, i }) => ({ ...e, place: place.get(i) ?? null })), division: { teams } },
+    indexMap,
+  };
+}
 
 /** The finest precision any of these time strings carries ("16:16" → seconds, "17:09.87" → hundredths). */
 export function precisionOf(times: Iterable<string>): Precision {

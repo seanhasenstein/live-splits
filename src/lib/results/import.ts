@@ -191,7 +191,8 @@ async function writeImport(db: Awaited<ReturnType<typeof getDb>>, session: Clien
     // A combined race takes several contests; the race ends with the last of them.
     const lastFinish = Math.max(0, ...plans.filter((p) => p.race._id === race._id).flatMap((p) => p.contest.entries.map((e) => e.finishMs ?? 0)));
     const finishedAt = race.finishedAt ?? (race.gunTimeMs !== null && lastFinish > 0 ? new Date(race.gunTimeMs + lastFinish) : now);
-    await collection(db, "races").updateOne({ _id: race._id }, { $set: { officialImportId: importDoc._id, finishedAt, updatedAt: now, updatedBy: actor } }, { session });
+    const placesDerived = plans.filter((p) => p.race._id === race._id).some((p) => !!p.contest.division);
+    await collection(db, "races").updateOne({ _id: race._id }, { $set: { officialImportId: importDoc._id, placesDerived, finishedAt, updatedAt: now, updatedBy: actor } }, { session });
   }
   return { importId: importDoc._id };
 }

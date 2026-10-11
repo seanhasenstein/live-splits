@@ -40,6 +40,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps<"/
         name: r.name,
         gunTimeMs: r.gunTimeMs,
         finished: !!r.finishedAt,
+        placesDerived: r.placesDerived ?? false,
         checkpoints: r.checkpoints.map((c) => ({ id: c.id, label: c.label, meters: c.distance.meters, kind: c.kind })),
         athleteIds: r.lineup.map((l) => l.athleteId),
         levels: Object.fromEntries(r.lineup.map((l) => [l.athleteId, levelLabel(l.levelId)])),

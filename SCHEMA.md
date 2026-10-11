@@ -87,6 +87,11 @@ and the running race clock always show tenths), `classYearSystem`, `levels[]`, `
 `historyCompleteFromYear` (null until history is imported; lists use it to say
 "history complete from YYYY").
 
+`races.placesDerived`: the official sheet scored a bigger field (divisions run
+together); the import kept our division's teams and the app ranked them by
+time. Times are official, places are the app's; the board labels them
+"division place".
+
 `raceCategories[].gender` says which athletes to offer when building a lineup
 for that category (`null` = everyone, for Open/Mixed).
 

@@ -34,7 +34,7 @@ export function RaceStatusBar({
   gunTimeMs: number | null;
   now: () => number | null;
   /** Official times are on the board (imported, or live from the timing company's feed), or "none": app taps only. */
-  official?: "imported" | "live" | "none";
+  official?: "imported" | "division" | "live" | "none";
 }) {
   const prefix = name ? <span className="truncate text-sm font-semibold">{name} ·</span> : null;
 
@@ -113,13 +113,13 @@ export function CheckpointCounts({
 }
 
 /** Sits at the right end of the status bar, as loud as the state itself. */
-function OfficialPill({ kind, className }: { kind: "imported" | "live" | "none"; className: string }) {
+function OfficialPill({ kind, className }: { kind: "imported" | "division" | "live" | "none"; className: string }) {
   if (kind === "none")
     return <span className="ml-auto shrink-0 rounded-md bg-current/15 px-2 py-1 text-[11px] font-semibold tracking-[0.06em] uppercase opacity-90">Unofficial times</span>;
   return (
     <span className={`ml-auto flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold tracking-[0.06em] uppercase ${className}`}>
       {kind === "live" ? <LiveDot className="bg-current" /> : <Award className="size-3.5" />}
-      {kind === "live" ? "Official · live" : "Official results"}
+      {kind === "live" ? "Official · live" : kind === "division" ? "Official times · division places" : "Official results"}
     </span>
   );
 }

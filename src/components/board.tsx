@@ -21,6 +21,8 @@ type RaceInfo = {
   name: string;
   gunTimeMs: number | null;
   finished: boolean;
+  /** Official times, but places the app computed within our division (see races.placesDerived). */
+  placesDerived: boolean;
   checkpoints: { id: string; label: string; meters: number; kind: "split" | "finish" }[];
   athleteIds: string[];
   /** Level label per athlete in this race (Varsity / JV). */
@@ -318,7 +320,7 @@ function RaceBoard({
     <>
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-1">
-          <RaceStatusBar finished={isFinished} gunTimeMs={gunTimeMs} now={clock.now} official={officialLive ? "live" : hasOfficial ? "imported" : "none"} />
+          <RaceStatusBar finished={isFinished} gunTimeMs={gunTimeMs} now={clock.now} official={officialLive ? "live" : hasOfficial ? (race.placesDerived ? "division" : "imported") : "none"} />
           {hasOfficial && !isFinished && !gunTimeMs && <Badge tone="brand">Official results</Badge>}
           {staleMinutes > 0 && <Badge tone="gold">updated {staleMinutes} min ago</Badge>}
           {!online && (
@@ -408,7 +410,7 @@ function RaceBoard({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line text-left text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
-              <th className="px-3 py-2 font-semibold sm:px-4">{hasOfficial ? "Place · Athlete" : "Athlete"}</th>
+              <th className="px-3 py-2 font-semibold sm:px-4">{hasOfficial ? (race.placesDerived ? "Division place · Athlete" : "Place · Athlete") : "Athlete"}</th>
               {race.checkpoints.map((c, i) => (
                 <th key={c.id} className="px-2 py-2 text-right font-semibold last:px-3 sm:last:px-4">
                   {c.label}
@@ -578,7 +580,7 @@ function RaceBoard({
       )}
 
       <p className="mt-3 text-xs text-ink-3">
-        {!editing && "Tap a runner for their splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a ~ time marked projected is a guess from the runner's last split${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : "Official times replace app taps where imported. ")}{" "}
+        {!editing && "Tap a runner for their splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a ~ time marked projected is a guess from the runner's last split${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : race.placesDerived ? "Official times replace app taps where imported; the timing company scored the divisions as one field, so places here are ranked by the app within our division. " : "Official times replace app taps where imported. ")}{" "}
         {view === "splits"
           ? "Splits are the time since the previous checkpoint; beneath each, the pace per mile and the change from the previous segment (+ slower, − faster). The finish column also shows the finish time."
           : "Cumulative time from the gun, with the split beneath and the pace change from the previous segment (+ slower, − faster)."}{" "}
@@ -747,7 +749,7 @@ function AthleteSheet({
       return v !== null ? [`${c.label} ${ft(v, row?.cells[i]?.precision)}`] : [];
     });
     const headline = finish !== null ? ft(finish, row?.cells[finishIndex]?.precision) : status ? status.short : raceClockMs !== null ? "in progress" : parts.length ? "" : "not started";
-    const text = [`${name} — ${race.name}, ${meetName}`, headline, row?.officialPlace != null ? `${row.officialPlace}${ordinal(row.officialPlace)} place` : "", ...parts]
+    const text = [`${name} — ${race.name}, ${meetName}`, headline, row?.officialPlace != null ? `${row.officialPlace}${ordinal(row.officialPlace)}${race.placesDerived ? " in division" : " place"}` : "", ...parts]
       .filter(Boolean)
       .join(" · ");
     try {
@@ -805,7 +807,7 @@ function AthleteSheet({
         {/* The other big number: place once they've finished, the race clock while they're out there. */}
         {row?.officialPlace != null ? (
           <div className="text-right">
-            <div className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">Place</div>
+            <div className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">{race.placesDerived ? "Division place" : "Place"}</div>
             <div className="text-4xl font-semibold tracking-tight text-ink">
               {row.officialPlace}
               <span className="text-xl">{ordinal(row.officialPlace)}</span>
