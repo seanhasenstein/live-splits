@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CalendarDays, Plus } from "lucide-react";
+import { CalendarDays, History, Plus } from "lucide-react";
 import { redirect } from "next/navigation";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { SessionMenu } from "@/components/session-menu";
@@ -103,6 +103,9 @@ export default async function MeetsPage() {
                 <LinkButton href="/meets/new" size="sm">
                   <Plus className="size-4" />
                   New meet
+                </LinkButton>
+                <LinkButton href="/meets/import-history" size="sm" variant="secondary" aria-label="Import past seasons">
+                  <History className="size-4" />
                 </LinkButton>
               </div>
             ) : undefined

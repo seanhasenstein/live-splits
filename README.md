@@ -71,6 +71,19 @@ Import maps each gender's results contest to that same race (places stay per
 contest), and the CSV's Race column reads "JV Girls" / "JV Boys" so the
 workbook can split them.
 
+## Past seasons
+
+Meets → the history button → upload the team's split-sheet PDF (one PDF for
+years of meets: "Meet, Month Dth YYYY" header, a table per gender with
+Mile 1 / Mile 2 / Mile 3.1 segment times, Finish, Place with "JV" for the JV
+race). The review lists the meets (ticked unless already in the app), lets
+you name each venue (for course bests) and decide who each unknown name is
+(an existing athlete, or a new alumni with a graduation year). Everything
+lands in one transaction: seasons, meets, races with Mile 1 / Mile 2 /
+Finish checkpoints, results with mat splits, alumni and season rosters, and
+`programs.settings.historyCompleteFromYear` moves back to the earliest
+season imported.
+
 ## Official results
 
 - **After a race:** meet page → Import results (timing company link, pasted

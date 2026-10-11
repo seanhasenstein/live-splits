@@ -216,9 +216,13 @@ function polyfillCanvasGlobals() {
   if (!g.ImageData) g.ImageData = class ImageData {};
 }
 
-export async function fromPdf(data: Uint8Array, contestName: string): Promise<ParsedContest> {
+/** The text of a PDF, as pdf.js lays it out (tabs between columns). */
+export async function fromPdfText(data: Uint8Array): Promise<string> {
   polyfillCanvasGlobals();
   const { PDFParse } = await import("pdf-parse");
-  const text = (await new PDFParse({ data }).getText()).text;
-  return parseResultsText(text, contestName);
+  return (await new PDFParse({ data }).getText()).text;
+}
+
+export async function fromPdf(data: Uint8Array, contestName: string): Promise<ParsedContest> {
+  return parseResultsText(await fromPdfText(data), contestName);
 }
