@@ -91,6 +91,30 @@ function zoneOffsetMs(epochMs: number, timeZone: string): number {
 }
 
 /** "6:02.4", "6:02", "1:02:05.12" or "362.4" (seconds) → ms. Null if unreadable. */
+/**
+ * A time typed on a phone: "6:40", "6:40.5", "12:34", "1:02:03" — or, since a
+ * number keypad has no colon, digits alone read like a microwave: "640" is
+ * 6:40, "1234" is 12:34, "640.5" is 6:40.5, "45" is 0:45. Anything else is
+ * null; seconds must be under 60.
+ */
+export function parseTypedTime(text: string): number | null {
+  const t = text.trim();
+  if (t.includes(":")) {
+    const ms = parseElapsed(t);
+    return ms !== null && /^(\d+:)?\d{1,2}:\d{2}(\.\d{1,3})?$/.test(t) && Number(t.split(":").at(-1)) < 60 && (t.split(":").length < 3 || Number(t.split(":")[1]) < 60) ? ms : null;
+  }
+  const m = t.match(/^(\d{1,6})(\.\d)?$/); // one digit after the dot: tenths ("6.40" is not 6:40)
+  if (!m) return null;
+  const digits = m[1].padStart(2, "0");
+  const seconds = Number(digits.slice(-2));
+  const minutesAll = Number(digits.slice(0, -2) || "0");
+  if (seconds >= 60) return null;
+  const hours = Math.floor(minutesAll / 100);
+  const minutes = minutesAll % 100;
+  if (minutes >= 60) return null;
+  return Math.round(((hours * 60 + minutes) * 60 + seconds + Number(m[2] ?? 0)) * 1000);
+}
+
 export function parseElapsed(text: string): number | null {
   const m = text.trim().match(/^(?:(\d+):)?(?:(\d{1,2}):)?(\d{1,4}(?:\.\d{1,3})?)$/);
   if (!m) return null;

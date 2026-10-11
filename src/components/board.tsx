@@ -14,7 +14,7 @@ import type { AthleteRaceStatus, Precision } from "@/lib/db/schema";
 import { lastFinished } from "@/lib/order";
 import type { LineupHistory } from "@/lib/results/history";
 import { METERS_PER_MILE, paceMsPerMile, projectElapsed } from "@/lib/pace";
-import { formatClock, formatElapsed, parseElapsed } from "@/lib/time";
+import { formatClock, formatElapsed, parseTypedTime } from "@/lib/time";
 
 type RaceInfo = {
   id: string;
@@ -1033,10 +1033,13 @@ function FixSheet({
   const withTime = others.filter((id) => cp?.byAthlete.get(id) && !cp.byAthlete.get(id)!.missed);
 
   const absolute = (text: string): number | null => {
-    const ms = parseElapsed(text);
+    const ms = parseTypedTime(text);
     if (ms === null) return null;
     return gunTimeMs ? gunTimeMs + ms : null;
   };
+  // What the typed digits will be saved as, shown under the field before Save.
+  const typedMs = parseTypedTime(typed);
+  const typedPreview = typed.trim() === "" ? null : typedMs === null ? "Not a time yet" : `= ${formatElapsed(typedMs)}`;
 
   const nudge = (e: SyntheticEvent, deltaMs: number) => {
     if (!mark?.timeMs) return;
@@ -1047,7 +1050,7 @@ function FixSheet({
   const saveTyped = (e: SyntheticEvent) => {
     e.preventDefault();
     const timeMs = absolute(typed);
-    if (timeMs === null) return setError(gunTimeMs ? "Use m:ss.t, like 6:02.4" : "Set the gun time first");
+    if (timeMs === null) return setError(gunTimeMs ? "Type the time as minutes and seconds: 6:40, or just 640; tenths after a dot (640.5)." : "Set the gun time first");
     if (mark && !mark.missed) {
       void send({ ...base, type: "edit", targetTapId: mark.tapId, timeMs, deviceTimeMs: eventTimeMs(e) });
     } else {
@@ -1178,12 +1181,15 @@ function FixSheet({
 
       {(mode === "type" || mode === "add") && (
         <form onSubmit={saveTyped} className="space-y-3">
-          <Field label={`${mode === "add" ? "Time" : "New time"} (elapsed, m:ss.t)`}>
+          <Field label={`${mode === "add" ? "Time" : "New time"} since the gun`} hint={typedPreview ?? "Digits are enough: 640 is 6:40, 640.5 is 6:40.5."}>
             <Input
               autoFocus
               value={typed}
-              onChange={(e) => setTyped(e.target.value)}
-              placeholder={gunTimeMs ? "6:02.4" : "set the gun time first"}
+              onChange={(e) => {
+                setTyped(e.target.value);
+                setError(null);
+              }}
+              placeholder={gunTimeMs ? "6:40" : "set the gun time first"}
               disabled={!gunTimeMs}
               inputMode="decimal"
               className="h-12 font-mono text-xl"
