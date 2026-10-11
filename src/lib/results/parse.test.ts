@@ -1,12 +1,15 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import { guessRace, isOurTeam, matchAthlete, normalizeName } from "./match";
 import { headerLabels, parseArrowResultsHtml, parseRaceResultJson, parseResultsText } from "./parse";
 
+// Real, unsanitized results stay out of git; these two tests run only where they exist.
+// The committed, sanitized copies are covered in fixtures.test.ts.
 const dir = `${process.cwd()}/data/results/2026-10-02-nightfall-classic`;
+const withRealData = test.skipIf(!existsSync(dir));
 const ALIASES = ["Sheboygan Lutheran", "Sheboygan Area Lutheran"];
 
-test("RACE RESULT json: columns, mats, DNF, our rows", () => {
+withRealData("RACE RESULT json: columns, mats, DNF, our rows", () => {
   const rows = JSON.parse(readFileSync(`${dir}/girls-raceresult.json`, "utf8"));
   const c = parseRaceResultJson(rows, "Girls Division 3");
   expect(c.splitLabels).toEqual(["Mile 1", "Mile 2"]);
@@ -21,7 +24,7 @@ test("RACE RESULT json: columns, mats, DNF, our rows", () => {
   expect(c.entries.filter((e) => isOurTeam(e.team, ALIASES))).toHaveLength(10);
 });
 
-test("pdf text: header gives mat labels; rows parse incl. DNF without points", () => {
+withRealData("pdf text: header gives mat labels; rows parse incl. DNF without points", () => {
   const text = readFileSync(`${dir}/boys.txt`, "utf8");
   const c = parseResultsText(text, "Boys Division 3");
   expect(c.splitLabels).toEqual(["Mile 1", "Mile 2"]);
