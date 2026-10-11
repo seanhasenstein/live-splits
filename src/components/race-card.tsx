@@ -2,12 +2,12 @@
 
 import { ChevronRight, CircleCheck, Download, Flag, GitCompare, MoreHorizontal, Pencil, Radio, Timer } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { StartRaceControl } from "@/components/start-race";
 import { clearGunTimeAction, findLiveFeedsAction, gunFromOfficialPreviewAction, type LiveFeedOption, setGunFromOfficialAction, setGunTimeAction, setLiveFeedAction, setRaceFinishedAction } from "@/app/actions/races";
 import { Alert, Badge, Button, Field, Input, Sheet, Time, RaceStateBadge } from "@/components/ui";
+import { RunningClock } from "@/components/race-status";
 import { useClock } from "@/lib/client/clock";
-import { useTimeFormat } from "@/lib/client/time-format";
 import { formatClock, formatElapsed } from "@/lib/time";
 
 export type RaceState = "not_started" | "in_progress" | "finished";
@@ -100,10 +100,18 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
 
       {gunTimeMs !== null ? (
         <div className="mt-3">
-          <Elapsed gunTimeMs={gunTimeMs} finishedAt={finishedAt} now={clock.now} />
+          {/* The clock runs while the race does. Afterwards only the times of day matter: how long
+              the race "took" is when the last runner finished, which is nobody's result. */}
+          {!finishedAt && <RunningClock gunTimeMs={gunTimeMs} now={clock.now} className="text-3xl font-semibold tracking-tight text-ink" />}
           <div className="mt-0.5 text-[13px] text-ink-2">
             Gun <Time>{formatClock(gunTimeMs, timeZone)}</Time>
             {firedBy && ` · by ${firedBy}`}
+            {finishedAt && (
+              <>
+                {" · finished "}
+                <Time>{formatClock(new Date(finishedAt).getTime(), timeZone, false)}</Time>
+              </>
+            )}
           </div>
         </div>
       ) : finished ? (
@@ -486,19 +494,6 @@ function Option({ title, description, action, danger }: { title: string; descrip
   );
 }
 
-function Elapsed({ gunTimeMs, finishedAt, now }: { gunTimeMs: number; finishedAt: string | null; now: () => number | null }) {
-  const { ft } = useTimeFormat();
-  const [, tick] = useState(0);
-  useEffect(() => {
-    if (finishedAt) return;
-    const t = setInterval(() => tick((n) => n + 1), 100);
-    return () => clearInterval(t);
-  }, [finishedAt]);
-  const end = finishedAt ? new Date(finishedAt).getTime() : now();
-  if (end === null) return <Time className="text-3xl font-semibold text-ink">—</Time>;
-  // Running: tenths, like every race clock. Finished: the race's length, shown the team's way.
-  return <Time className="text-3xl font-semibold tracking-tight text-ink">{finishedAt ? ft(end - gunTimeMs) : formatElapsed(end - gunTimeMs)}</Time>;
-}
 
 /** Only speaks up when something is wrong with the device clock. */
 export function ClockWarning({ sync, error }: { sync: { offsetMs: number; rttMs: number } | null; error: string | null }) {
