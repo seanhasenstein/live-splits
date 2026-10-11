@@ -10,6 +10,17 @@ import { formatElapsed } from "@/lib/time";
  * with the running clock, solid green finished. Shared by the board and the
  * record screen.
  */
+/** Elapsed since the gun, ticking at tenths: the one race clock, wherever it's shown. */
+export function RunningClock({ gunTimeMs, now, className }: { gunTimeMs: number; now: () => number | null; className?: string }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 100);
+    return () => clearInterval(t);
+  }, []);
+  const n = now();
+  return <Time className={className}>{n === null ? "—" : formatElapsed(n - gunTimeMs)}</Time>;
+}
+
 export function RaceStatusBar({
   name,
   finished,
@@ -25,13 +36,6 @@ export function RaceStatusBar({
   /** Official times are on the board (imported, or live from the timing company's feed), or "none": app taps only. */
   official?: "imported" | "live" | "none";
 }) {
-  const [, tick] = useState(0);
-  useEffect(() => {
-    if (finished || !gunTimeMs) return;
-    const t = setInterval(() => tick((n) => n + 1), 100);
-    return () => clearInterval(t);
-  }, [finished, gunTimeMs]);
-
   const prefix = name ? <span className="truncate text-sm font-semibold">{name} ·</span> : null;
 
   if (finished) {
@@ -57,13 +61,12 @@ export function RaceStatusBar({
         <span className="hidden truncate text-sm opacity-80 min-[400px]:inline">· waiting for the gun</span>
       </div>
     );
-  const n = now();
   return (
     <div className="flex min-w-0 flex-1 items-center justify-center gap-2.5 rounded-lg border border-danger/40 bg-danger-soft px-3 py-1.5 text-danger sm:justify-start">
       <LiveDot className="bg-danger" />
       {prefix}
       <span className="shrink-0 text-sm font-semibold">In progress</span>
-      <Time className="shrink-0 text-2xl font-semibold tracking-tight text-ink">{n === null ? "—" : formatElapsed(n - gunTimeMs)}</Time>
+      <RunningClock gunTimeMs={gunTimeMs} now={now} className="shrink-0 text-2xl font-semibold tracking-tight text-ink" />
       {official && <OfficialPill kind={official} className="bg-danger/15 text-danger" />}
     </div>
   );

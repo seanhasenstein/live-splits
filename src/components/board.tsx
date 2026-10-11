@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Pencil, Share } from "lucide-react";
-import { CheckpointCounts, DeltaText, RaceStatusBar } from "@/components/race-status";
+import { CheckpointCounts, DeltaText, RaceStatusBar, RunningClock } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
 import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, LiveDot, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
@@ -624,6 +624,8 @@ function RaceBoard({
             return { rank: idx + 1, of: group.length, team };
           })()}
           raceClockMs={!isFinished && gunTimeMs !== null && nowMs > 0 ? nowMs - gunTimeMs : null}
+          gunTimeMs={gunTimeMs}
+          now={clock.now}
           onShared={showToast}
           history={race.history.byAthlete[openAthlete]}
           onClose={() => setAthleteSheet(null)}
@@ -683,6 +685,8 @@ function AthleteSheet({
   history,
   teamRank,
   raceClockMs,
+  gunTimeMs,
+  now,
   onShared,
   onClose,
 }: {
@@ -700,8 +704,11 @@ function AthleteSheet({
   history: LineupHistory["byAthlete"][string] | undefined;
   /** Position within the runner's gender + level group, e.g. { rank: 3, of: 7, team: "girls varsity team" }. */
   teamRank: { rank: number; of: number; team: string } | null;
-  /** Elapsed race time right now (ms), while the race runs. */
+  /** Elapsed race time right now (ms), while the race runs; refreshed once a second, for "ago" and projections. */
   raceClockMs: number | null;
+  gunTimeMs: number | null;
+  /** Synced clock, for the race clock itself (ticks at tenths). */
+  now: () => number | null;
   /** A toast, for the clipboard fallback. */
   onShared: (msg: string) => void;
   onClose: () => void;
@@ -813,7 +820,7 @@ function AthleteSheet({
                 <LiveDot />
                 Race clock
               </div>
-              <Time className="text-4xl font-semibold tracking-tight text-ink">{formatElapsed(raceClockMs).replace(/\.\d$/, "")}</Time>
+              <RunningClock gunTimeMs={gunTimeMs!} now={now} className="text-4xl font-semibold tracking-tight text-ink" />
             </div>
           )
         )}
