@@ -18,6 +18,7 @@ pnpm dev
 ## Scripts
 
 - `pnpm dev` / `pnpm build` / `pnpm lint` / `pnpm typecheck`
+- `pnpm test` — unit tests. `src/lib/results/fixtures/` holds real vendor output (Arrow/XM, RACE RESULT, Badger State PDF text, a hand-split division PDF) with other schools' names replaced, run through the parsers and the fetch chain; regenerate a fixture from a fresh download when a vendor changes its format. Two tests on unsanitized local data (`data/results/`, git-ignored) skip where it isn't present.
 - `pnpm db:indexes` — create indexes (run again after pulling: new indexes were added Oct 8)
 - `pnpm db:seed` — create indexes and seed
 - `pnpm db:migrate` — backfill fields added since the database was seeded
