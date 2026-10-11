@@ -60,6 +60,12 @@ export const Program = tenantDoc({
     /** Default N for Top N lists; overridable per query. */
     defaultListLength: z.int().positive(),
     displayUnit: z.enum(["mi", "km"]),
+    /**
+     * How the team shows times to athletes and parents: whole seconds or tenths. A time is never
+     * shown finer than its source (a sheet in seconds stays in seconds). The record screen and
+     * the running race clock always show tenths.
+     */
+    timePrecision: z.enum(["seconds", "tenths"]).default("tenths"),
     classYearSystem: ClassYearSystem,
     levels: z.array(LevelLabel),
     raceCategories: z.array(RaceCategoryLabel),

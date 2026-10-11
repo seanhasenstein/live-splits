@@ -23,8 +23,8 @@ test("app vs official: errors, mean, max, bias", () => {
     tap("3", { type: "name_tap", athleteId: "A", checkpointId: "fin", serverTimeMs: 1_000_000 + 1_000_000 + 2_000 }), // +2.0s
   ];
   const official = {
-    A: { finishMs: 1_000_000, status: "finished", place: 1, byCheckpoint: { m1: 300_000 } },
-    B: { finishMs: null, status: "dnf", place: null, byCheckpoint: { m1: 320_000 } },
+    A: { finishMs: 1_000_000, status: "finished", place: 1, byCheckpoint: { m1: 300_000 }, precision: "tenths" as const },
+    B: { finishMs: null, status: "dnf", place: null, byCheckpoint: { m1: 320_000 }, precision: "tenths" as const },
   };
   const { rows, summary } = compareRace(race, replay(race, taps), official);
   expect(rows[0].cells[0]).toMatchObject({ appMs: 300_800, officialMs: 300_000, errorMs: 800 });

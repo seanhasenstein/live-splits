@@ -21,6 +21,7 @@ test("Arrow Live Results partial (XM Timing): 136 finishers, bibs, hundredths", 
   expect(c.entries.filter((e) => isOurTeam(e.team, ALIASES))).toHaveLength(7);
   expect(c.entries.every((e) => e.finishMs !== null && e.name.includes(" "))).toBe(true);
   expect(c.source).toEqual({ kind: "arrow", url: "https://www.arrowliveresults.com/X" });
+  expect(c.precision).toBe("hundredths");
 });
 
 test("RACE RESULT contest JSON (Badger State Timing): mat columns, DNF, grades", () => {
@@ -34,6 +35,7 @@ test("RACE RESULT contest JSON (Badger State Timing): mat columns, DNF, grades",
   expect(dnf).toHaveLength(1);
   expect(dnf[0].finishMs).toBeNull();
   expect(Object.keys(dnf[0].splits)).toEqual(["Mile 1"]);
+  expect(c.precision).toBe("tenths");
 });
 
 test("Badger State PDF text: header gives mat labels, team-score rows skipped, DNF without points", () => {
@@ -45,6 +47,7 @@ test("Badger State PDF text: header gives mat labels, team-score rows skipped, D
   expect(c.entries.some((e) => e.name === "Northfield" || e.team === "")).toBe(false);
   expect(c.entries.filter((e) => e.status === "dnf").length).toBeGreaterThan(0);
   expect(c.entries.every((e) => e.grade !== null)).toBe(true);
+  expect(c.precision).toBe("tenths");
 });
 
 test("hand-split division PDF text: ordinals, OVR column, class years, displacer points", () => {
@@ -55,6 +58,7 @@ test("hand-split division PDF text: ordinals, OVR column, class years, displacer
   expect(c.entries.find((e) => e.name === "Joe Vanic")).toMatchObject({ place: 14, grade: 12 }); // "(13)" displacer points
   expect(c.entries.every((e) => e.grade !== null && e.team && e.finishMs !== null)).toBe(true);
   expect(c.splitLabels).toEqual([]);
+  expect(c.precision).toBe("seconds"); // whole seconds on the sheet: shown as "16:16", never "16:16.0"
 });
 
 // ---- The fetch chain, with the network replaced by fixtures.

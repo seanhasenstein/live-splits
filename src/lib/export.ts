@@ -78,7 +78,7 @@ export function buildExportRows(input: {
         o?.place != null ? String(o.place) : statusLabel,
         a.displayName,
         a.grade === null ? "" : String(a.grade),
-        o?.finishMs != null ? formatElapsed(o.finishMs) : "",
+        o?.finishMs != null ? formatElapsed(o.finishMs, o.precision) : "",
         elapsed(finishMark) === null ? statusLabel : formatWorkbookTime(elapsed(finishMark)!),
         ...splits.map((c, i) => {
           const off = officialSplit(c);

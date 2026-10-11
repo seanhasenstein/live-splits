@@ -61,7 +61,7 @@ async function fetchLive(meet: Meet, race: Race): Promise<OfficialTimes> {
       const id = checkpointForLabel(race, label);
       if (id) byCheckpoint[id] = ms;
     }
-    out[m.athlete._id] = { finishMs: e.finishMs, status: e.status, place: e.place, byCheckpoint };
+    out[m.athlete._id] = { finishMs: e.finishMs, status: e.status, place: e.place, byCheckpoint, precision: contest.precision };
   }
   return out;
 }

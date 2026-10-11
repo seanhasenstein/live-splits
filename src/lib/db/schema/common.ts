@@ -35,7 +35,8 @@ export const DurationMs = z.int().nonnegative();
 /** Absolute instants used for timing (gun, taps): integer epoch milliseconds (UTC). */
 export const EpochMs = z.int().positive();
 
-export const Precision = z.enum(["tenths", "hundredths", "thousandths"]);
+/** How many decimals a time carries: an official sheet in whole seconds, a chip system in hundredths. */
+export const Precision = z.enum(["seconds", "tenths", "hundredths", "thousandths"]);
 export type Precision = z.infer<typeof Precision>;
 
 export const TimingMethod = z.enum(["fat", "hand", "rfid", "app"]);

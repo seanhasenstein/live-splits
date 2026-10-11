@@ -31,6 +31,21 @@ async function main() {
     { "settings.teamAliases": { $exists: false } },
     { $set: { "settings.teamAliases": ["Sheboygan Lutheran", "Sheboygan Area Lutheran", "Sheboygan Area Lutheran HS"] } },
   );
+  // The team shows whole seconds (its long-standing convention); programs seeded before the setting existed get it.
+  const r9 = await collection(db, "programs").updateMany({ "settings.timePrecision": { $exists: false } }, { $set: { "settings.timePrecision": "seconds" } });
+  // Results imported before precision was recorded were all stamped "tenths". A race whose official
+  // times are every one a whole second came from a sheet in seconds; mark it so.
+  let r10 = 0;
+  for (const race of await collection(db, "races").find({ officialImportId: { $ne: null } }).toArray()) {
+    const results = await collection(db, "results").find({ raceId: race._id, deletedAt: null, "mark.type": "time" }).toArray();
+    const entries = await collection(db, "raceEntries").find({ raceId: race._id, deletedAt: null, timeMs: { $ne: null } }).toArray();
+    const values = [...results.map((r) => (r.mark?.type === "time" ? r.mark.value : 0)), ...entries.map((e) => e.timeMs ?? 0)];
+    if (values.length === 0 || values.some((v) => v % 1000 !== 0)) continue;
+    await collection(db, "results").updateMany({ raceId: race._id, deletedAt: null, "mark.type": "time" }, { $set: { "mark.precision": "seconds" } });
+    await collection(db, "raceEntries").updateMany({ raceId: race._id, deletedAt: null, timeMs: { $ne: null } }, { $set: { precision: "seconds" } });
+    r10 += 1;
+  }
+  console.log(`programs.timePrecision: ${r9.modifiedCount}, races.officialSeconds: ${r10}`);
   console.log(`races.finishedAt: ${r1.modifiedCount}, races.officialImportId: ${r2.modifiedCount}, races.liveFeed: ${r4.modifiedCount}, meets.resultsUrl: ${r5.modifiedCount}, schools.viewerLink: ${r6.modifiedCount}, programs.mixedCategory: ${r7.modifiedCount}, races.finishedByImport: ${r8}, schools.teamAliases: ${r3.modifiedCount}`);
 }
 

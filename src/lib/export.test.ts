@@ -92,7 +92,7 @@ test("official and app finishers sort together by time", () => {
   const taps = [
     tap("1", { type: "name_tap", athleteId: "A", checkpointId: "fin", serverTimeMs: gun + 18 * 60_000 }), // app-only 18:00
   ];
-  const official = { B: { finishMs: 22 * 60_000, status: "finished", place: 40, byCheckpoint: {} } };
+  const official = { B: { finishMs: 22 * 60_000, status: "finished", place: 40, byCheckpoint: {}, precision: "tenths" as const } };
   const rows = buildExportRows({ race, state: replay(race, taps), athletes, levelLabel: (id) => id, official });
   const names = rows.slice(1).filter((r) => r[0] === "varsity").map((r) => r[2]);
   expect(names[0]).toBe("Eddy Giebler"); // A (18:00) before C (no time)

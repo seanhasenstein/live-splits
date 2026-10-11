@@ -124,6 +124,7 @@ async function main() {
       recordsStartGrade: 9,
       defaultListLength: 30,
       displayUnit: "mi",
+      timePrecision: "seconds", // the Crusaders have always posted whole seconds
       classYearSystem: "hs_grade",
       levels: [
         { id: "varsity", label: "Varsity", abbreviation: "V" },

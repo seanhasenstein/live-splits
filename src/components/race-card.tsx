@@ -7,6 +7,7 @@ import { StartRaceControl } from "@/components/start-race";
 import { clearGunTimeAction, findLiveFeedsAction, gunFromOfficialPreviewAction, type LiveFeedOption, setGunFromOfficialAction, setGunTimeAction, setLiveFeedAction, setRaceFinishedAction } from "@/app/actions/races";
 import { Alert, Badge, Button, Field, Input, Sheet, Time, RaceStateBadge } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
+import { useTimeFormat } from "@/lib/client/time-format";
 import { formatClock, formatElapsed } from "@/lib/time";
 
 export type RaceState = "not_started" | "in_progress" | "finished";
@@ -486,6 +487,7 @@ function Option({ title, description, action, danger }: { title: string; descrip
 }
 
 function Elapsed({ gunTimeMs, finishedAt, now }: { gunTimeMs: number; finishedAt: string | null; now: () => number | null }) {
+  const { ft } = useTimeFormat();
   const [, tick] = useState(0);
   useEffect(() => {
     if (finishedAt) return;
@@ -494,7 +496,8 @@ function Elapsed({ gunTimeMs, finishedAt, now }: { gunTimeMs: number; finishedAt
   }, [finishedAt]);
   const end = finishedAt ? new Date(finishedAt).getTime() : now();
   if (end === null) return <Time className="text-3xl font-semibold text-ink">—</Time>;
-  return <Time className="text-3xl font-semibold tracking-tight text-ink">{formatElapsed(end - gunTimeMs)}</Time>;
+  // Running: tenths, like every race clock. Finished: the race's length, shown the team's way.
+  return <Time className="text-3xl font-semibold tracking-tight text-ink">{finishedAt ? ft(end - gunTimeMs) : formatElapsed(end - gunTimeMs)}</Time>;
 }
 
 /** Only speaks up when something is wrong with the device clock. */

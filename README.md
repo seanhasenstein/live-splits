@@ -77,6 +77,10 @@ workbook can split them.
   text, or PDF). Official finishes and mat splits then replace app taps on
   every screen; Adjust → "Set the gun from official results" lines the app's
   splits up with the mats; the App vs official page shows the error.
+  Imported times keep the sheet's precision (whole seconds, tenths,
+  hundredths) and are shown no finer than that, or than the program's
+  `timePrecision` setting (whole seconds for the Crusaders). The record screen
+  and running race clocks always show tenths.
 - **During a race:** Adjust → "Live official results" links the race to the
   timing company's feed (paste their results page or a RACE RESULT contest
   link, pick the contest). While the race is in progress the taps poll carries

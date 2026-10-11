@@ -7,9 +7,10 @@ import { CheckpointCounts, DeltaText, RaceStatusBar } from "@/components/race-st
 import { SessionMenu } from "@/components/session-menu";
 import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, LiveDot, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
+import { useTimeFormat } from "@/lib/client/time-format";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type AthleteStatus, type CheckpointState, expectedAt, type Mark, replay, replayStatuses, type Slot, STATUS_LABEL, STATUS_LONG } from "@/lib/replay";
-import type { AthleteRaceStatus } from "@/lib/db/schema";
+import type { AthleteRaceStatus, Precision } from "@/lib/db/schema";
 import { lastFinished } from "@/lib/order";
 import type { LineupHistory } from "@/lib/results/history";
 import { METERS_PER_MILE, paceMsPerMile, projectElapsed } from "@/lib/pace";
@@ -108,7 +109,7 @@ export function Board({ meetId, meetName, session, initialRaceId, timeZone, race
 }
 
 /** One board cell: official time if imported, else the app's mark. `elapsedMs` is from the gun (null without one). */
-type Cell = { mark: Mark | undefined; official: number | null; elapsedMs: number | null; absoluteMs: number | null; missed: boolean; beforeGun?: boolean };
+type Cell = { mark: Mark | undefined; official: number | null; precision: Precision | null; elapsedMs: number | null; absoluteMs: number | null; missed: boolean; beforeGun?: boolean };
 type Row = { athleteId: string; marks: (Mark | undefined)[]; cells: Cell[]; reached: number; officialStatus: string | null; officialPlace: number | null; status: AthleteStatus | undefined };
 
 function RaceBoard({
@@ -207,9 +208,10 @@ function RaceBoard({
     toastTimer.current = setTimeout(() => setToast(null), 3000);
   }, []);
 
+  const { ft } = useTimeFormat();
   const fmt = useCallback(
-    (ms: number | null) => (ms === null ? "—" : gunTimeMs ? (ms < gunTimeMs ? "before gun" : formatElapsed(ms - gunTimeMs)) : formatClock(ms, timeZone)),
-    [gunTimeMs, timeZone],
+    (ms: number | null) => (ms === null ? "—" : gunTimeMs ? (ms < gunTimeMs ? "before gun" : ft(ms - gunTimeMs)) : formatClock(ms, timeZone)),
+    [gunTimeMs, timeZone, ft],
   );
 
   // A sheet for someone no longer in this race (lineup edited underneath it) just isn't shown.
@@ -225,11 +227,11 @@ function RaceBoard({
       const cells = race.checkpoints.map((c, i): Cell => {
         const m = marks[i];
         const o = off?.byCheckpoint[c.id] ?? (c.kind === "finish" ? (off?.finishMs ?? null) : null);
-        if (o !== null && o !== undefined) return { mark: m, official: o, elapsedMs: o, absoluteMs: null, missed: false, beforeGun: false };
+        if (o !== null && o !== undefined) return { mark: m, official: o, precision: off.precision, elapsedMs: o, absoluteMs: null, missed: false, beforeGun: false };
         const abs = m && !m.missed && m.timeMs !== null ? m.timeMs : null;
         // A tap from before the gun (race restarted) isn't a time: shown as "before gun", counted as nothing.
         const beforeGun = abs !== null && !!gunTimeMs && abs < gunTimeMs;
-        return { mark: m, official: null, elapsedMs: abs !== null && gunTimeMs && !beforeGun ? abs - gunTimeMs : null, absoluteMs: beforeGun ? null : abs, missed: !!m?.missed, beforeGun };
+        return { mark: m, official: null, precision: null, elapsedMs: abs !== null && gunTimeMs && !beforeGun ? abs - gunTimeMs : null, absoluteMs: beforeGun ? null : abs, missed: !!m?.missed, beforeGun };
       });
       let reached = -1;
       cells.forEach((cell, i) => {
@@ -307,7 +309,7 @@ function RaceBoard({
           .sort((a, b) => a - b);
   const teamLine =
     finishTimes.length >= 5
-      ? `Top 5 avg ${formatElapsed(Math.round(finishTimes.slice(0, 5).reduce((a, b) => a + b, 0) / 5))} · 1–5 spread ${formatElapsed(finishTimes[4] - finishTimes[0])} · ${finishTimes.length} finished`
+      ? `Top 5 avg ${ft(Math.round(finishTimes.slice(0, 5).reduce((a, b) => a + b, 0) / 5))} · 1–5 spread ${ft(finishTimes[4] - finishTimes[0])} · ${finishTimes.length} finished`
       : finishTimes.length > 0
         ? `${finishTimes.length} finished`
         : null;
@@ -487,8 +489,8 @@ function RaceBoard({
                   const prevSplit = prevHere !== null && prevPrev !== null ? prevHere - prevPrev : null;
                   const prevPace = prevSplit !== null ? paceMsPerMile(prevSplit, race.checkpoints[i - 1].meters - (i > 1 ? race.checkpoints[i - 2].meters : 0)) : null;
                   const last = i === row.cells.length - 1;
-                  const cumulative = cell.official !== null ? formatElapsed(cell.official) : cell.absoluteMs !== null ? fmt(cell.absoluteMs) : "—";
-                  const shown = cell.missed ? "missed" : cell.beforeGun ? "before gun" : view === "splits" && i > 0 ? (split === null ? "—" : formatElapsed(split)) : cumulative;
+                  const cumulative = cell.official !== null ? ft(cell.official, cell.precision) : cell.absoluteMs !== null ? fmt(cell.absoluteMs) : "—";
+                  const shown = cell.missed ? "missed" : cell.beforeGun ? "before gun" : view === "splits" && i > 0 ? (split === null ? "—" : ft(split)) : cumulative;
                   const flag = cell.official !== null ? "" : m && !cell.missed && shown !== "—" ? (m.estimate ? "~" : m.edited ? "*" : "") : "";
                   const projected = here === null && !cell.missed ? projectAt(row, i) : null;
                   const fresh = isFresh(m?.tapId);
@@ -507,7 +509,7 @@ function RaceBoard({
                       )}
                       {view === "both" && i > 0 && split !== null && (
                         <Time className="block text-[11px] text-ink-3">
-                          {formatElapsed(split)}
+                          {ft(split)}
                           {prevPace !== null && segMeters > 0 && (
                             <>
                               {" "}
@@ -704,6 +706,7 @@ function AthleteSheet({
   onShared: (msg: string) => void;
   onClose: () => void;
 }) {
+  const { ft } = useTimeFormat();
   const last = lastFinished(history);
   const t = (i: number): number | null => {
     const c = row?.cells[i];
@@ -734,9 +737,9 @@ function AthleteSheet({
   const share = async () => {
     const parts = race.checkpoints.flatMap((c, i) => {
       const v = t(i);
-      return v !== null ? [`${c.label} ${formatElapsed(v)}`] : [];
+      return v !== null ? [`${c.label} ${ft(v, row?.cells[i]?.precision)}`] : [];
     });
-    const headline = finish !== null ? formatElapsed(finish) : status ? status.short : raceClockMs !== null ? "in progress" : parts.length ? "" : "not started";
+    const headline = finish !== null ? ft(finish, row?.cells[finishIndex]?.precision) : status ? status.short : raceClockMs !== null ? "in progress" : parts.length ? "" : "not started";
     const text = [`${name} — ${race.name}, ${meetName}`, headline, row?.officialPlace != null ? `${row.officialPlace}${ordinal(row.officialPlace)} place` : "", ...parts]
       .filter(Boolean)
       .join(" · ");
@@ -787,7 +790,7 @@ function AthleteSheet({
               <div className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
                 {finish !== null ? (finishOfficial ? "Finish · official" : "Finish · unofficial") : projected !== null ? "Projected finish" : "Finish"}
               </div>
-              <Time className="text-4xl font-semibold tracking-tight text-ink">{finish !== null ? formatElapsed(finish) : projected !== null ? `~${formatElapsed(projected).replace(/\.\d$/, "")}` : "—"}</Time>
+              <Time className="text-4xl font-semibold tracking-tight text-ink">{finish !== null ? ft(finish, row?.cells[finishIndex]?.precision) : projected !== null ? `~${formatElapsed(projected).replace(/\.\d$/, "")}` : "—"}</Time>
               {avgPace !== null && <Time className="block text-[13px] text-ink-2">{formatElapsed(avgPace).replace(/\.\d$/, "")}/mi average</Time>}
             </>
           )}
@@ -824,7 +827,7 @@ function AthleteSheet({
             )}
             {last && last.finishMs !== null && (
               <SmallStat
-                value={finish !== null ? <DeltaText ms={finish - last.finishMs} /> : <span className="text-ink-2">{formatElapsed(last.finishMs)}</span>}
+                value={finish !== null ? <DeltaText ms={finish - last.finishMs} /> : <span className="text-ink-2">{ft(last.finishMs, last.precision)}</span>}
                 label={finish !== null ? "vs last meet" : "last meet"}
               />
             )}
@@ -859,7 +862,7 @@ function AthleteSheet({
               </span>
               {(() => {
                 const p = here === null && !cell?.missed ? projectAt(i) : null;
-                if (p === null) return <Time className="w-16 shrink-0 text-right font-semibold text-ink">{cell?.missed ? "missed" : here !== null ? formatElapsed(here) : "—"}</Time>;
+                if (p === null) return <Time className="w-16 shrink-0 text-right font-semibold text-ink">{cell?.missed ? "missed" : here !== null ? ft(here, cell?.precision) : "—"}</Time>;
                 const late = overdue(p);
                 return (
                   <span className={`w-16 shrink-0 text-right ${late ? "text-gold-text/75" : "text-ink-3"}`}>
@@ -869,10 +872,10 @@ function AthleteSheet({
                 );
               })()}
               <Time className="w-32 shrink-0 text-right whitespace-nowrap text-ink-2">
-                {split !== null && segMeters > 0 ? `${formatElapsed(split)} · ${formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}/mi` : "—"}
+                {split !== null && segMeters > 0 ? `${ft(split)} · ${formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}/mi` : "—"}
               </Time>
               {last && (
-                <Time className="w-14 shrink-0 text-right">{here !== null && ref !== null ? <DeltaText ms={here - ref} /> : ref !== null ? <span className="text-ink-3">{formatElapsed(ref)}</span> : <span className="text-ink-3">—</span>}</Time>
+                <Time className="w-14 shrink-0 text-right">{here !== null && ref !== null ? <DeltaText ms={here - ref} /> : ref !== null ? <span className="text-ink-3">{ft(ref, last?.precision)}</span> : <span className="text-ink-3">—</span>}</Time>
               )}
             </div>
           );

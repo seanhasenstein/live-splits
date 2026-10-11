@@ -1,4 +1,5 @@
 import "server-only";
+import type { Precision } from "@/lib/db/schema";
 import type { Meet, Race } from "@/lib/db/schema";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
@@ -23,6 +24,8 @@ export type PriorRace = {
 export type PriorResult = {
   raceId: string;
   finishMs: number | null;
+  /** What the official sheet carried, for display. */
+  precision: Precision;
   status: string;
   /** Mat split cumulative ms by checkpoint meters. */
   splits: Record<string, number>;
@@ -78,6 +81,7 @@ export async function getLineupHistory(meet: Meet, race: Pick<Race, "lineup">): 
     (byAthlete[r.athleteId!] ??= []).push({
       raceId: r.raceId!,
       finishMs: r.mark?.type === "time" ? r.mark.value : null,
+      precision: r.mark?.type === "time" ? r.mark.precision : "tenths",
       status: r.status,
       splits,
       prSb: r.status === "finished" && !r.exclusions.excludeFromPrSb,

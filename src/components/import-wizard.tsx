@@ -288,7 +288,7 @@ function ContestCard({
                   <div className="min-w-0 flex-1">
                     <span className="text-sm font-medium text-ink">{e.name}</span>
                     <span className="tnum ml-2 text-[13px] text-ink-2">
-                      {e.status === "finished" ? `${e.place ?? "—"} · ${e.finishMs !== null ? formatElapsed(e.finishMs) : "—"}` : e.status.toUpperCase()}
+                      {e.status === "finished" ? `${e.place ?? "—"} · ${e.finishMs !== null ? formatElapsed(e.finishMs, contest.precision) : "—"}` : e.status.toUpperCase()}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">

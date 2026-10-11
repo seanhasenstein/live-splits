@@ -6,7 +6,7 @@ import type { FormState } from "@/app/actions/races";
 import { Alert, Button, Card, CardBody, CardHeader, Checkbox, Field, Input, LinkButton, Select } from "@/components/ui";
 import type { DistanceUnit, Gender, Program } from "@/lib/db/schema";
 import type { RacePayload } from "@/lib/race-form";
-import { formatElapsed } from "@/lib/time";
+import { useTimeFormat } from "@/lib/client/time-format";
 
 type DistanceOption = { id: string; label: string; value: number; unit: DistanceUnit };
 type RosterEntry = { id: string; name: string; gender: Gender; defaultLevelId: string };
@@ -34,6 +34,7 @@ function defaultCheckpoints(distance: DistanceOption | undefined): Checkpoint[] 
 }
 
 export function RaceForm({ action, cancelHref, program, distances, roster, lastFinishMs, race }: Props) {
+  const { ft } = useTimeFormat();
   const [state, formAction, pending] = useActionState(action, {});
   const defaultDistance = distances.find((d) => d.id === "xc-5000m") ?? distances[0];
   const firstCategory = program.raceCategories[0];
@@ -291,7 +292,7 @@ export function RaceForm({ action, cancelHref, program, distances, roster, lastF
               <>
                 <span className="w-6 text-right text-[13px] tabular-nums text-ink-3">{i + 1}</span>
                 <span className="flex-1 truncate text-sm font-medium text-ink">{nameOf(id)}</span>
-                {lastFinishMs[id] !== undefined && <span className="tnum text-xs text-ink-3">{formatElapsed(lastFinishMs[id])}</span>}
+                {lastFinishMs[id] !== undefined && <span className="tnum text-xs text-ink-3">{ft(lastFinishMs[id])}</span>}
               </>
             )}
           />

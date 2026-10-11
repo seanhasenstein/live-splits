@@ -1,6 +1,6 @@
 import "server-only";
 import type { ClientSession } from "mongodb";
-import type { Actor, Athlete, Meet, Race, Result, Split } from "@/lib/db/schema";
+import type { Actor, Athlete, Meet, Precision, Race, Result, Split } from "@/lib/db/schema";
 import { getClient, getDb, newId } from "@/lib/db/client";
 import { collection, COLLECTIONS } from "@/lib/db/collections";
 import { gradeForSeason } from "@/lib/grade";
@@ -94,7 +94,7 @@ async function writeImport(db: Awaited<ReturnType<typeof getDb>>, session: Clien
         place: e.place,
         status: e.status,
         timeMs: e.finishMs,
-        precision: e.finishMs !== null ? "tenths" : null,
+        precision: e.finishMs !== null ? contest.precision : null,
         splits: Object.entries(e.splits).map(([label, cumulativeMs]) => ({ label, checkpointId: checkpointForLabel(race, label), cumulativeMs })),
         athleteId: byIndex.get(i) ?? null,
         ...audit,
@@ -151,7 +151,7 @@ async function writeImport(db: Awaited<ReturnType<typeof getDb>>, session: Clien
         raceId: race._id,
         athleteId: athlete._id,
         distanceId: race.distanceId,
-        mark: entry?.finishMs != null ? { type: "time", value: entry.finishMs, precision: "tenths", timingMethod: "rfid" } : null,
+        mark: entry?.finishMs != null ? { type: "time", value: entry.finishMs, precision: contest.precision, timingMethod: "rfid" } : null,
         status: entry ? entry.status : "dns",
         place: entry?.place ?? null,
         levelId: levelByAthlete.get(athlete._id) ?? null,
@@ -196,7 +196,7 @@ async function writeImport(db: Awaited<ReturnType<typeof getDb>>, session: Clien
   return { importId: importDoc._id };
 }
 
-export type OfficialTimes = Record<string, { finishMs: number | null; status: string; place: number | null; byCheckpoint: Record<string, number> }>;
+export type OfficialTimes = Record<string, { finishMs: number | null; status: string; place: number | null; byCheckpoint: Record<string, number>; precision: Precision }>;
 
 /** Official (mat) times per athlete for a race, keyed by athleteId → checkpointId. Empty when nothing was imported. */
 export async function getOfficialTimes(race: Race): Promise<OfficialTimes> {
@@ -207,7 +207,7 @@ export async function getOfficialTimes(race: Race): Promise<OfficialTimes> {
     if (!r.athleteId) continue;
     const byCheckpoint: Record<string, number> = {};
     for (const s of r.splits) if (s.source === "mat") byCheckpoint[s.checkpointId] = s.cumulativeMs;
-    out[r.athleteId] = { finishMs: r.mark?.type === "time" ? r.mark.value : null, status: r.status, place: r.place, byCheckpoint };
+    out[r.athleteId] = { finishMs: r.mark?.type === "time" ? r.mark.value : null, status: r.status, place: r.place, byCheckpoint, precision: r.mark?.type === "time" ? r.mark.precision : "tenths" };
   }
   return out;
 }

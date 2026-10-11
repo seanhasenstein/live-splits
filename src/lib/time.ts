@@ -1,12 +1,18 @@
 import type { Precision } from "@/lib/db/schema";
 
 const PRECISION_DIGITS: Record<Precision, number> = {
+  seconds: 0,
   tenths: 1,
   hundredths: 2,
   thousandths: 3,
 };
 
-/** Elapsed duration as "m:ss.t" (or "h:mm:ss.t"). Truncates, like timing systems do. */
+/** The coarser of two precisions: a team that shows seconds never sees tenths, and a sheet in seconds never gains them. */
+export function coarser(a: Precision, b: Precision): Precision {
+  return PRECISION_DIGITS[a] <= PRECISION_DIGITS[b] ? a : b;
+}
+
+/** Elapsed duration as "m:ss.t" (or "h:mm:ss.t"; "m:ss" at whole seconds). Truncates, like timing systems do. */
 export function formatElapsed(ms: number, precision: Precision = "tenths"): string {
   const digits = PRECISION_DIGITS[precision];
   const sign = ms < 0 ? "-" : "";
@@ -18,7 +24,7 @@ export function formatElapsed(ms: number, precision: Precision = "tenths"): stri
   const s = totalSeconds % 60;
   const frac = String(fraction).padStart(digits, "0");
   const base = h > 0 ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
-  return `${sign}${base}.${frac}`;
+  return digits === 0 ? `${sign}${base}` : `${sign}${base}.${frac}`;
 }
 
 /** Wall-clock time of an instant in a zone, e.g. "7:10:23.4 PM". */
