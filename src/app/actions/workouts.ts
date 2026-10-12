@@ -86,3 +86,16 @@ export async function deleteWorkoutAction(workoutId: string): Promise<void> {
   await collection(await getDb(), "workouts").updateOne({ _id: workout._id }, { $set: { deletedAt: new Date(), updatedAt: new Date(), updatedBy: sessionActor(session!) } });
   redirect("/workouts");
 }
+
+/** End a workout (the clocks stop and the page becomes a summary) or reopen it. Coaches only. */
+export async function setWorkoutFinishedAction(workoutId: string, finished: boolean): Promise<{ error?: string }> {
+  const session = await getSession();
+  if (!isSchoolCoach(session)) return { error: "Only a coach can end a workout" };
+  const workout = await getWorkout(workoutId);
+  if (!workout || workout.schoolId !== session!.schoolId) return { error: "Workout not found" };
+  await collection(await getDb(), "workouts").updateOne(
+    { _id: workout._id },
+    { $set: { finishedAt: finished ? new Date() : null, updatedAt: new Date(), updatedBy: sessionActor(session!) } },
+  );
+  return {};
+}

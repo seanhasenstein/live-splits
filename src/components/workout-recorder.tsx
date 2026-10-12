@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, MoreHorizontal, Play, SlidersHorizontal, UserPlus } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Card, Input, SectionLabel, Segmented, Sheet, Time } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useLocalValue } from "@/lib/client/use-local-value";
@@ -22,7 +22,40 @@ type Plan = Pick<Workout, "sets" | "groups" | "athletes"> & { finishedAt: string
 let lastPointerDownMs = 0;
 const notePointerDown = () => {
   lastPointerDownMs = Date.now();
+  unlockAudio();
 };
+
+/**
+ * The countdown alert: a beep (and a buzz where the phone supports it; iPhones
+ * don't) at 10 s to go and a double one at Go. Browsers only allow sound after
+ * a tap, so the audio is switched on by the first tap on the screen.
+ */
+let audio: AudioContext | null = null;
+function unlockAudio() {
+  try {
+    audio ??= new AudioContext();
+    if (audio.state === "suspended") void audio.resume();
+  } catch {
+    // no Web Audio: the buzz (where there is one) still works
+  }
+}
+function beep(go: boolean) {
+  navigator.vibrate?.(go ? [200, 100, 200] : 150);
+  if (!audio || audio.state !== "running") return;
+  const tones = go ? [0, 0.22] : [0];
+  for (const at of tones) {
+    const osc = audio.createOscillator();
+    const gain = audio.createGain();
+    osc.frequency.value = go ? 1046 : 784;
+    gain.gain.setValueAtTime(0.0001, audio.currentTime + at);
+    gain.gain.exponentialRampToValueAtTime(0.4, audio.currentTime + at + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + at + 0.18);
+    osc.connect(gain).connect(audio.destination);
+    osc.start(audio.currentTime + at);
+    osc.stop(audio.currentTime + at + 0.2);
+  }
+}
+const ALERT_KEY = "ls_workout_alerts";
 const tapTime = () => {
   const now = Date.now();
   return lastPointerDownMs && now - lastPointerDownMs < 1500 ? lastPointerDownMs : now;
@@ -72,6 +105,8 @@ export function WorkoutRecorder({
   const order: TileOrder = orderPref === "last" || orderPref === "name" ? orderPref : "goal";
   const [largePref, setLargePref] = useLocalValue(LARGE_KEY);
   const large = largePref === "1";
+  const [alertPref, setAlertPref] = useLocalValue(ALERT_KEY);
+  const alerts = alertPref !== "off";
 
   // The clocks: server time, ticking at tenths.
   // Keyed on the offset, not the clock object (a new one each render would restart the ticker).
@@ -165,6 +200,17 @@ export function WorkoutRecorder({
   // After an early rest the rep clock keeps going for whoever is still out: coaches call those times.
   const outRepStartMs = phase.kind === "rest" && stillOut.length > 0 ? (state.groupLog.get(group.id)?.find((l) => l.repIndex === phase.afterRepIndex)?.startMs ?? null) : null;
 
+  // Beep as the rest counts down: once at 10 s to go, twice at Go. Only on a change seen
+  // here, so opening the screen mid-countdown doesn't beep for a moment already past.
+  const countdownStage = phase.kind === "rest" && phase.nextStartMs !== null ? (now >= phase.nextStartMs ? 2 : phase.nextStartMs - now <= 10_000 ? 1 : 0) : -1;
+  const restKey = phase.kind === "rest" ? `${group.id}:${phase.afterRepIndex}` : "";
+  const lastStage = useRef({ key: "", stage: -1 });
+  useEffect(() => {
+    const prev = lastStage.current;
+    lastStage.current = { key: restKey, stage: countdownStage };
+    if (alerts && restKey && prev.key === restKey && countdownStage > prev.stage && countdownStage > 0) beep(countdownStage === 2);
+  }, [countdownStage, restKey, alerts]);
+
   // The big clock.
   let clockLabel = "";
   let clockValue = "";
@@ -211,6 +257,7 @@ export function WorkoutRecorder({
         <Alert tone="gold">{!online ? `Offline: ${unsent} tap${unsent === 1 ? "" : "s"} saved on this phone, sending when the connection's back.` : `Sending ${unsent}…`}</Alert>
       )}
 
+      {plan.finishedAt && <Alert tone="gold">This workout has been ended. Times can still be fixed; reopen it from All times to run more reps.</Alert>}
       {/* Where the group is, and the one clock that matters right now. */}
       <Card className="px-4 py-4">
         <div className="text-[13px] font-medium text-ink-2">
@@ -233,7 +280,7 @@ export function WorkoutRecorder({
         ) : phase.kind === "before" ? (
           <p className="mt-1 text-sm text-ink-2">{loaded ? "Start the clock when the group goes." : "Loading…"}</p>
         ) : null}
-        {phase.kind === "running" && (
+        {phase.kind === "running" && !plan.finishedAt && (
           <div className="mt-4 grid grid-cols-2 gap-2">
             <Button variant={adjusting ? "ink" : "secondary"} className="h-11" disabled={!startEventId} onClick={() => setAdjusting((a) => !a)} aria-expanded={adjusting}>
               Fix the clock
@@ -257,7 +304,7 @@ export function WorkoutRecorder({
             </div>
           </div>
         )}
-        {phase.kind !== "running" && phase.kind !== "done" && (
+        {phase.kind !== "running" && phase.kind !== "done" && !plan.finishedAt && (
           <>
             {startArmed && (
               <p className="mt-3 rounded-md bg-gold-soft px-3 py-2 text-[13px] text-ink">
@@ -418,7 +465,7 @@ export function WorkoutRecorder({
       )}
 
       {viewOpen && (
-        <Sheet title="Runners" subtitle="Remembered on this phone." onClose={() => setViewOpen(false)}>
+        <Sheet title="This screen" subtitle="Remembered on this phone." onClose={() => setViewOpen(false)}>
           <SectionLabel className="mb-1.5">Order</SectionLabel>
           <div className="grid gap-2">
             {(
@@ -442,6 +489,16 @@ export function WorkoutRecorder({
           </div>
           <SectionLabel className="mt-5 mb-1.5">Tiles</SectionLabel>
           <ChoiceRow active={large} label="Large tiles" hint="One name per row, bigger text." onClick={() => setLargePref(large ? null : "1")} />
+          <SectionLabel className="mt-5 mb-1.5">Countdown</SectionLabel>
+          <ChoiceRow
+            active={alerts}
+            label="Beep at 10 s and at Go"
+            hint="Before each timed rest ends, so you can watch the runners. Turn the phone's sound up."
+            onClick={() => {
+              unlockAudio();
+              setAlertPref(alerts ? "off" : null);
+            }}
+          />
         </Sheet>
       )}
     </div>

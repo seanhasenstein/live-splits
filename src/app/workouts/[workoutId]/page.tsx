@@ -5,6 +5,7 @@ import { AppHeader, Card, CardBody, CardHeader, LinkButton, Page, PageTitle } fr
 import { getSession, isSchoolCoach } from "@/lib/auth/session";
 import { SessionMenu } from "@/components/session-menu";
 import { WorkoutBoard } from "@/components/workout-board";
+import { WorkoutFinishButton } from "@/components/workout-finish-button";
 import { getProgram, listRoster } from "@/lib/data";
 import { describePlan, describeRest, EFFORT_LABEL } from "@/lib/workout-plan";
 import { flattenPlan } from "@/lib/workout-replay";
@@ -33,20 +34,27 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
           title={workout.name}
           description={`${formatLocalDate(workout.date)}${workout.place ? ` · ${workout.place}` : ""} · ${EFFORT_LABEL[workout.effort]}`}
           action={
-            <LinkButton href={`/workouts/${workout._id}/edit`} size="sm" variant="secondary">
-              <Pencil className="size-3.5" />
-              Edit
-            </LinkButton>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <WorkoutFinishButton workoutId={workout._id} finished={!!workout.finishedAt} />
+              <LinkButton href={`/workouts/${workout._id}/edit`} size="sm" variant="secondary">
+                <Pencil className="size-3.5" />
+                Edit
+              </LinkButton>
+            </div>
           }
         />
-        <div className="mb-4 grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(workout.groups.length, 3)}, minmax(0, 1fr))` }}>
-          {workout.groups.map((g) => (
-            <LinkButton key={g.id} href={`/workouts/${workout._id}/record?group=${g.id}`} size="lg">
-              <Timer className="size-4" />
-              {workout.groups.length > 1 ? `Time ${g.name}` : "Time it"}
-            </LinkButton>
-          ))}
-        </div>
+        {workout.finishedAt ? (
+          <p className="mb-4 text-sm text-ink-2">Ended at {new Intl.DateTimeFormat("en-US", { timeZone: workout.timeZone, hour: "numeric", minute: "2-digit" }).format(workout.finishedAt)}. Reopen it to time more reps.</p>
+        ) : (
+          <div className="mb-4 grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(workout.groups.length, 3)}, minmax(0, 1fr))` }}>
+            {workout.groups.map((g) => (
+              <LinkButton key={g.id} href={`/workouts/${workout._id}/record?group=${g.id}`} size="lg">
+                <Timer className="size-4" />
+                {workout.groups.length > 1 ? `Time ${g.name}` : "Time it"}
+              </LinkButton>
+            ))}
+          </div>
+        )}
         <div className="space-y-4">
           <Card>
             <CardHeader title="Reps" description={`${describePlan(workout.sets)} · ${totalKm.toFixed(totalKm % 1 ? 1 : 0)} km of reps${workout.approximateDistances ? " · distances approximate" : ""}`} />

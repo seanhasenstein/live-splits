@@ -74,6 +74,8 @@ export function WorkoutBoard({ workoutId, initialPlan, people }: { workoutId: st
     <div className="space-y-3">
       {options.length > 1 && <Segmented value={filter} onChange={setFilter} options={options} />}
       {/* Where each group is right now: the same clocks the timing phones show. Picking a group shows just its clocks. */}
+      {/* Once the workout is ended there's nothing live to show: the grid is the summary. */}
+      {!plan.finishedAt && (
       <div className={`grid gap-2 ${shownGroups.length > 1 ? "sm:grid-cols-2" : ""}`}>
         {shownGroups.map((g) => (
           <GroupStatus
@@ -87,6 +89,7 @@ export function WorkoutBoard({ workoutId, initialPlan, people }: { workoutId: st
           />
         ))}
       </div>
+      )}
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
