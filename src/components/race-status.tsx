@@ -127,10 +127,10 @@ function OfficialPill({ kind, className }: { kind: "imported" | "division" | "li
 
 /**
  * PR / SB / Course PR / Meet PR. Solid once the mats say so; outlined while
- * it rests on app taps, with a "?" when the margin is inside the tap error.
+ * it rests on app taps. How close the call is belongs in words on the sheet.
  */
 export function RecordPill({ badge, size = "sm", className = "" }: { badge: RecordBadge; size?: "sm" | "md"; className?: string }) {
-  const text = `${RECORD_LABEL[badge.kind].short}${badge.uncertain ? "?" : ""}`;
+  const text = RECORD_LABEL[badge.kind].short;
   const title = `${RECORD_LABEL[badge.kind].long}${badge.unofficial ? " (unofficial, pending official results)" : ""}`;
   const dims = size === "md" ? "h-7 px-2.5 text-[13px]" : "h-5 px-1.5 text-[11px]";
   const look = badge.unofficial ? "border border-brand text-brand-text" : "bg-brand text-brand-ink";

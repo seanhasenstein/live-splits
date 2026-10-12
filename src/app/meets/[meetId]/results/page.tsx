@@ -2,12 +2,11 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { Board } from "@/components/board";
 import { can, getSession, isSchoolCoach } from "@/lib/auth/session";
-import { getMeet, getProgram, listAthletes, listRaces } from "@/lib/data";
+import { getMeet, getProgram, listAthletes, listDistances, listRaces } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
 import { gradeForSeason } from "@/lib/grade";
 import { getLineupBests } from "@/lib/results/bests";
-import { getLineupHistory } from "@/lib/results/history";
 
 export const metadata: Metadata = { title: "Live results" };
 
@@ -22,11 +21,11 @@ export default async function ResultsPage({ params, searchParams }: PageProps<"/
   const races = await listRaces(meet._id);
   const athleteIds = [...new Set(races.flatMap((r) => r.lineup.map((l) => l.athleteId)))];
   const program = await getProgram(meet.schoolId, "xc");
-  const [athletes, histories, bests, season] = await Promise.all([
+  const [athletes, bests, season, distances] = await Promise.all([
     listAthletes(meet.schoolId, athleteIds),
-    Promise.all(races.map((r) => getLineupHistory(meet, r))),
     Promise.all(races.map((r) => getLineupBests(meet, r, program))),
     collection(await getDb(), "seasons").findOne({ _id: meet.seasonId }),
+    listDistances("xc"),
   ]);
   const levelLabel = (id: string) => program?.settings.levels.find((l) => l.id === id)?.label ?? id;
 
@@ -46,8 +45,8 @@ export default async function ResultsPage({ params, searchParams }: PageProps<"/
         checkpoints: r.checkpoints.map((c) => ({ id: c.id, label: c.label, meters: c.distance.meters, kind: c.kind })),
         athleteIds: r.lineup.map((l) => l.athleteId),
         levels: Object.fromEntries(r.lineup.map((l) => [l.athleteId, levelLabel(l.levelId)])),
-        history: histories[i],
         bests: bests[i],
+        distanceLabel: distances.find((d) => d._id === r.distanceId)?.label ?? "race",
         recordsExcluded: meet.recordsExclusion !== null && meet.recordsExclusion !== undefined,
       }))}
       grades={Object.fromEntries(athletes.map((a) => [a._id, a.graduationYear !== null && season ? gradeForSeason(a.graduationYear, season.endDate) : null]))}

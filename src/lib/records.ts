@@ -29,7 +29,7 @@ export type RecordBadge = {
   all: RecordKind[];
   /** From app taps rather than official results: provisional until the import. */
   unofficial: boolean;
-  /** Unofficial and inside UNCERTAIN_MS of the old mark: shown with a question mark. */
+  /** Unofficial and inside UNCERTAIN_MS of the old mark: the sheet says so in words. */
   uncertain: boolean;
   /** The mark beaten, for "previous best 16:52". */
   previousMs: number;
