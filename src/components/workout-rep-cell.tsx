@@ -9,3 +9,6 @@ export function RepCell({ time, delta, tone }: { time: string; delta: string | n
     </span>
   );
 }
+
+/** The +/− under each time, on or off, remembered on this phone; one switch for the record screen and the workout page. On unless turned off. */
+export const SHOW_DELTAS_KEY = "ls_workout_deltas";

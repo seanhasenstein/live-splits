@@ -3,9 +3,9 @@
 import { Check, MoreHorizontal, Play, Plus, SlidersHorizontal, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { changeRepsAction } from "@/app/actions/workouts";
-import { RepCell } from "@/components/workout-rep-cell";
+import { RepCell, SHOW_DELTAS_KEY } from "@/components/workout-rep-cell";
 import { groupTint, repCellTone } from "@/components/workout-tint";
-import { Alert, Button, Card, Input, SectionLabel, Segmented, Sheet, Time } from "@/components/ui";
+import { Alert, Button, Card, Checkbox, Input, SectionLabel, Segmented, Sheet, Time } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useLocalValue } from "@/lib/client/use-local-value";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
@@ -698,7 +698,10 @@ function GroupRepsGrid({
   onOpen: (id: string) => void;
 }) {
   const n = rows[0]?.list.length ?? 0;
+  const [deltasPref, setDeltasPref] = useLocalValue(SHOW_DELTAS_KEY);
+  const showDeltas = deltasPref !== "off";
   return (
+    <div>
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
@@ -730,7 +733,7 @@ function GroupRepsGrid({
                 {list.map((r) => (
                   <td key={r.repId} className="px-0.5 py-1 text-right">
                     {r.status === "done" && r.elapsedMs !== null ? (
-                      <RepCell time={ft(r.elapsedMs)} delta={r.deltaMs !== null ? deltaText(r.deltaMs, tenths) : null} tone={repCellTone(r.deltaMs)} />
+                      <RepCell time={ft(r.elapsedMs)} delta={showDeltas && r.deltaMs !== null ? deltaText(r.deltaMs, tenths) : null} tone={repCellTone(r.deltaMs)} />
                     ) : (
                       <span className="px-1 text-xs text-ink-3">{r.status === "skipped" ? "skip" : r.status === "unfinished" ? "—" : r.status === "stopped" ? "out" : "·"}</span>
                     )}
@@ -744,6 +747,10 @@ function GroupRepsGrid({
           })}
         </tbody>
       </table>
+    </div>
+      <div className="flex justify-end border-t border-line px-4 py-2">
+        <Checkbox label="Show +/− under times" checked={showDeltas} onChange={(e) => setDeltasPref(e.target.checked ? null : "off")} className="text-[13px] text-ink-2" />
+      </div>
     </div>
   );
 }

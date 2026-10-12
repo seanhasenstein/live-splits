@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Card, Segmented, Time } from "@/components/ui";
+import { Card, Checkbox, Segmented, Time } from "@/components/ui";
 import { WorkoutAthleteSheet } from "@/components/workout-athlete-sheet";
-import { RepCell } from "@/components/workout-rep-cell";
+import { RepCell, SHOW_DELTAS_KEY } from "@/components/workout-rep-cell";
+import { useLocalValue } from "@/lib/client/use-local-value";
 import { groupTint, ON_GOAL_MS, repCellTone } from "@/components/workout-tint";
 import { useClock } from "@/lib/client/clock";
 import { useTimeFormat } from "@/lib/client/time-format";
@@ -59,6 +60,8 @@ export function WorkoutBoard({
   // One filter: everyone, a group ("g:<id>"), or girls or boys.
   const [filter, setFilter] = useState<string>("all");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [deltasPref, setDeltasPref] = useLocalValue(SHOW_DELTAS_KEY);
+  const showDeltas = deltasPref !== "off";
 
   const reps = state.reps;
   const anyTimed = [...state.athletes.values()].some((list) => list.some((r) => r.status === "done"));
@@ -100,6 +103,11 @@ export function WorkoutBoard({
         ))}
       </div>
       )}
+      {anyTimed && (
+        <div className="flex justify-end">
+          <Checkbox label="Show +/− under times" checked={showDeltas} onChange={(e) => setDeltasPref(e.target.checked ? null : "off")} className="text-[13px] text-ink-2" />
+        </div>
+      )}
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -133,7 +141,7 @@ export function WorkoutBoard({
                   {list.map((r, i) => (
                     <td key={r.repId} className={`px-1 py-1 text-right ${reps[i].number === 1 && i > 0 ? "border-l border-line" : ""}`}>
                       {r.status === "done" && r.elapsedMs !== null ? (
-                        <RepCell time={ft(r.elapsedMs)} delta={r.deltaMs !== null ? signed(r.deltaMs, digits) : null} tone={cellTone(r.deltaMs)} />
+                        <RepCell time={ft(r.elapsedMs)} delta={showDeltas && r.deltaMs !== null ? signed(r.deltaMs, digits) : null} tone={cellTone(r.deltaMs)} />
                       ) : r.status === "skipped" ? (
                         <span className="px-1.5 text-xs whitespace-nowrap text-ink-3">skipped</span>
                       ) : r.status === "stopped" ? (
@@ -220,7 +228,7 @@ export function WorkoutBoard({
       )}
       <p className="text-xs leading-relaxed text-ink-3">
         {anyTimed
-          ? `Green is faster than goal, red slower; within a second is on goal. The small number under each time is how far off goal it was. "Skipped": didn't run that rep. "No time": started it but the group went on before they finished. "Done": done for today. "—": the group ended before that rep. Avg, spread and fade are per ${reps[0].label}, so reps of other distances compare fairly. Spread: slowest minus fastest. Fade: the second half against the first. "Rest after" is the rest each group took, from its last runner in to the next start, with how far off the plan it was; amber is more than 10 s long. Tap a name for that runner's reps.`
+          ? `Green is faster than goal, red slower; within a second is on goal. The small number under each time is how far off goal it was (turn it off above the grid). "Skipped": didn't run that rep. "No time": started it but the group went on before they finished. "Done": done for today. "—": the group ended before that rep. Avg, spread and fade are per ${reps[0].label}, so reps of other distances compare fairly. Spread: slowest minus fastest. Fade: the second half against the first. "Rest after" is the rest each group took, from its last runner in to the next start, with how far off the plan it was; amber is more than 10 s long. Tap a name for that runner's reps.`
           : "Times appear here as the reps are timed."}
       </p>
     </div>
