@@ -37,6 +37,27 @@ export async function saveWorkoutAction(workoutId: string | null, payloadJson: s
   const db = await getDb();
   const now = new Date();
   const actor = sessionActor(session!);
+  if (input.saveAsTemplate) {
+    // One template per name: saving again under the same name updates it.
+    const existing = await collection(db, "workoutTemplates").findOne({ schoolId, programId: program._id, name: input.name, deletedAt: null });
+    const template = COLLECTIONS.workoutTemplates.schema.parse({
+      _id: existing?._id ?? newId(),
+      schoolId,
+      schemaVersion: COLLECTIONS.workoutTemplates.version,
+      programId: program._id,
+      name: input.name,
+      effort: input.effort,
+      sets: expandSets(input.sets, newId),
+      approximateDistances: input.approximateDistances,
+      source: "manual",
+      createdAt: existing?.createdAt ?? now,
+      createdBy: existing?.createdBy ?? actor,
+      updatedAt: now,
+      updatedBy: actor,
+      deletedAt: null,
+    });
+    await collection(db, "workoutTemplates").replaceOne({ _id: template._id }, template, { upsert: true });
+  }
   const fields = {
     seasonId: season._id,
     name: input.name,
@@ -66,7 +87,7 @@ export async function saveWorkoutAction(workoutId: string | null, payloadJson: s
     ...fields,
     visibility: "staff",
     finishedAt: null,
-    templateId: null,
+    templateId: input.templateId ?? null,
     source: "manual",
     createdAt: now,
     createdBy: actor,
@@ -98,4 +119,15 @@ export async function setWorkoutFinishedAction(workoutId: string, finished: bool
     { $set: { finishedAt: finished ? new Date() : null, updatedAt: new Date(), updatedBy: sessionActor(session!) } },
   );
   return {};
+}
+
+/** Remove a saved template. Workouts made from it keep their reps. */
+export async function deleteTemplateAction(templateId: string): Promise<void> {
+  const session = await getSession();
+  if (!isSchoolCoach(session)) return;
+  await collection(await getDb(), "workoutTemplates").updateOne(
+    { _id: templateId, schoolId: session!.schoolId, deletedAt: null },
+    { $set: { deletedAt: new Date(), updatedAt: new Date(), updatedBy: sessionActor(session!) } },
+  );
+  redirect("/workouts/new");
 }

@@ -7,6 +7,7 @@ import { useClock } from "@/lib/client/clock";
 import { useTimeFormat } from "@/lib/client/time-format";
 import { useWorkoutEvents } from "@/lib/client/use-workout-events";
 import type { Workout } from "@/lib/db/schema";
+import type { LastTime } from "@/lib/workouts";
 import { describeRest } from "@/lib/workout-plan";
 import { type GroupPhase, type GroupRepLog, replayWorkout, summarize } from "@/lib/workout-replay";
 import { formatElapsed } from "@/lib/time";
@@ -31,7 +32,7 @@ const signed = (ms: number, digits: 0 | 1) => {
  * runner's goal (green under, red over, plain within a second), with average
  * pace, average vs goal, spread and fade. Live while it's being timed.
  */
-export function WorkoutBoard({ workoutId, initialPlan, people }: { workoutId: string; initialPlan: Plan; people: Person[] }) {
+export function WorkoutBoard({ workoutId, initialPlan, people, lastTimes }: { workoutId: string; initialPlan: Plan; people: Person[]; lastTimes: Record<string, LastTime> }) {
   const { events, plan, recording, send } = useWorkoutEvents(workoutId, initialPlan);
   const { ft, team } = useTimeFormat();
   const digits = team === "tenths" ? 1 : 0;
@@ -198,6 +199,7 @@ export function WorkoutBoard({ workoutId, initialPlan, people }: { workoutId: st
           groupName={plan.groups.length > 1 ? (plan.groups.find((g) => g.id === state.athletes.get(openId)!.at(-1)?.groupId)?.name ?? null) : null}
           reps={reps}
           list={state.athletes.get(openId)!}
+          last={lastTimes[openId] ?? null}
           onAddTime={(repId, groupId, timeMs, finishEventId) =>
             finishEventId ? send({ type: "edit", targetEventId: finishEventId, timeMs }) : send({ type: "finish", athleteId: openId, groupId, repId, timeMs })
           }

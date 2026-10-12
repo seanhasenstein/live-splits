@@ -30,6 +30,10 @@ export const WorkoutPayload = z.object({
     .array(z.object({ athleteId: z.string().min(1), groupId: z.string().min(1), goalPaceMsPerKm: z.int().positive().max(3_600_000).nullable() }))
     .max(200),
   notes: z.string().trim().max(2000).nullable(),
+  /** The template this was started from, kept on a new workout. */
+  templateId: z.string().min(1).nullable().optional(),
+  /** Also save (or update) a template with these reps, under the workout's name. */
+  saveAsTemplate: z.boolean().optional(),
 });
 export type WorkoutPayload = z.infer<typeof WorkoutPayload>;
 

@@ -1,10 +1,16 @@
 import "server-only";
-import type { Workout } from "@/lib/db/schema";
+import type { Workout, WorkoutTemplate } from "@/lib/db/schema";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
+import { describePlan } from "@/lib/workout-plan";
+import { replayWorkout, summarize } from "@/lib/workout-replay";
 
 export async function listWorkouts(schoolId: string): Promise<Workout[]> {
   return collection(await getDb(), "workouts").find({ schoolId, deletedAt: null }).sort({ date: -1, createdAt: -1 }).toArray();
+}
+
+export async function listTemplates(schoolId: string): Promise<WorkoutTemplate[]> {
+  return collection(await getDb(), "workoutTemplates").find({ schoolId, deletedAt: null }).sort({ name: 1 }).toArray();
 }
 
 export async function getWorkout(id: string): Promise<Workout | null> {
@@ -39,6 +45,47 @@ export async function fiveKBests(schoolId: string, seasonId: string, athleteIds:
     const b = out[r.athleteId!];
     if (b.pr === null || r.mark.value < b.pr) b.pr = r.mark.value;
     if (seasonOf.get(race.meetId) === seasonId && (b.sb === null || r.mark.value < b.sb)) b.sb = r.mark.value;
+  }
+  return out;
+}
+
+/** An athlete's run of the same reps on an earlier day, for "last time" on their sheet. */
+export type LastTime = {
+  workoutId: string;
+  date: string;
+  /** Each rep's time, in order; null where they have none. */
+  repMs: (number | null)[];
+  avgPaceMsPerKm: number | null;
+  avgDeltaMs: number | null;
+};
+
+/**
+ * For each athlete in the workout, the most recent earlier workout with the
+ * same reps ("12 × 400m", whatever the rests) where they ran at least one.
+ */
+export async function lastTimeRan(workout: Workout): Promise<Record<string, LastTime>> {
+  const db = await getDb();
+  const signature = describePlan(workout.sets);
+  const earlier = (
+    await collection(db, "workouts")
+      .find({ schoolId: workout.schoolId, programId: workout.programId, deletedAt: null, date: { $lte: workout.date }, _id: { $ne: workout._id } })
+      .sort({ date: -1, createdAt: -1 })
+      .limit(60)
+      .toArray()
+  ).filter((w) => describePlan(w.sets) === signature && (w.date < workout.date || w.createdAt < workout.createdAt));
+  const out: Record<string, LastTime> = {};
+  const want = new Set(workout.athletes.map((a) => a.athleteId));
+  // Newest first; stop once everyone has one (or after a handful of workouts).
+  for (const w of earlier.slice(0, 8)) {
+    if (want.size === 0) break;
+    const events = await collection(db, "workoutEvents").find({ workoutId: w._id }).toArray();
+    const state = replayWorkout(w, events);
+    for (const [id, list] of state.athletes) {
+      if (!want.has(id) || !list.some((r) => r.status === "done")) continue;
+      const s = summarize(state.reps, list);
+      out[id] = { workoutId: w._id, date: w.date, repMs: list.map((r) => (r.status === "done" ? r.elapsedMs : null)), avgPaceMsPerKm: s.avgPaceMsPerKm, avgDeltaMs: s.avgDeltaMs };
+      want.delete(id);
+    }
   }
   return out;
 }

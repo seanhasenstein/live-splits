@@ -60,6 +60,7 @@ export function WorkoutForm({
   const [approx, setApprox] = useState(initial.approximateDistances);
   const [effort, setEffort] = useState<WorkoutEffort>(initial.effort);
   const [notes, setNotes] = useState(initial.notes ?? "");
+  const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [sets, setSets] = useState<SetDraft[]>(() =>
     initial.sets.map((s) => ({ key: nextKey(), id: s.id, count: String(s.count), value: String(s.value), unit: s.unit, rest: restToDraft(s.rest), restAfter: restToDraft(s.restAfter) })),
   );
@@ -131,6 +132,8 @@ export function WorkoutForm({
       groups,
       athletes: included.map((a) => ({ athleteId: a.athleteId, groupId: groups.some((g) => g.id === a.groupId) ? a.groupId : groups[0].id, goalPaceMsPerKm: a.goal })),
       notes: notes.trim() || null,
+      templateId: initial.templateId ?? null,
+      saveAsTemplate,
     };
     setError(null);
     start(async () => {
@@ -354,7 +357,8 @@ export function WorkoutForm({
       </Card>
 
       {error && <Alert tone="danger">{error}</Alert>}
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
+        <Checkbox className="mr-auto" checked={saveAsTemplate} onChange={(e) => setSaveAsTemplate(e.target.checked)} label="Also save the reps as a template" />
         <LinkButton href={cancelHref} variant="secondary">
           Cancel
         </LinkButton>

@@ -9,7 +9,7 @@ import { WorkoutFinishButton } from "@/components/workout-finish-button";
 import { getProgram, listRoster } from "@/lib/data";
 import { describePlan, describeRest, EFFORT_LABEL } from "@/lib/workout-plan";
 import { flattenPlan } from "@/lib/workout-replay";
-import { getWorkout } from "@/lib/workouts";
+import { getWorkout, lastTimeRan } from "@/lib/workouts";
 import { formatLocalDate } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Workout" };
@@ -20,7 +20,7 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
   if (!isSchoolCoach(session)) redirect("/meets");
   const workout = await getWorkout(workoutId);
   if (!workout || workout.schoolId !== session!.schoolId) notFound();
-  const [roster, program] = await Promise.all([listRoster(workout.seasonId), getProgram(workout.schoolId, "xc")]);
+  const [roster, program, lastTimes] = await Promise.all([listRoster(workout.seasonId), getProgram(workout.schoolId, "xc"), lastTimeRan(workout)]);
   const levelLabel = (id: string) => program?.settings.levels.find((l) => l.id === id)?.label ?? id;
   const people = roster.map((a) => ({ id: a._id, name: a.displayName, gender: a.gender, level: levelLabel(a.defaultLevelId) }));
   const reps = flattenPlan(workout);
@@ -80,6 +80,7 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
             workoutId={workout._id}
             initialPlan={{ sets: workout.sets, groups: workout.groups, athletes: workout.athletes, finishedAt: workout.finishedAt?.toISOString() ?? null }}
             people={people}
+            lastTimes={lastTimes}
           />
 
           {workout.notes && (

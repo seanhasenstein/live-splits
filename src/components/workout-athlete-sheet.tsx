@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Button, Input, SectionLabel, Sheet, Time } from "@/components/ui";
 import { useTimeFormat } from "@/lib/client/time-format";
 import { type AthleteRep, type FlatRep, summarize } from "@/lib/workout-replay";
-import { formatElapsed, parseTypedTime } from "@/lib/time";
+import { formatDateWithYear, formatElapsed, parseTypedTime } from "@/lib/time";
+import type { LastTime } from "@/lib/workouts";
 
 /** Within this of the goal counts as on it, as on the grid. */
 const ON_GOAL_MS = 1000;
@@ -22,6 +23,7 @@ export function WorkoutAthleteSheet({
   groupName,
   reps,
   list,
+  last,
   onAddTime,
   onClose,
 }: {
@@ -29,6 +31,8 @@ export function WorkoutAthleteSheet({
   groupName: string | null;
   reps: FlatRep[];
   list: AthleteRep[];
+  /** Their last run of the same reps, if any. */
+  last: LastTime | null;
   /** A typed time for a rep: a new finish, or an edit to the one there. */
   onAddTime: (repId: string, groupId: string, timeMs: number, finishEventId: string | null) => void;
   onClose: () => void;
@@ -63,6 +67,18 @@ export function WorkoutAthleteSheet({
         <Stat value={per(s.fadeMsPerKm) !== null ? signed(per(s.fadeMsPerKm)!) : "—"} label="Fade" className={s.fadeMsPerKm === null ? "" : s.fadeMsPerKm > 0 ? "text-danger" : "text-brand-text"} />
       </div>
 
+      {last && (
+        <p className="border-b border-line py-2.5 text-[13px] text-ink-2">
+          <span className="font-medium text-ink">Last time</span> ({formatDateWithYear(last.date)}): {per(last.avgPaceMsPerKm) !== null ? `${ft(per(last.avgPaceMsPerKm)!)} average per ${base.label}` : "no times"}
+          {last.avgDeltaMs !== null && `, ${signed(last.avgDeltaMs)} vs goal then`}
+          {per(last.avgPaceMsPerKm) !== null && per(s.avgPaceMsPerKm) !== null && (() => {
+            const d = per(s.avgPaceMsPerKm)! - per(last.avgPaceMsPerKm)!;
+            const v = tenths ? Math.round(d / 100) / 10 : Math.round(d / 1000);
+            return v === 0 ? ". Same average today." : <span className={v < 0 ? "text-brand-text" : "text-danger"}>{`. ${Math.abs(v)} s ${v < 0 ? "faster" : "slower"} today.`}</span>;
+          })()}
+        </p>
+      )}
+
       {points.length >= 2 && <RepChart points={points} goalMs={goalPerBase} reps={reps} ft={ft} baseLabel={base.label} />}
 
       <SectionLabel className="mt-3 mb-1">Reps</SectionLabel>
@@ -95,6 +111,7 @@ export function WorkoutAthleteSheet({
                       {r.status === "unfinished" ? "no time · tap to add" : r.status === "skipped" ? "skipped" : r.status === "stopped" ? "done for today" : r.status === "running" ? "running" : "·"}
                     </span>
                   )}
+                  {last?.repMs[i] != null && <Time className="block text-[11px] text-ink-3">last time {ft(last.repMs[i]!)}</Time>}
                 </span>
                 <Time className={`w-12 text-right text-[13px] ${tone(r.deltaMs)}`}>{r.status === "done" && r.deltaMs !== null ? signed(r.deltaMs) : ""}</Time>
                 <Time className="w-20 text-right text-[13px] text-ink-3">{restMs !== null ? `${formatElapsed(restMs, "seconds")} rest` : ""}</Time>
