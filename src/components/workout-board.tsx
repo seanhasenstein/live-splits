@@ -107,7 +107,7 @@ export function WorkoutBoard({ workoutId, initialPlan, people }: { workoutId: st
                       {r.status === "done" && r.elapsedMs !== null ? (
                         <Time className={`inline-block rounded px-1.5 py-0.5 ${cellTone(r.deltaMs)}`}>{ft(r.elapsedMs)}</Time>
                       ) : r.status === "skipped" ? (
-                        <span className="px-1.5 text-xs whitespace-nowrap text-ink-3">sat out</span>
+                        <span className="px-1.5 text-xs whitespace-nowrap text-ink-3">skipped</span>
                       ) : r.status === "stopped" ? (
                         <span className="px-1.5 text-xs text-ink-3" title="Done for today">done</span>
                       ) : r.status === "unfinished" ? (
@@ -143,7 +143,7 @@ export function WorkoutBoard({ workoutId, initialPlan, people }: { workoutId: st
       </Card>
       <p className="text-xs leading-relaxed text-ink-3">
         {anyTimed
-          ? `Green is faster than goal, red slower; within a second is on goal. "Sat out": skipped that rep. "No time": started it but the group went on before they finished. "Done": done for today. Avg, spread and fade are per ${reps[0].label}, so reps of other distances compare fairly. Spread: slowest minus fastest. Fade: the second half against the first. A rest shown in amber ran more than 10 s past the plan.`
+          ? `Green is faster than goal, red slower; within a second is on goal. "Skipped": didn't run that rep. "No time": started it but the group went on before they finished. "Done": done for today. Avg, spread and fade are per ${reps[0].label}, so reps of other distances compare fairly. Spread: slowest minus fastest. Fade: the second half against the first. A rest shown in amber ran more than 10 s past the plan.`
           : "Times appear here as the reps are timed."}
       </p>
     </div>

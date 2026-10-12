@@ -212,9 +212,18 @@ export function WorkoutRecorder({
                     {r.deltaMs !== null && <Time className={`text-xs ${deltaTone(r.deltaMs)}`}>{deltaText(r.deltaMs, tenths)}</Time>}
                   </span>
                 ) : r.status === "skipped" ? (
-                  <span className="text-xs text-ink-3">sitting out</span>
+                  <span className="text-xs text-ink-3">skipping</span>
                 ) : (
-                  r.goalMs !== null && <Time className="text-xs text-ink-3">goal {formatElapsed(r.goalMs, "seconds")}</Time>
+                  <span className="flex items-baseline gap-2">
+                    {/* A late start runs on their own clock; show it so it isn't mistaken for the group's. */}
+                    {phase.kind === "running" && r.startMs !== null && r.startMs !== phase.startMs && (
+                      <span className="flex items-baseline gap-1">
+                        <span className="text-[10px] font-semibold tracking-wide text-gold-text uppercase">late start</span>
+                        <Time className="text-sm font-semibold text-ink">{formatElapsed(Math.max(0, now - r.startMs))}</Time>
+                      </span>
+                    )}
+                    {r.goalMs !== null && <Time className="text-xs text-ink-3">goal {formatElapsed(r.goalMs, "seconds")}</Time>}
+                  </span>
                 )}
               </button>
               <button type="button" onClick={() => setSheetFor(id)} className="absolute top-1 right-1 rounded p-1.5 text-ink-3 hover:bg-surface-2 hover:text-ink" aria-label={`More for ${nameOf.get(id)}`}>
@@ -260,7 +269,7 @@ export function WorkoutRecorder({
             {notRunning.map(({ id, r }) => (
               <button key={id} type="button" onClick={() => setSheetFor(id)} className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-ink-3 hover:bg-surface-2">
                 <span className="min-w-0 flex-1 truncate">{nameOf.get(id) ?? "?"}</span>
-                <span>{r.status === "skipped" ? "sat out" : r.status === "unfinished" ? "no time" : "done for today"}</span>
+                <span>{r.status === "skipped" ? "skipped" : r.status === "unfinished" ? "no time" : "done for today"}</span>
               </button>
             ))}
           </div>
@@ -336,6 +345,9 @@ export function WorkoutRecorder({
   );
 }
 
+/** "Addyson's", "James'". */
+const possessive = (first: string) => (/s$/i.test(first) ? `${first}'` : `${first}'s`);
+
 /** What can happen to one runner mid-workout. */
 function AthleteActions({
   name,
@@ -389,7 +401,8 @@ function AthleteActions({
         )}
         {running && rep.status === "running" && (
           <button type="button" className={btn} onClick={() => act("rep_start", { repId: rep.repId })}>
-            Started late: start their clock now
+            Start {possessive(name.split(" ")[0])} clock now
+            <span className="mt-0.5 block text-[13px] text-ink-2">For a late start. The group&rsquo;s clock keeps running.</span>
           </button>
         )}
         {next && upId && next.entry.status !== "done" && next.entry.status !== "stopped" && next.entry.status !== "skipped" && (
