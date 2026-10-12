@@ -1,0 +1,158 @@
+import { describe, expect, it } from "vitest";
+import type { Workout, WorkoutEvent } from "@/lib/db/schema";
+import { flattenPlan, goalPaceFrom5K, replayWorkout, summarize } from "./workout-replay";
+
+const m = (meters: number) => ({ value: meters, unit: "m" as const, meters });
+// 3 × 400 with 60 s rest, then 2 min, then 2 × 200 on the 90 s.
+const workout: Pick<Workout, "sets" | "groups" | "athletes"> = {
+  sets: [
+    { id: "s1", reps: [1, 2, 3].map((n) => ({ id: `a${n}`, distance: m(400), rest: { kind: "time" as const, ms: 60_000 } })), restAfter: { kind: "time", ms: 120_000 } },
+    { id: "s2", reps: [1, 2].map((n) => ({ id: `b${n}`, distance: m(200), rest: { kind: "interval" as const, everyMs: 90_000 } })), restAfter: null },
+  ],
+  groups: [
+    { id: "g1", name: "Group 1" },
+    { id: "g2", name: "Group 2" },
+  ],
+  athletes: [
+    { athleteId: "eddy", groupId: "g1", goalPaceMsPerKm: 195_000 }, // 78 s per 400
+    { athleteId: "titus", groupId: "g1", goalPaceMsPerKm: 200_000 }, // 80 s
+    { athleteId: "will", groupId: "g2", goalPaceMsPerKm: 210_000 },
+  ],
+};
+
+let seq = 0;
+const T0 = 1_800_000_000_000;
+const ev = (type: WorkoutEvent["type"], at: number, fields: Partial<WorkoutEvent> = {}): WorkoutEvent => ({
+  _id: `e${++seq}`,
+  schoolId: "s",
+  schemaVersion: 1,
+  clientEventId: fields.clientEventId ?? `c${seq}`,
+  workoutId: "w",
+  type,
+  groupId: null,
+  athleteId: null,
+  repId: null,
+  targetEventId: null,
+  deviceTimeMs: T0 + at,
+  clockOffsetMs: 0,
+  serverTimeMs: T0 + at,
+  timeMs: null,
+  note: null,
+  createdAt: new Date(),
+  createdBy: { type: "user", id: "u", name: "Coach" } as never,
+  ...fields,
+});
+
+describe("flattenPlan", () => {
+  it("numbers reps within sets and gives each the rest that follows it", () => {
+    const reps = flattenPlan(workout);
+    expect(reps.map((r) => [r.id, r.setIndex, r.number, r.setSize, r.label])).toEqual([
+      ["a1", 0, 1, 3, "400m"],
+      ["a2", 0, 2, 3, "400m"],
+      ["a3", 0, 3, 3, "400m"],
+      ["b1", 1, 1, 2, "200m"],
+      ["b2", 1, 2, 2, "200m"],
+    ]);
+    expect(reps[0].restAfter).toEqual({ kind: "time", ms: 60_000 });
+    expect(reps[2].restAfter).toEqual({ kind: "time", ms: 120_000 }); // the set's rest
+    expect(reps[4].restAfter).toBeNull();
+  });
+});
+
+describe("replayWorkout", () => {
+  it("times each athlete's rep from their group's start and compares it to their goal", () => {
+    const s = replayWorkout(workout, [ev("rep_start", 0, { groupId: "g1", repId: "a1" }), ev("finish", 76_000, { athleteId: "eddy", repId: "a1" }), ev("finish", 82_500, { athleteId: "titus", repId: "a1" })]);
+    expect(s.athletes.get("eddy")![0]).toMatchObject({ status: "done", elapsedMs: 76_000, goalMs: 78_000, deltaMs: -2_000 });
+    expect(s.athletes.get("titus")![0]).toMatchObject({ elapsedMs: 82_500, deltaMs: 2_500 });
+    expect(s.athletes.get("will")![0].status).toBe("pending"); // group 2 hasn't started
+    // Everyone in group 1 is in: resting 60 s from the last finisher.
+    expect(s.groups.get("g1")).toEqual({ kind: "rest", afterRepIndex: 0, restStartedMs: T0 + 82_500, nextStartMs: T0 + 142_500, rest: { kind: "time", ms: 60_000 } });
+    expect(s.groups.get("g2")).toEqual({ kind: "before", nextRepIndex: 0 });
+  });
+
+  it("a group is running until everyone is in; on-the-clock rest counts from the rep's start", () => {
+    const base = [ev("rep_start", 0, { groupId: "g1", repId: "b1" }), ev("finish", 35_000, { athleteId: "eddy", repId: "b1" })];
+    expect(replayWorkout(workout, base).groups.get("g1")).toEqual({ kind: "running", repIndex: 3, startMs: T0 });
+    const s = replayWorkout(workout, [...base, ev("finish", 38_000, { athleteId: "titus", repId: "b1" })]);
+    expect(s.groups.get("g1")).toMatchObject({ kind: "rest", nextStartMs: T0 + 90_000 });
+  });
+
+  it("skips, stops, rejoins, late arrivals and group moves", () => {
+    const s = replayWorkout(workout, [
+      ev("rep_start", 0, { groupId: "g1", repId: "a1" }),
+      ev("finish", 76_000, { athleteId: "eddy", repId: "a1" }),
+      ev("skip", 77_000, { athleteId: "titus", repId: "a1" }),
+      ev("stop", 78_000, { athleteId: "titus", repId: "a2" }),
+      ev("rejoin", 300_000, { athleteId: "titus", repId: "b1" }),
+      ev("move", 79_000, { athleteId: "sam", groupId: "g1", repId: "a2" }), // arrived late
+      ev("move", 80_000, { athleteId: "will", groupId: "g1", repId: "a3" }), // moved up
+    ]);
+    expect(s.athletes.get("titus")!.map((r) => r.status)).toEqual(["skipped", "stopped", "stopped", "pending", "pending"]);
+    expect(s.athletes.get("sam")!.map((r) => r.status)).toEqual(["stopped", "pending", "pending", "pending", "pending"]);
+    expect(s.athletes.get("sam")![1].goalMs).toBeNull(); // no goal set for a walk-on
+    expect(s.athletes.get("will")!.map((r) => r.groupId)).toEqual(["g2", "g2", "g1", "g1", "g1"]);
+    // Titus skipped and Eddy finished: group 1 is resting after rep 1.
+    expect(s.groups.get("g1")).toMatchObject({ kind: "rest", afterRepIndex: 0 });
+  });
+
+  it("a staggered start times that athlete from their own start; a finish beats a skip", () => {
+    const s = replayWorkout(workout, [
+      ev("rep_start", 0, { groupId: "g1", repId: "a1" }),
+      ev("rep_start", 10_000, { athleteId: "titus", repId: "a1" }),
+      ev("skip", 5_000, { groupId: "g1", repId: "a1" }),
+      ev("finish", 90_000, { athleteId: "titus", repId: "a1" }),
+    ]);
+    expect(s.athletes.get("titus")![0]).toMatchObject({ status: "done", elapsedMs: 80_000 });
+    expect(s.athletes.get("eddy")![0].status).toBe("skipped");
+  });
+
+  it("void removes a finish whenever it arrives; edits move the time, latest wins", () => {
+    const fin = ev("finish", 76_000, { athleteId: "eddy", repId: "a1", clientEventId: "fin" });
+    const start = ev("rep_start", 0, { groupId: "g1", repId: "a1", clientEventId: "start" });
+    expect(replayWorkout(workout, [ev("void", 1, { targetEventId: "fin" }), start, fin]).athletes.get("eddy")![0].status).toBe("running");
+    const s = replayWorkout(workout, [
+      start,
+      fin,
+      ev("edit", 100_000, { targetEventId: "fin", timeMs: T0 + 77_000 }),
+      ev("edit", 110_000, { targetEventId: "fin", timeMs: T0 + 75_500 }),
+      ev("edit", 120_000, { targetEventId: "start", timeMs: T0 + 500 }),
+    ]);
+    expect(s.athletes.get("eddy")![0].elapsedMs).toBe(75_000);
+  });
+
+  it("the last rep, when everyone's in, is the end", () => {
+    const evs = [
+      ...["a1", "a2", "a3", "b1", "b2"].flatMap((id, i) => [ev("rep_start", i * 200_000, { groupId: "g1", repId: id }), ev("finish", i * 200_000 + 60_000, { athleteId: "eddy", repId: id }), ev("finish", i * 200_000 + 61_000, { athleteId: "titus", repId: id })]),
+    ];
+    expect(replayWorkout(workout, evs).groups.get("g1")).toEqual({ kind: "done" });
+  });
+});
+
+describe("summarize", () => {
+  it("average pace, average vs goal, spread and fade across reps of any distance", () => {
+    const reps = flattenPlan(workout);
+    const s = replayWorkout(workout, [
+      ev("rep_start", 0, { groupId: "g1", repId: "a1" }),
+      ev("finish", 76_000, { athleteId: "eddy", repId: "a1" }),
+      ev("rep_start", 200_000, { groupId: "g1", repId: "a2" }),
+      ev("finish", 278_000, { athleteId: "eddy", repId: "a2" }),
+      ev("rep_start", 400_000, { groupId: "g1", repId: "b1" }),
+      ev("finish", 440_000, { athleteId: "eddy", repId: "b1" }),
+    ]);
+    const sum = summarize(reps, s.athletes.get("eddy")!);
+    expect(sum.done).toBe(3);
+    expect(sum.avgPaceMsPerKm).toBe(Math.round((190_000 + 195_000 + 200_000) / 3));
+    expect(sum.avgDeltaMs).toBe(Math.round((-2_000 + 0 + 1_000) / 3));
+    expect(sum.spreadMsPerKm).toBe(10_000);
+    expect(sum.fadeMsPerKm).toBe(10_000); // last (200 s/km) vs first (190)
+  });
+});
+
+describe("goalPaceFrom5K", () => {
+  it("by effort, from 5K pace", () => {
+    const fiveK = 17 * 60_000; // 3:24 / km
+    expect(goalPaceFrom5K(fiveK, "race")).toBe(204_000);
+    expect(goalPaceFrom5K(fiveK, "vo2")).toBe(Math.round(204_000 * 0.96));
+    expect(goalPaceFrom5K(fiveK, "custom")).toBeNull();
+  });
+});

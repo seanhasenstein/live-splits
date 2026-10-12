@@ -19,6 +19,9 @@ import {
   Tap,
   User,
   Venue,
+  Workout,
+  WorkoutEvent,
+  WorkoutTemplate,
 } from "./schema";
 
 /**
@@ -44,6 +47,9 @@ export const COLLECTIONS = {
   users: { schema: User, version: 1 },
   sessions: { schema: Session, version: 1 },
   pins: { schema: Pin, version: 1 },
+  workouts: { schema: Workout, version: 1 },
+  workoutTemplates: { schema: WorkoutTemplate, version: 1 },
+  workoutEvents: { schema: WorkoutEvent, version: 1 },
 } as const;
 
 export type CollectionName = keyof typeof COLLECTIONS;

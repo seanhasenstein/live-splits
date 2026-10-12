@@ -5,3 +5,4 @@ export * from "./meets";
 export * from "./results";
 export * from "./taps";
 export * from "./auth";
+export * from "./workouts";
