@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { encrypt, formatCode, generateCode, hashCode } from "@/lib/auth/crypto";
 import { getSession, isSchoolCoach, sessionActor } from "@/lib/auth/session";
 import { getProgram, getSchool, getSeasonFor, listAthletes } from "@/lib/data";
 import { getDb, newId } from "@/lib/db/client";
@@ -130,4 +131,25 @@ export async function deleteTemplateAction(templateId: string): Promise<void> {
     { $set: { deletedAt: new Date(), updatedAt: new Date(), updatedBy: sessionActor(session!) } },
   );
   redirect("/workouts/new");
+}
+
+/**
+ * Make (or replace) the team's workout code for managers. Replacing it signs
+ * out everyone who joined with the old one. Returns the new code, "ABC-DEF".
+ */
+export async function regenerateWorkoutCodeAction(): Promise<{ error?: string; code?: string }> {
+  const session = await getSession();
+  if (!isSchoolCoach(session)) return { error: "Only a coach can change the workout code" };
+  const program = await getProgram(session!.schoolId, "xc");
+  if (!program) return { error: "No program set up" };
+  const code = generateCode();
+  const db = await getDb();
+  await collection(db, "programs").updateOne(
+    { _id: program._id },
+    { $set: { workoutCode: { hash: hashCode(code), enc: encrypt(code) }, updatedAt: new Date(), updatedBy: sessionActor(session!) } },
+  );
+  if (program.workoutCode) {
+    await collection(db, "sessions").updateMany({ schoolId: program.schoolId, role: "manager", meetId: null, revokedAt: null }, { $set: { revokedAt: new Date() } });
+  }
+  return { code: formatCode(code) };
 }

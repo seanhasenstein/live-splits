@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { getSession, isSchoolCoach, sessionActor } from "@/lib/auth/session";
+import { getSession, canUseWorkouts, sessionActor } from "@/lib/auth/session";
 import { getDb, newId } from "@/lib/db/client";
 import { collection, COLLECTIONS } from "@/lib/db/collections";
 import { type Workout, WorkoutEventType } from "@/lib/db/schema";
@@ -24,7 +24,7 @@ export type WorkoutEventInput = z.infer<typeof WorkoutEventInput>;
 /** Who may time a workout: for now, a school coach session. Manager access by code comes with the record screen's sharing. */
 export async function canTimeWorkout(workout: Workout) {
   const session = await getSession();
-  return isSchoolCoach(session) && session!.schoolId === workout.schoolId ? session! : null;
+  return canUseWorkouts(session) && session!.schoolId === workout.schoolId ? session! : null;
 }
 
 /** Store events; retries are safe (clientEventId is unique). Returns the ids now stored. */

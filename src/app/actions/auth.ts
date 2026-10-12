@@ -30,11 +30,18 @@ export async function joinAction(_prev: FormState, formData: FormData): Promise<
   }
 
   const hash = hashCode(code);
-  const meet = await collection(await getDb(), "meets").findOne({
+  const db = await getDb();
+  // The team's workout code: a manager who times practice, school-wide but workouts only.
+  const program = await collection(db, "programs").findOne({ "workoutCode.hash": hash, deletedAt: null });
+  if (program) {
+    await createSession({ schoolId: program.schoolId, meetId: null, role: "manager", name });
+    redirect("/workouts");
+  }
+  const meet = await collection(db, "meets").findOne({
     deletedAt: null,
     $or: [{ "joinCodes.managerCodeHash": hash }, { "joinCodes.coachCodeHash": hash }],
   });
-  if (!meet) return { error: "That code didn't match a meet" };
+  if (!meet) return { error: "That code didn't match a meet or workouts" };
   const role = meet.joinCodes.coachCodeHash === hash ? "coach" : "manager";
   await createSession({ schoolId: meet.schoolId, meetId: meet._id, role, name });
   redirect(`/meets/${meet._id}`);

@@ -32,7 +32,7 @@ function statusOf(meet: Meet, races: Race[], today: string): MeetStatus {
 export default async function MeetsPage() {
   const session = await getSession();
   if (!session) redirect("/join");
-  if (!isSchoolWide(session)) redirect(session.meetId ? `/meets/${session.meetId}` : "/join");
+  if (!isSchoolWide(session)) redirect(session.meetId ? `/meets/${session.meetId}` : session.role === "manager" ? "/workouts" : "/join");
   const coach = isSchoolCoach(session);
 
   const [meets, school] = await Promise.all([listMeets(session.schoolId), getSchool(session.schoolId)]);

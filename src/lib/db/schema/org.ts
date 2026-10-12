@@ -54,6 +54,11 @@ export type ClassYearSystem = z.infer<typeof ClassYearSystem>;
 export const Program = tenantDoc({
   sport: Sport,
   name: z.string().min(1),
+  /**
+   * The team's workout code, for managers who time practice: a keyed hash for
+   * lookup plus the code encrypted so coaches can see and re-share it. Null until made.
+   */
+  workoutCode: z.object({ hash: z.string().min(1), enc: z.string().min(1) }).nullable().default(null),
   settings: z.object({
     /** Results below this grade are stored but excluded from records. */
     recordsStartGrade: z.int(),

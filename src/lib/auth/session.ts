@@ -108,5 +108,18 @@ export function isSchoolViewer(session: Session | null): boolean {
 
 /** Can browse the meets list: school-level coach or viewer. */
 export function isSchoolWide(session: Session | null): boolean {
-  return !!session && session.meetId === null;
+  return !!session && session.meetId === null && session.role !== "manager";
+}
+
+/**
+ * A manager who joined with the team's workout code: times any workout, and
+ * nothing else (no meets, no planning). The only school-level manager session.
+ */
+export function isWorkoutManager(session: Session | null): boolean {
+  return session?.role === "manager" && session.meetId === null;
+}
+
+/** Can open workouts and time them: a coach, or a workout manager. Planning stays with coaches. */
+export function canUseWorkouts(session: Session | null): boolean {
+  return isSchoolCoach(session) || isWorkoutManager(session);
 }

@@ -4,12 +4,14 @@ Practice sessions timed rep by rep: plan it, time it on phones, review it.
 Built on the same ideas as races (an append-only event log replayed into
 every screen), kept in their own collections so race code is untouched.
 
-Status: plan, record and team grid built (`/workouts`, `/workouts/new`,
-`/workouts/[id]`, `/workouts/[id]/record?group=`); the athlete sheet, ending a
-workout, templates and manager access are next. Model and replay in
-`src/lib/db/schema/workouts.ts` and `src/lib/workout-replay.ts` (tested); the
-phone queues events locally and syncs through `/api/workout-events` and
-`/api/workouts/[id]/events`.
+Status: built: plan (with templates), record (one phone per group; runner
+order and large tiles; two-tap rest and start; countdown beep), the team grid
+(rest row per group, who's timing each group), the athlete sheet (chart, own
+rests, last time on the same reps, add or fix a time), ending a workout, and
+manager access by the team's workout code (time only; planning stays with
+coaches). Model and replay in `src/lib/db/schema/workouts.ts` and
+`src/lib/workout-replay.ts` (tested); the phone queues events locally and
+syncs through `/api/workout-events` and `/api/workouts/[id]/events`.
 
 ## Shape of a workout
 
@@ -74,7 +76,6 @@ last time they ran this workout.
 
 ## Later
 
-Goals as a % of 5K pace per group; templates library; "last time you ran
-this" for the whole team; time-based reps and fartleks (record distance, not
-time); laps within a rep; several recorders per group; manager access by
-code, like meets; athletes and parents seeing their own workouts.
+Goals as a % of 5K pace per group; "last time you ran this" for the whole
+team; time-based reps and fartleks (record distance, not
+time); laps within a rep; several recorders per group; athletes and parents seeing their own workouts.

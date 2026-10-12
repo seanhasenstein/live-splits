@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Pencil, Timer } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { AppHeader, Card, CardBody, CardHeader, LinkButton, Page, PageTitle } from "@/components/ui";
-import { getSession, isSchoolCoach } from "@/lib/auth/session";
+import { canUseWorkouts, getSession, isSchoolCoach } from "@/lib/auth/session";
 import { SessionMenu } from "@/components/session-menu";
 import { WorkoutBoard } from "@/components/workout-board";
 import { WorkoutFinishButton } from "@/components/workout-finish-button";
@@ -17,7 +17,8 @@ export const metadata: Metadata = { title: "Workout" };
 export default async function WorkoutPage({ params }: PageProps<"/workouts/[workoutId]">) {
   const { workoutId } = await params;
   const session = await getSession();
-  if (!isSchoolCoach(session)) redirect("/meets");
+  if (!canUseWorkouts(session)) redirect("/meets");
+  const coach = isSchoolCoach(session);
   const workout = await getWorkout(workoutId);
   if (!workout || workout.schoolId !== session!.schoolId) notFound();
   const [roster, program, lastTimes] = await Promise.all([listRoster(workout.seasonId), getProgram(workout.schoolId, "xc"), lastTimeRan(workout)]);
@@ -28,12 +29,13 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
 
   return (
     <>
-      <AppHeader back={{ href: "/workouts", label: "Workouts" }} right={<SessionMenu name={session!.name} role="coach" />} />
+      <AppHeader back={{ href: "/workouts", label: "Workouts" }} right={<SessionMenu name={session!.name} role={coach ? "coach" : "manager"} />} />
       <Page wide>
         <PageTitle
           title={workout.name}
           description={`${formatLocalDate(workout.date)}${workout.place ? ` · ${workout.place}` : ""} · ${EFFORT_LABEL[workout.effort]}`}
           action={
+            coach && (
             <div className="flex flex-wrap items-center justify-end gap-2">
               <WorkoutFinishButton workoutId={workout._id} finished={!!workout.finishedAt} />
               <LinkButton href={`/workouts/${workout._id}/edit`} size="sm" variant="secondary">
@@ -41,6 +43,7 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
                 Edit
               </LinkButton>
             </div>
+            )
           }
         />
         {workout.finishedAt ? (

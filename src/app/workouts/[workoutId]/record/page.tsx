@@ -4,7 +4,7 @@ import { SessionMenu } from "@/components/session-menu";
 import { WorkoutRecorder } from "@/components/workout-recorder";
 import { Table2 } from "lucide-react";
 import { AppHeader, LinkButton, Page } from "@/components/ui";
-import { getSession, isSchoolCoach } from "@/lib/auth/session";
+import { canUseWorkouts, getSession, isSchoolCoach } from "@/lib/auth/session";
 import { listRoster } from "@/lib/data";
 import { getWorkout } from "@/lib/workouts";
 
@@ -14,7 +14,7 @@ export default async function RecordWorkoutPage({ params, searchParams }: PagePr
   const { workoutId } = await params;
   const { group } = await searchParams;
   const session = await getSession();
-  if (!isSchoolCoach(session)) redirect("/meets");
+  if (!canUseWorkouts(session)) redirect("/meets");
   const workout = await getWorkout(workoutId);
   if (!workout || workout.schoolId !== session!.schoolId) notFound();
   const roster = await listRoster(workout.seasonId);
@@ -28,7 +28,7 @@ export default async function RecordWorkoutPage({ params, searchParams }: PagePr
               <Table2 className="size-4" />
               All times
             </LinkButton>
-            <SessionMenu name={session!.name} role="coach" />
+            <SessionMenu name={session!.name} role={isSchoolCoach(session) ? "coach" : "manager"} />
           </div>
         }
       />

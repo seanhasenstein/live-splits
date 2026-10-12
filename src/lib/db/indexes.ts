@@ -4,7 +4,11 @@ import type { CollectionName } from "./collections";
 /** Index definitions. Applied by `pnpm db:indexes` (idempotent). */
 export const INDEXES: Partial<Record<CollectionName, IndexDescription[]>> = {
   schools: [{ key: { "viewerLink.tokenHash": 1 }, partialFilterExpression: { "viewerLink.tokenHash": { $type: "string" } } }],
-  programs: [{ key: { schoolId: 1, sport: 1 }, unique: true }],
+  programs: [
+    { key: { schoolId: 1, sport: 1 }, unique: true },
+    // Join by workout code.
+    { key: { "workoutCode.hash": 1 }, partialFilterExpression: { "workoutCode.hash": { $type: "string" } } },
+  ],
   seasons: [{ key: { programId: 1, label: 1 }, unique: true }],
   athletes: [{ key: { schoolId: 1, aliases: 1 } }],
   seasonRosters: [

@@ -3,8 +3,11 @@ import { Dumbbell, Plus } from "lucide-react";
 import { redirect } from "next/navigation";
 import { SectionTabs } from "@/components/section-tabs";
 import { SessionMenu } from "@/components/session-menu";
-import { AppHeader, Card, EmptyState, LinkButton, Page, PageTitle, SectionLabel } from "@/components/ui";
-import { getSession, isSchoolCoach } from "@/lib/auth/session";
+import { WorkoutCodePanel } from "@/components/workout-code-panel";
+import { AppHeader, Card, CardBody, CardHeader, EmptyState, LinkButton, Page, PageTitle, SectionLabel } from "@/components/ui";
+import { decrypt, formatCode } from "@/lib/auth/crypto";
+import { canUseWorkouts, getSession, isSchoolCoach } from "@/lib/auth/session";
+import { getProgram } from "@/lib/data";
 import { describePlan, EFFORT_LABEL } from "@/lib/workout-plan";
 import { listWorkouts } from "@/lib/workouts";
 import { formatLocalDate } from "@/lib/time";
@@ -13,8 +16,10 @@ export const metadata: Metadata = { title: "Workouts" };
 
 export default async function WorkoutsPage() {
   const session = await getSession();
-  if (!isSchoolCoach(session)) redirect(session ? "/meets" : "/join");
-  const workouts = await listWorkouts(session!.schoolId);
+  if (!canUseWorkouts(session)) redirect(session ? "/meets" : "/join");
+  const coach = isSchoolCoach(session);
+  const [workouts, program] = await Promise.all([listWorkouts(session!.schoolId), coach ? getProgram(session!.schoolId, "xc") : null]);
+  const workoutCode = program?.workoutCode ? decrypt(program.workoutCode.enc) : null;
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: workouts[0]?.timeZone ?? "America/Chicago" }).format(new Date());
   const upcoming = workouts.filter((w) => w.date >= today && !w.finishedAt).sort((a, b) => a.date.localeCompare(b.date));
   const past = workouts.filter((w) => !(w.date >= today && !w.finishedAt));
@@ -35,22 +40,35 @@ export default async function WorkoutsPage() {
 
   return (
     <>
-      <AppHeader right={<SessionMenu name={session!.name} role="coach" />} />
+      <AppHeader right={<SessionMenu name={session!.name} role={coach ? "coach" : "manager"} />} />
       <Page>
-        <SectionTabs active="workouts" />
+        {coach && <SectionTabs active="workouts" />}
         <PageTitle
           title="Workouts"
-          description="Reps timed on phones, against each runner's goal."
+          description={coach ? "Reps timed on phones, against each runner's goal." : "Pick today's workout and the group you're timing."}
           action={
-            <LinkButton href="/workouts/new" size="sm">
-              <Plus className="size-4" />
-              New workout
-            </LinkButton>
+            coach && (
+              <LinkButton href="/workouts/new" size="sm">
+                <Plus className="size-4" />
+                New workout
+              </LinkButton>
+            )
           }
         />
         {workouts.length === 0 ? (
           <Card>
-            <EmptyState icon={<Dumbbell />} title="No workouts yet" description="Plan the reps, pick who's running, and time it from any phone." action={<LinkButton href="/workouts/new" size="sm">New workout</LinkButton>} />
+            <EmptyState
+              icon={<Dumbbell />}
+              title="No workouts yet"
+              description={coach ? "Plan the reps, pick who's running, and time it from any phone." : "A coach plans each workout; it shows up here to time."}
+              action={
+                coach && (
+                  <LinkButton href="/workouts/new" size="sm">
+                    New workout
+                  </LinkButton>
+                )
+              }
+            />
           </Card>
         ) : (
           <div className="space-y-5">
@@ -71,6 +89,14 @@ export default async function WorkoutsPage() {
               </section>
             )}
           </div>
+        )}
+        {coach && (
+          <Card className="mt-5">
+            <CardHeader title="Managers" description="Share the workout code with managers who time practice. They join once and can time any workout, but can't plan, edit or end one, or see meets." />
+            <CardBody>
+              <WorkoutCodePanel initialCode={workoutCode ? formatCode(workoutCode) : null} />
+            </CardBody>
+          </Card>
         )}
       </Page>
     </>
