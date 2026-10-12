@@ -45,3 +45,43 @@ test("a meet's two tables become one meet with splits, finishes, places, levels,
   expect(m.rows.filter((r) => r.gender === "F")).toHaveLength(7);
   expect(m.rows.some((r) => r.name === "Emma Winter")).toBe(false); // blank row
 });
+
+const sheet = (rows: string[]) => ["Sample Invite, September 10th 2025", "Boys \tMile 1 \tMile 2 \tMile 3.1 \tFinish \tPlace \tLetter", ...rows].join("\n");
+
+test("tabbed lines that aren't rows are not athletes; DNS is DNS; a placeless DNF takes the level they ran elsewhere", () => {
+  const meets = parseSplitsHistory(
+    sheet([
+      "Eddy Giebler \t5:46 \t5:48 \t6:21 \t17:55 \t6th \tYes",
+      "Girls Varsity - 108 Pts.\t4th Place. 8 Teams.",
+      "Printed\t10/12/2026",
+      "Will Leibham \tDNS \tDNS \tDNS \tDNS",
+      "Owen Puetz \t10:31 \tDNF \tDNF \tDNF",
+      "Owen Puetz \t6:30 \t7:00 \t7:30 \t21:00 \t12th JV",
+    ]),
+  );
+  const rows = meets[0].rows;
+  expect(rows.map((r) => r.name)).toEqual(["Eddy Giebler", "Will Leibham", "Owen Puetz", "Owen Puetz"]);
+  expect(meets[0].summaries).toContain("Girls Varsity - 108 Pts.\t4th Place. 8 Teams.");
+  expect(rows[1]).toMatchObject({ status: "dns", finishMs: null, place: null });
+  expect(rows[2]).toMatchObject({ status: "dnf", level: "jv", splits: { "Mile 1": 10 * 60_000 + 31_000 } }); // level from his other row
+});
+
+test("segments that don't add up to the finish are dropped rather than written wrong; a cumulative sheet is read as such", () => {
+  const meets = parseSplitsHistory(
+    sheet([
+      "Avery Abbott \t5:46 \t6:47 \t18:51 \t16th \tYes", // a collapsed empty Mile 2 cell
+      "Blake Barlow \t5:46 \t12:04 \t18:51 \t18:51 \t17th", // printed cumulative
+      "Casey Calder \t5:46 \t6:18 \t6:47 \t18:51 \t18th", // segments
+    ]),
+  );
+  const [a, b, c] = meets[0].rows;
+  expect(a).toMatchObject({ finishMs: 18 * 60_000 + 51_000, place: 16, status: "finished", splitsUnreadable: true, splits: {} });
+  expect(b.splits).toEqual({ "Mile 1": 5 * 60_000 + 46_000, "Mile 2": 12 * 60_000 + 4_000 });
+  expect(b.splitsUnreadable).toBe(false);
+  expect(c.splits).toEqual({ "Mile 1": 5 * 60_000 + 46_000, "Mile 2": 12 * 60_000 + 4_000 });
+});
+
+test("a 'Mile 3' last column is a 5K", () => {
+  const meets = parseSplitsHistory(["Sample Invite, September 10th 2025", "Boys \tMile 1 \tMile 2 \tMile 3 \tFinish \tPlace", "Eddy Giebler \t5:46 \t5:48 \t6:21 \t17:55 \t6th"].join("\n"));
+  expect(meets[0].distanceMeters).toBe(5000);
+});

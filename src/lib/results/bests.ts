@@ -60,7 +60,7 @@ export async function getLineupBests(meet: Meet, race: Pick<Race, "lineup" | "di
   if (meets.length === 0) return out;
   const meetById = new Map(meets.map((m) => [m._id, m]));
   const races = await collection(db, "races")
-    .find({ meetId: { $in: meets.map((m) => m._id) }, distanceId: race.distanceId, deletedAt: null, "exclusions.excludeFromPrSb": false }, { projection: { _id: 1, meetId: 1, name: 1, checkpoints: 1 } })
+    .find({ meetId: { $in: meets.map((m) => m._id) }, distanceId: race.distanceId, deletedAt: null }, { projection: { _id: 1, meetId: 1, name: 1, checkpoints: 1, exclusions: 1 } })
     .toArray();
   if (races.length === 0) return out;
   const raceById = new Map(races.map((r) => [r._id, r]));
@@ -75,10 +75,11 @@ export async function getLineupBests(meet: Meet, race: Pick<Race, "lineup" | "di
   const thisSeries = seriesKey(meet);
   const better = (cur: Best | null, cand: Best) => (cur === null || cand.ms < cur.ms ? cand : cur);
   for (const r of results) {
-    if (r.exclusions.excludeFromPrSb) continue;
+    const race = raceById.get(r.raceId!)!;
+    // A result's own flag, when set, overrides the race's.
+    if (r.exclusions.excludeFromPrSb ?? race.exclusions.excludeFromPrSb) continue;
     if (r.gradeSnapshot !== null && r.gradeSnapshot < minGrade) continue;
     if (r.mark?.type !== "time") continue;
-    const race = raceById.get(r.raceId!)!;
     const m = meetById.get(race.meetId)!;
     const best: Best = { ms: r.mark.value, precision: r.mark.precision, meetName: m.name, date: m.date };
     const b = out[r.athleteId!];

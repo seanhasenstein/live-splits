@@ -24,7 +24,8 @@ export async function loadHistoryAction(_prev: HistoryLoadState, formData: FormD
     if (meets.length === 0) return { error: "No meets found. The sheet needs a 'Meet name, Month Dth YYYY' line per meet and a table per gender with Mile 1 … Finish, Place." };
     return { meets, review: await reviewHistory(await getDb(), school, meets) };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Couldn't read that PDF." };
+    console.error("history load", err);
+    return { error: "Couldn't read that PDF. If it isn't the split sheets, check the file; otherwise send it to the developer." };
   }
 }
 
@@ -35,8 +36,9 @@ const RowSchema = z.object({
   splits: z.record(z.string(), z.int().nonnegative()),
   finishMs: z.int().nonnegative().nullable(),
   place: z.int().positive().nullable(),
-  status: z.enum(["finished", "dnf"]),
+  status: z.enum(["finished", "dnf", "dns"]),
   letter: z.boolean(),
+  splitsUnreadable: z.boolean(),
 });
 const MeetSchema = z.object({
   name: z.string().min(1).max(120),
@@ -50,7 +52,7 @@ const Payload = z.object({
   meets: z.array(MeetSchema).max(400),
   choices: z.object({
     meets: z.record(z.string(), z.object({ venueName: z.string().max(120) })),
-    athletes: z.record(z.string(), z.union([z.object({ athleteId: z.string().min(1) }), z.object({ create: z.object({ graduationYear: z.int().min(1990).max(2100).nullable() }) })])),
+    athletes: z.record(z.string(), z.union([z.object({ athleteId: z.string().min(1) }), z.object({ create: z.object({ graduationYear: z.int().min(1990).max(2100).nullable() }) }), z.object({ sameAs: z.string().min(1) })])),
   }),
 });
 
@@ -74,6 +76,9 @@ export async function commitHistoryAction(payloadJson: string): Promise<{ error?
     const result = await commitHistory(school, program, parsed.data.meets, choices, sessionActor(session!));
     return { result };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "The import failed; nothing was written." };
+    console.error("history commit", err);
+    // Our own checks say what's wrong; anything else (a driver error) stays in the log.
+    const ours = err instanceof Error && /No decision for|Unknown athlete for|isn't in this import/.test(err.message);
+    return { error: ours ? (err as Error).message : "The import stopped partway. Meets already written are kept; run it again and the rest will be added without duplicates." };
   }
 }

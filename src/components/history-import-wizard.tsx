@@ -60,11 +60,16 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
 
   const commit = () => {
     if (chosen.length === 0) return setError("Tick at least one meet.");
-    const athletes: Record<string, { athleteId: string } | { create: { graduationYear: number | null } }> = {};
+    const athletes: Record<string, { athleteId: string } | { create: { graduationYear: number | null } } | { sameAs: string }> = {};
     for (const a of review.athletes) {
       if (!namesInChosen.has(a.name)) continue;
       if (a.athleteId) athletes[a.name] = { athleteId: a.athleteId };
-      else if (identity[a.name]) athletes[a.name] = { athleteId: identity[a.name] };
+      else if (identity[a.name]?.startsWith("file:")) {
+        // The same new person under another spelling in this file; that spelling must be the one that gets created.
+        const target = identity[a.name].slice(5);
+        if (identity[target]?.startsWith("file:")) return setError(`${a.name} and ${target}: pick one of them as the new athlete and point the other at it.`);
+        athletes[a.name] = { sameAs: target };
+      } else if (identity[a.name]) athletes[a.name] = { athleteId: identity[a.name] };
       else {
         const y = gradYears[a.name]?.trim() ?? "";
         if (y && !/^\d{4}$/.test(y)) return setError(`${a.name}: graduation year should be a 4-digit year, or blank.`);
@@ -201,7 +206,14 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
                                   {r.splits[c.label] !== undefined ? ft(r.splits[c.label], "seconds") : "—"}
                                 </td>
                               ))}
-                              <td className="tnum px-2 py-1.5 text-right font-medium text-ink">{r.finishMs !== null ? ft(r.finishMs, "seconds") : r.status.toUpperCase()}</td>
+                              <td className="tnum px-2 py-1.5 text-right font-medium text-ink">
+                                {r.finishMs !== null ? ft(r.finishMs, "seconds") : r.status.toUpperCase()}
+                                {r.splitsUnreadable && (
+                                  <span className="ml-1 text-[10px] font-semibold text-gold-text uppercase" title="The split times on the sheet don't add up to the finish; only the finish is kept.">
+                                    splits?
+                                  </span>
+                                )}
+                              </td>
                               <td className="tnum px-4 py-1.5 text-right text-ink-2">{r.place ?? "—"}</td>
                             </tr>
                           );
@@ -258,6 +270,7 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
                           <Identity
                             name={a.name}
                             candidates={a.candidates}
+                            inFile={a.sameAsInFile}
                             others={others}
                             value={identity[a.name] ?? ""}
                             onChange={(v) => setIdentity({ ...identity, [a.name]: v })}
@@ -313,10 +326,26 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
  * Who an unknown name is: a new athlete (the usual answer), the same-surname
  * athlete the app found, or someone picked from the list.
  */
-function Identity({ name, candidates, others, value, onChange }: { name: string; candidates: { id: string; name: string }[]; others: { id: string; name: string }[]; value: string; onChange: (id: string) => void }) {
-  const suggested = candidates[0];
+function Identity({
+  name,
+  candidates,
+  inFile,
+  others,
+  value,
+  onChange,
+}: {
+  name: string;
+  candidates: { id: string; name: string }[];
+  /** Other unknown spellings in this file that look like the same person; chosen as "file:<name>". */
+  inFile: string[];
+  others: { id: string; name: string }[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  // An athlete already in the app comes first; failing that, the same new person elsewhere in the file.
+  const suggested = candidates[0] ? { id: candidates[0].id, name: candidates[0].name } : inFile[0] ? { id: `file:${inFile[0]}`, name: `${inFile[0]} (in this file)` } : null;
   const [mode, setMode] = useState<"new" | "suggested" | "pick">(() => (value ? (suggested && value === suggested.id ? "suggested" : "pick") : "new"));
-  const all = [...candidates, ...others];
+  const all = [...candidates, ...inFile.map((n) => ({ id: `file:${n}`, name: `${n} (in this file)` })), ...others];
   return (
     <div className="space-y-2">
       <div className="text-[13px] text-ink-2">Who is this?</div>

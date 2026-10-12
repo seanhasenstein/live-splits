@@ -18,8 +18,10 @@ export type HistoryRow = {
   splits: Record<string, number>;
   finishMs: number | null;
   place: number | null;
-  status: "finished" | "dnf";
+  status: "finished" | "dnf" | "dns";
   letter: boolean;
+  /** The segment times didn't add up to the finish (a collapsed empty cell, a cumulative sheet): splits were dropped. */
+  splitsUnreadable: boolean;
 };
 
 export type HistoryMeet = {
@@ -56,12 +58,18 @@ function metersOf(label: string): number | null {
   return null;
 }
 
-const ROUND_DISTANCES = [5000, 4000, 3000, 2000, 6000, 8000, 10000, 3218.688, 4828.032];
+const ROUND_DISTANCES = [5000, 4000, 3000, 2000, 6000, 8000, 10000, 3218.688];
 
-/** The sheet's last column names the full course ("Mile 3.1"): snap it to the race distance it means. */
+/**
+ * The sheet's last column names the full course ("Mile 3.1"): snap it to the
+ * race distance it means. "Mile 3" on a high-school sheet is a 5K too — the
+ * column is the last stretch, not a survey — so anything within 5% of 5000 m
+ * is a 5K.
+ */
 function courseMeters(lastLabel: string): number | null {
   const m = metersOf(lastLabel);
   if (m === null) return null;
+  if (Math.abs(5000 - m) / 5000 <= 0.05) return 5000;
   const near = ROUND_DISTANCES.find((d) => Math.abs(d - m) / d < 0.02);
   return near ?? Math.round(m);
 }
@@ -71,7 +79,6 @@ export function parseSplitsHistory(text: string): HistoryMeet[] {
   let meet: HistoryMeet | null = null;
   let gender: "M" | "F" | null = null;
   let labels: string[] = []; // segment columns between the gender column and Finish
-  let placeCol = -1;
   let letterCol = -1;
 
   for (const raw of text.split(/\r?\n/)) {
@@ -101,7 +108,6 @@ export function parseSplitsHistory(text: string): HistoryMeet[] {
       gender = /^(boys|men)$/i.test(cells[0]) ? "M" : "F";
       const finishCol = cells.findIndex((c) => /^finish$/i.test(c));
       labels = cells.slice(1, finishCol);
-      placeCol = cells.findIndex((c) => /^place$/i.test(c));
       letterCol = cells.findIndex((c) => /^letter$/i.test(c));
       if (meet.checkpoints.length === 0 && labels.length > 0) {
         meet.checkpoints = labels.slice(0, -1).flatMap((label) => {
@@ -112,28 +118,51 @@ export function parseSplitsHistory(text: string): HistoryMeet[] {
       }
       continue;
     }
-    // Race summary lines: "Boys Varsity - 110 Pts. 5th Place. 9 Teams. …"
-    if (cells.length === 1 && /^(boys|girls|men|women)\b.*\b(pts|place|teams|runners)\b/i.test(line)) {
+    // Race summary lines: "Boys Varsity - 110 Pts. 5th Place. 9 Teams. …" (tabs or not)
+    if (/^(boys|girls|men|women)\b.*\b(pts|place|teams|runners)\b/i.test(cells[0]) && !cells.some((c) => TIME_OR_STATUS.test(c))) {
       meet.summaries.push(line.trim());
       continue;
     }
     if (!gender || cells.length < 2) continue; // a blank row (name only): didn't run
+    // A result row has a time or a status right after the name; anything else with tabs (a footer) isn't one.
+    if (!TIME_OR_STATUS.test(cells[1])) continue;
 
     const name = cells[0];
-    const finishCol = 1 + labels.length;
-    const segments = labels.map((_, i) => cells[1 + i] ?? "");
-    const finishText = cells[finishCol] ?? "";
-    const placeText = placeCol >= 0 ? (cells[placeCol] ?? "") : "";
-    const dnf = [...segments, finishText].some((c) => /^dnf$/i.test(c));
-    const finishMs = /^\d/.test(finishText) ? parseElapsed(finishText) : null;
+    // Read the cells by what they are, not where they sit: the text layer drops empty cells, so a missing
+    // Mile 2 shifts everything left. Times in order, then a place ("16th", "39th JV"), then the letter.
+    const rest = cells.slice(1);
+    const timeCells = rest.filter((c) => /^\d+:\d{2}(\.\d+)?$/.test(c)).map((c) => parseElapsed(c)!);
+    const placeText = rest.find((c) => /^\d+(st|nd|rd|th)\b/i.test(c)) ?? "";
+    const dns = rest.some((c) => /^dns$/i.test(c));
+    const dnf = !dns && rest.some((c) => /^dnf$/i.test(c));
+    const finishMs = dns || dnf ? null : (timeCells.at(-1) ?? null);
+    const segMs: (number | null)[] = dns || dnf ? timeCells : timeCells.slice(0, -1);
     // Segment times accumulate; the last segment ends at the finish, so only the earlier ones are splits.
+    // The segments must add up to the finish: a collapsed empty cell or a sheet printed cumulative would
+    // otherwise put wrong numbers in a runner's history, so then the splits are dropped and the row says so.
+    let splitsUnreadable = false;
+    let cumulative: number[] = [];
+    if (finishMs !== null) {
+      // One time per segment column, then the finish.
+      const complete = segMs.length === labels.length && segMs.every((v): v is number => v !== null);
+      const sum = complete ? (segMs as number[]).reduce((a, b) => a + b, 0) : NaN;
+      if (complete && Math.abs(sum - finishMs) <= 2_000) {
+        cumulative = (segMs as number[]).reduce<number[]>((acc, v) => [...acc, (acc.at(-1) ?? 0) + v], []);
+      } else if (complete && Math.abs((segMs as number[])[segMs.length - 1] - finishMs) <= 2_000 && (segMs as number[]).every((v, i) => i === 0 || v > (segMs as number[])[i - 1])) {
+        cumulative = segMs as number[]; // printed cumulative rather than as segments
+      } else {
+        splitsUnreadable = true;
+      }
+    } else {
+      // A DNF: whatever segments were run, in order, until the first gap.
+      for (const v of segMs) {
+        if (v === null) break;
+        cumulative.push((cumulative.at(-1) ?? 0) + v);
+      }
+    }
     const splits: Record<string, number> = {};
-    let acc = 0;
-    for (let i = 0; i < labels.length - 1; i++) {
-      const ms = /^\d/.test(segments[i]) ? parseElapsed(segments[i]) : null;
-      if (ms === null) break;
-      acc += ms;
-      if (meet.checkpoints.some((c) => c.label === labels[i])) splits[labels[i]] = acc;
+    for (let i = 0; i < labels.length - 1 && i < cumulative.length; i++) {
+      if (meet.checkpoints.some((c) => c.label === labels[i])) splits[labels[i]] = cumulative[i];
     }
     const placeNum = Number(placeText.match(/^(\d+)/)?.[1]);
     meet.rows.push({
@@ -141,11 +170,26 @@ export function parseSplitsHistory(text: string): HistoryMeet[] {
       gender,
       level: /\bjv\b/i.test(placeText) ? "jv" : "varsity",
       splits,
-      finishMs: dnf ? null : finishMs,
-      place: !dnf && Number.isInteger(placeNum) && placeNum > 0 ? placeNum : null,
-      status: dnf || finishMs === null ? "dnf" : "finished",
+      finishMs: dnf || dns ? null : finishMs,
+      place: !dnf && !dns && Number.isInteger(placeNum) && placeNum > 0 ? placeNum : null,
+      status: dns ? "dns" : dnf || finishMs === null ? "dnf" : "finished",
       letter: letterCol >= 0 && /^yes$/i.test(cells[letterCol] ?? ""),
+      splitsUnreadable,
     });
+  }
+  // A runner whose level the sheet never said (a DNF with no place) ran where they ran the rest of that meet's
+  // season: the level they appear at most elsewhere in the file, else varsity.
+  const levelByName = new Map<string, Map<"varsity" | "jv", number>>();
+  for (const m of meets) for (const r of m.rows) if (r.place !== null) {
+    const c = levelByName.get(r.name) ?? new Map<"varsity" | "jv", number>();
+    c.set(r.level, (c.get(r.level) ?? 0) + 1);
+    levelByName.set(r.name, c);
+  }
+  for (const m of meets) for (const r of m.rows) if (r.place === null && r.status !== "finished") {
+    const c = levelByName.get(r.name);
+    if (c) r.level = [...c].sort((a, b) => b[1] - a[1])[0][0];
   }
   return meets;
 }
+
+const TIME_OR_STATUS = /^(\d+:\d{2}(\.\d+)?|dnf|dns)$/i;

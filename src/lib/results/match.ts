@@ -55,7 +55,7 @@ export function matchAthlete(entry: ParsedEntry, athletes: Athlete[]): Match {
 }
 
 /** Levenshtein distance, for near-miss surnames. */
-function editDistance(a: string, b: string): number {
+export function editDistance(a: string, b: string): number {
   const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
   for (let i = 1; i <= a.length; i++) {
     let diag = prev[0];
