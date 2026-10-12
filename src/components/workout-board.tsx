@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Badge, Card, Segmented, Time } from "@/components/ui";
+import { Card, Segmented, Time } from "@/components/ui";
 import { WorkoutAthleteSheet } from "@/components/workout-athlete-sheet";
 import { useClock } from "@/lib/client/clock";
 import { useTimeFormat } from "@/lib/client/time-format";
 import { useWorkoutEvents } from "@/lib/client/use-workout-events";
 import type { Workout } from "@/lib/db/schema";
 import type { LastTime } from "@/lib/workouts";
-import { describeRest } from "@/lib/workout-plan";
 import { type GroupPhase, type GroupRepLog, replayWorkout, summarize } from "@/lib/workout-replay";
 import { formatElapsed } from "@/lib/time";
 
@@ -59,44 +58,33 @@ export function WorkoutBoard({
   }, [offsetMs]);
   const state = useMemo(() => replayWorkout(plan, events), [plan, events]);
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
-  // Two filters that combine: a group, and girls or boys ("Varsity girls" from a mixed group).
-  const [groupFilter, setGroupFilter] = useState<string>("all");
-  const [genderFilter, setGenderFilter] = useState<string>("all");
+  // One filter: everyone, a group ("g:<id>"), or girls or boys.
+  const [filter, setFilter] = useState<string>("all");
   const [openId, setOpenId] = useState<string | null>(null);
 
   const reps = state.reps;
   const anyTimed = [...state.athletes.values()].some((list) => list.some((r) => r.status === "done"));
   const genders = [...new Set(people.filter((p) => state.athletes.has(p.id)).map((p) => p.gender))];
+  const options = [
+    { value: "all", label: "Everyone" },
+    ...(plan.groups.length > 1 ? plan.groups.map((g) => ({ value: `g:${g.id}`, label: g.name })) : []),
+    ...(genders.length > 1 ? [{ value: "F", label: "Girls" }, { value: "M", label: "Boys" }] : []),
+  ];
 
   const rows = [...state.athletes.entries()]
-    .filter(([id, list]) => (groupFilter === "all" || list.some((r) => r.groupId === groupFilter)) && (genderFilter === "all" || byId.get(id)?.gender === genderFilter))
+    .filter(([id, list]) => filter === "all" || (filter.startsWith("g:") ? list.some((r) => r.groupId === filter.slice(2)) : byId.get(id)?.gender === filter))
     .map(([id, list]) => ({ id, list, summary: summarize(reps, list), goalMs: list.find((r) => r.goalMs !== null)?.goalMs ?? null }))
     // Fastest on average first; nobody-timed-yet by goal.
     .sort((a, b) => (a.summary.avgPaceMsPerKm ?? Infinity) - (b.summary.avgPaceMsPerKm ?? Infinity) || (a.goalMs ?? Infinity) - (b.goalMs ?? Infinity));
 
   const paceFor = (msPerKm: number | null) => (msPerKm === null ? "—" : ft((msPerKm * reps[0].meters) / 1000));
-  const shownGroups = plan.groups.filter((g) => groupFilter === "all" || groupFilter === g.id);
+  const shownGroups = plan.groups.filter((g) => !filter.startsWith("g:") || filter === `g:${g.id}`);
   // The rest each group took after each rep, as a row under the grid: read down a column for "rep 3, then 1:12 of rest".
   const restRows = shownGroups.map((g) => ({ g, log: new Map((state.groupLog.get(g.id) ?? []).map((l) => [l.repIndex, l])) })).filter(({ log }) => [...log.values()].some((l) => l.restMs !== null));
 
   return (
     <div className="space-y-3">
-      {(plan.groups.length > 1 || genders.length > 1) && (
-        <div className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-          {plan.groups.length > 1 && <Segmented value={groupFilter} onChange={setGroupFilter} options={[{ value: "all", label: "All groups" }, ...plan.groups.map((g) => ({ value: g.id, label: g.name }))]} />}
-          {genders.length > 1 && (
-            <Segmented
-              value={genderFilter}
-              onChange={setGenderFilter}
-              options={[
-                { value: "all", label: "Everyone" },
-                { value: "F", label: "Girls" },
-                { value: "M", label: "Boys" },
-              ]}
-            />
-          )}
-        </div>
-      )}
+      {options.length > 1 && <Segmented value={filter} onChange={setFilter} options={options} scroll />}
       {/* Where each group is right now: the same clocks the timing phones show. Picking a group shows just its clocks. */}
       {/* Once the workout is ended there's nothing live to show: the grid is the summary. */}
       {!plan.finishedAt && (
@@ -252,19 +240,21 @@ function GroupStatus({ name, phase, log, reps, now, timers }: { name: string; ph
   // The rep clock runs while the rep does, and on through the rest while anyone is still out.
   const repStartMs = phase.kind === "running" ? phase.startMs : phase.kind === "rest" && phase.stillOut ? (log.find((l) => l.repIndex === phase.afterRepIndex)?.startMs ?? null) : null;
   const leftMs = phase.kind === "rest" && phase.nextStartMs !== null ? phase.nextStartMs - now : null;
-  // Where the group is, by look: a green tint running, amber resting, plain and dashed before, grey when done.
-  const look =
+  const pastDue = leftMs !== null && leftMs <= 0;
+  // A quiet tint says where the group is: green running, amber resting, red once the next rep is past due,
+  // dashed before it starts, grey when done. The words are in the clock labels, not badges.
+  const card =
     phase.kind === "running"
-      ? { card: "border-brand/40 bg-brand-soft/50", badge: <Badge tone="brand" pulse>Running</Badge> }
+      ? "border-brand/20 bg-brand-soft/30"
       : phase.kind === "rest"
         ? phase.holdEventId
-          ? { card: "border-line-strong bg-surface", badge: <Badge tone="neutral">On hold</Badge> }
-          : { card: "border-gold/40 bg-gold-soft/40", badge: <Badge tone="gold" dot>Resting</Badge> }
+          ? "border-line bg-surface"
+          : pastDue
+            ? "border-danger/25 bg-danger-soft/40"
+            : "border-gold/25 bg-gold-soft/30"
         : phase.kind === "done"
-          ? { card: "border-line bg-surface-2", badge: <Badge tone="neutral">Done</Badge> }
-          : { card: "border-dashed border-line-strong bg-surface", badge: <Badge tone="neutral">Not started</Badge> };
-  // How far through: reps run, the one running, and (after an early end) the ones that won't be.
-  const doneThrough = phase.kind === "running" ? phase.repIndex - 1 : phase.kind === "rest" ? phase.afterRepIndex : phase.kind === "done" ? (phase.endedEarlyAfter ?? reps.length - 1) : -1;
+          ? "border-line bg-surface-2"
+          : "border-dashed border-line-strong bg-surface";
   const headline =
     phase.kind === "running" ? (
       <>
@@ -277,63 +267,38 @@ function GroupStatus({ name, phase, log, reps, now, timers }: { name: string; ph
     ) : phase.kind === "done" ? (
       phase.endedEarlyAfter !== null ? (
         <>
-          Ended after rep {repNo(phase.endedEarlyAfter)} <span className="font-normal text-ink-2">of {reps.length}</span>
+          Done after rep {repNo(phase.endedEarlyAfter)} <span className="font-normal text-ink-2">of {reps.length}</span>
         </>
       ) : (
-        <>All {reps.length} reps</>
+        <>Done: all {reps.length} reps</>
       )
     ) : (
       <>
-        Rep 1 <span className="font-normal text-ink-2">up first · {reps[0].label}</span>
+        Not started <span className="font-normal text-ink-2">· rep 1 is {reps[0].label}</span>
       </>
     );
   return (
-    <div className={`rounded-lg border px-4 py-3 shadow-card ${look.card}`}>
+    <div className={`rounded-lg border px-4 py-3 shadow-card ${card}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold text-ink">{name}</span>
-            {look.badge}
-          </div>
-          <div className="mt-1.5 text-lg leading-tight font-semibold text-ink">{headline}</div>
-          {phase.kind === "rest" && <div className="text-[13px] text-ink-2">{phase.holdEventId ? "On hold: no countdown" : phase.rest ? `${describeRest(phase.rest)} rest` : "Rest"}</div>}
+          <div className="text-sm font-semibold text-ink-2">{name}</div>
+          <div className="mt-0.5 text-lg leading-tight font-semibold text-ink">{headline}</div>
+          {phase.kind === "rest" && phase.holdEventId && <div className="text-[13px] text-ink-2">On hold: no countdown</div>}
+          {(phase.kind === "running" || phase.kind === "rest") && <div className="mt-1.5 text-[12px] text-ink-3">{timers.length > 0 ? `Timed by ${timers.join(", ")}` : "No one timing right now"}</div>}
         </div>
         <div className="flex shrink-0 gap-5 text-right">
-          {repStartMs !== null && <Clock label={phase.kind === "rest" ? `Rep ${repNo(phase.afterRepIndex)}, ${phase.stillOut} out` : "Rep clock"} value={formatElapsed(Math.max(0, now - repStartMs))} />}
+          {repStartMs !== null && <Clock label={phase.kind === "rest" ? `Running, ${phase.stillOut} out` : "Running"} value={formatElapsed(Math.max(0, now - repStartMs))} />}
           {phase.kind === "rest" && (
             <Clock
-              label="Resting"
+              label={phase.holdEventId ? "Resting, on hold" : "Resting"}
               value={formatElapsed(Math.max(0, now - phase.restStartedMs)).replace(/\.\d$/, "")}
-              tone={leftMs !== null && leftMs <= 0 ? "text-danger" : "text-ink"}
-              note={
-                leftMs === null
-                  ? null
-                  : leftMs > 0
-                    ? `next rep in ${formatElapsed(leftMs).replace(/\.\d$/, "")}`
-                    : `next rep ${formatElapsed(-leftMs).replace(/\.\d$/, "")} past due`
-              }
-              noteTone={leftMs !== null && leftMs <= 0 ? "text-danger" : leftMs !== null && leftMs <= 10_000 ? "text-gold-text" : "text-ink-3"}
+              tone={pastDue ? "text-danger" : "text-ink"}
+              note={leftMs === null ? null : leftMs > 0 ? `next rep in ${formatElapsed(leftMs).replace(/\.\d$/, "")}` : `next rep ${formatElapsed(-leftMs).replace(/\.\d$/, "")} past due`}
+              noteTone={pastDue ? "text-danger" : leftMs !== null && leftMs <= 10_000 ? "text-gold-text" : "text-ink-3"}
             />
           )}
         </div>
       </div>
-      <div className="mt-3 flex gap-0.5" aria-hidden>
-        {reps.map((r, i) => (
-          <span
-            key={r.id}
-            className={`h-1.5 flex-1 rounded-full ${r.number === 1 && i > 0 ? "ml-1.5" : ""} ${
-              i <= doneThrough
-                ? "bg-brand"
-                : phase.kind === "running" && i === phase.repIndex
-                  ? "animate-pulse bg-brand/60"
-                  : phase.kind === "done"
-                    ? "bg-line/50"
-                    : "bg-line-strong"
-            }`}
-          />
-        ))}
-      </div>
-      {(phase.kind === "running" || phase.kind === "rest") && <div className="mt-2 text-[12px] text-ink-3">{timers.length > 0 ? `Timed by ${timers.join(", ")}` : "No one timing right now"}</div>}
     </div>
   );
 }

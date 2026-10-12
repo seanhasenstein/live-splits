@@ -400,10 +400,18 @@ export function WorkoutRecorder({
                 onPointerDown={r.status === "running" ? notePointerDown : undefined}
                 onClick={() => (r.status === "running" ? finish(id) : setSheetFor(id))}
                 className={`flex w-full rounded-lg border text-left ${large ? "min-h-16 items-center justify-between gap-3 py-2 pr-11 pl-4" : "h-20 flex-col items-start justify-between px-3 py-2"} ${
-                  r.status === "running" ? "border-line bg-surface active:bg-brand-soft" : "border-transparent bg-surface-2"
+                  // Still out: raised, ready to tap. Tapped: green and checked, so the ones left stand out. Skipping: faded.
+                  r.status === "running"
+                    ? "border-line-strong bg-surface shadow-card active:bg-brand-soft"
+                    : r.status === "done"
+                      ? "border-brand/30 bg-brand-soft"
+                      : "border-transparent bg-surface-2"
                 }`}
               >
-                <span className={`line-clamp-2 leading-tight font-semibold ${large ? "text-xl" : "pr-6 text-[15px]"} ${r.status === "running" ? "text-ink" : "text-ink-2"}`}>{nameOf.get(id) ?? "?"}</span>
+                <span className={`line-clamp-2 leading-tight font-semibold ${large ? "text-xl" : "pr-6 text-[15px]"} ${r.status === "skipped" ? "text-ink-3" : "text-ink"}`}>
+                  {r.status === "done" && <Check className="mr-1 inline size-4 -translate-y-px text-brand-text" strokeWidth={3} />}
+                  {nameOf.get(id) ?? "?"}
+                </span>
                 {r.status === "done" && r.elapsedMs !== null ? (
                   <span className="flex items-baseline gap-2">
                     <Time className={`${large ? "text-xl" : "text-base"} font-semibold text-ink`}>{ft(r.elapsedMs)}</Time>
