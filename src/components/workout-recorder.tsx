@@ -41,7 +41,7 @@ const deltaTone = (ms: number) => (Math.abs(ms) < 500 ? "text-ink-2" : ms < 0 ? 
 type TileOrder = "goal" | "last" | "name";
 const ORDER_KEY = "ls_workout_order";
 const LARGE_KEY = "ls_workout_large";
-const ORDER_LABEL: Record<TileOrder, string> = { goal: "Goal order", last: "Last-rep order", name: "A–Z" };
+const ORDER_LABEL: Record<TileOrder, string> = { goal: "Goal", last: "Last rep", name: "A–Z" };
 
 export function WorkoutRecorder({
   workoutId,
@@ -60,8 +60,8 @@ export function WorkoutRecorder({
   // Rep times the team's way; the running clocks stay at tenths.
   const { ft, team } = useTimeFormat();
   const tenths = team === "tenths";
-  const { events, plan, send, online, loaded, unsent } = useWorkoutEvents(workoutId, initialPlan);
   const [groupId, setGroupId] = useState(() => (initialGroupId && initialPlan.groups.some((g) => g.id === initialGroupId) ? initialGroupId : initialPlan.groups[0].id));
+  const { events, plan, send, online, loaded, unsent } = useWorkoutEvents(workoutId, initialPlan, groupId);
   const group = plan.groups.find((g) => g.id === groupId) ?? plan.groups[0];
   const state = useMemo(() => replayWorkout(plan, events), [plan, events]);
   const nameOf = useMemo(() => new Map(people.map((p) => [p.id, p.name])), [people]);
@@ -130,7 +130,19 @@ export function WorkoutRecorder({
   const stillOut = phase.kind === "rest" ? sortRows(rowsAt(phase.afterRepIndex).filter(({ r }) => r.status === "running"), phase.afterRepIndex) : [];
   const upNext = phase.kind !== "running" && phase.kind !== "done" ? sortRows(rowsAt(repIndex).filter(({ r }) => r.status === "pending"), repIndex) : [];
 
-  const startRep = () => send({ type: "rep_start", groupId: group.id, repId: rep.id, at: tapTime() });
+  // Starting the next rep while someone is still out on the last one leaves them with no time for it,
+  // so it takes a second tap that says who. (A time can still be added for them afterwards.)
+  const [startArmed, setStartArmed] = useState(false);
+  useEffect(() => {
+    if (!startArmed) return;
+    const t = setTimeout(() => setStartArmed(false), 4000);
+    return () => clearTimeout(t);
+  }, [startArmed]);
+  const startRep = () => {
+    if (stillOut.length > 0 && !startArmed) return setStartArmed(true);
+    setStartArmed(false);
+    send({ type: "rep_start", groupId: group.id, repId: rep.id, at: tapTime() });
+  };
   const finish = (athleteId: string, repId = rep.id) => send({ type: "finish", groupId: group.id, athleteId, repId, at: tapTime() });
   // Starting the rest early takes two taps: the first arms it for a few seconds, so a stray tap mid-rep does nothing.
   const [restArmed, setRestArmed] = useState(false);
@@ -190,9 +202,9 @@ export function WorkoutRecorder({
             "Timing"
           )}
         </h1>
-        <Button variant="ghost" size="sm" onClick={() => setViewOpen(true)} className="-mr-2 shrink-0 text-ink-2">
+        <Button variant="secondary" size="sm" onClick={() => setViewOpen(true)} className="shrink-0">
           <SlidersHorizontal className="size-3.5" />
-          {ORDER_LABEL[order]}
+          <span className="text-ink-2">Order:</span> {ORDER_LABEL[order]}
         </Button>
       </div>
       {(!online || unsent > 0) && (
@@ -246,10 +258,18 @@ export function WorkoutRecorder({
           </div>
         )}
         {phase.kind !== "running" && phase.kind !== "done" && (
-          <Button size="lg" className="mt-3 h-14 w-full text-base" onPointerDown={notePointerDown} onClick={startRep}>
-            <Play className="size-5" />
-            Start {phase.kind === "before" ? "rep 1" : `rep ${repIndex + 1}`}
-          </Button>
+          <>
+            {startArmed && (
+              <p className="mt-3 rounded-md bg-gold-soft px-3 py-2 text-[13px] text-ink">
+                {listNames(shortNames(stillOut.map(({ id }) => nameOf.get(id) ?? "?")))} {stillOut.length === 1 ? "is" : "are"} still out on rep {repIndex}. Starting rep {repIndex + 1} leaves{" "}
+                {stillOut.length === 1 ? "them" : "them each"} with no time for rep {repIndex}. You can add one later by tapping their name.
+              </p>
+            )}
+            <Button size="lg" variant={startArmed ? "gold" : "primary"} className="mt-3 h-14 w-full text-base" onPointerDown={notePointerDown} onClick={startRep}>
+              <Play className="size-5" />
+              {startArmed ? `Tap again to start rep ${repIndex + 1}` : `Start rep ${repIndex + 1}`}
+            </Button>
+          </>
         )}
       </Card>
 
@@ -444,6 +464,15 @@ function ChoiceRow({ active, label, hint, onClick }: { active: boolean; label: s
   );
 }
 
+/** "Ajani", "Ajani and Joe", "Ajani, Joe and Will". */
+const listNames = (names: string[]) => (names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
+
+/** First names, unless two share one: then full names, so "Emma and Emma" can't happen. */
+const shortNames = (full: string[]) => {
+  const first = full.map((n) => n.split(" ")[0]);
+  return full.map((n, i) => (first.filter((f) => f === first[i]).length > 1 ? n : first[i]));
+};
+
 /** "Addyson's", "James'". */
 const possessive = (first: string) => (/s$/i.test(first) ? `${first}'` : `${first}'s`);
 
@@ -471,7 +500,7 @@ function AthleteActions({
   groupStartMs: number | null;
   otherGroups: { id: string; name: string }[];
   onClose: () => void;
-  act: (type: "void" | "edit" | "skip" | "stop" | "rejoin" | "move" | "rep_start", extra: { repId?: string; targetEventId?: string; timeMs?: number; groupId?: string }) => void;
+  act: (type: "void" | "edit" | "skip" | "stop" | "rejoin" | "move" | "rep_start" | "finish", extra: { repId?: string; targetEventId?: string; timeMs?: number; groupId?: string }) => void;
   reps: { id: string }[];
 }) {
   const [fixing, setFixing] = useState(false);
@@ -493,11 +522,23 @@ function AthleteActions({
             </button>
           </>
         )}
+        {rep.status === "unfinished" && rep.startMs !== null && !fixing && (
+          <button type="button" className={btn} onClick={() => setFixing(true)}>
+            Add their time
+            <span className="mt-0.5 block text-[13px] text-ink-2">The group went on before they were tapped in. Type it from a watch.</span>
+          </button>
+        )}
         {fixing && rep.startMs !== null && (
           <div className="space-y-2">
             <Input autoFocus value={typed} onChange={(e) => setTyped(e.target.value)} inputMode="decimal" className="h-12 font-mono text-xl" aria-label="Rep time" />
             <p className="text-[13px] text-ink-2">{typed.trim() ? (typedMs !== null ? `= ${formatElapsed(typedMs)}` : "Not a time yet") : "Digits are enough: 116 is 1:16, 116.4 is 1:16.4."}</p>
-            <Button className="w-full" disabled={typedMs === null} onClick={() => act("edit", { targetEventId: rep.finishEventId!, timeMs: rep.startMs! + typedMs! })}>
+            <Button
+              className="w-full"
+              disabled={typedMs === null}
+              onClick={() =>
+                rep.finishEventId ? act("edit", { targetEventId: rep.finishEventId, timeMs: rep.startMs! + typedMs! }) : act("finish", { repId: rep.repId, timeMs: rep.startMs! + typedMs! })
+              }
+            >
               Save {typedMs !== null ? formatElapsed(typedMs) : ""}
             </Button>
           </div>

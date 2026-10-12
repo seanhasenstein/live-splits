@@ -3,6 +3,7 @@ import { Pencil, Timer } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { AppHeader, Card, CardBody, CardHeader, LinkButton, Page, PageTitle } from "@/components/ui";
 import { getSession, isSchoolCoach } from "@/lib/auth/session";
+import { SessionMenu } from "@/components/session-menu";
 import { WorkoutBoard } from "@/components/workout-board";
 import { getProgram, listRoster } from "@/lib/data";
 import { describePlan, describeRest, EFFORT_LABEL } from "@/lib/workout-plan";
@@ -26,7 +27,7 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
 
   return (
     <>
-      <AppHeader back={{ href: "/workouts", label: "Workouts" }} />
+      <AppHeader back={{ href: "/workouts", label: "Workouts" }} right={<SessionMenu name={session!.name} role="coach" />} />
       <Page wide>
         <PageTitle
           title={workout.name}

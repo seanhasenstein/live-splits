@@ -32,12 +32,14 @@ function saveQueue(workoutId: string, q: Queued[]) {
  * A workout's live event log: what the server has plus what this phone has
  * queued but not yet delivered, and the current plan (it can change mid-way).
  */
-export function useWorkoutEvents(workoutId: string, initial: Plan) {
+export function useWorkoutEvents(workoutId: string, initial: Plan, timingGroupId: string | null = null) {
   const [serverEvents, setServerEvents] = useState<Map<string, WorkoutEvent>>(() => new Map());
   const [queue, setQueue] = useState<Queued[]>([]);
   const [plan, setPlan] = useState<Plan>(initial);
   const [online, setOnline] = useState(true);
   const [loaded, setLoaded] = useState(false);
+  /** Who has a record screen open, and on which group. */
+  const [recording, setRecording] = useState<{ name: string; groupId: string }[]>([]);
   const since = useRef(0);
   const sending = useRef(false);
   const failures = useRef(0);
@@ -46,11 +48,12 @@ export function useWorkoutEvents(workoutId: string, initial: Plan) {
 
   const poll = useCallback(async () => {
     try {
-      const res = await fetch(`/api/workouts/${workoutId}/events?since=${since.current}`, { cache: "no-store" });
+      const res = await fetch(`/api/workouts/${workoutId}/events?since=${since.current}${timingGroupId ? `&at=${encodeURIComponent(timingGroupId)}` : ""}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const body = (await res.json()) as { events: WorkoutEvent[]; serverTimeMs: number; workout: Plan };
+      const body = (await res.json()) as { events: WorkoutEvent[]; serverTimeMs: number; workout: Plan; recording: { name: string; groupId: string }[] };
       since.current = body.serverTimeMs;
       setPlan(body.workout);
+      setRecording(body.recording);
       if (body.events.length) {
         setServerEvents((prev) => {
           const next = new Map(prev);
@@ -63,7 +66,7 @@ export function useWorkoutEvents(workoutId: string, initial: Plan) {
     } catch {
       setOnline(false);
     }
-  }, [workoutId]);
+  }, [workoutId, timingGroupId]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -181,7 +184,7 @@ export function useWorkoutEvents(workoutId: string, initial: Plan) {
     return [...all.values()];
   }, [serverEvents, queue]);
 
-  return { events, plan, send, online, loaded, unsent: queue.length, refresh: poll };
+  return { events, plan, send, online, loaded, unsent: queue.length, refresh: poll, recording };
 }
 
 function asEvent(e: Queued): WorkoutEvent {

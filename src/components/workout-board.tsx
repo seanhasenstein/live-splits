@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Card, LiveDot, Segmented, Time } from "@/components/ui";
+import { WorkoutAthleteSheet } from "@/components/workout-athlete-sheet";
 import { useClock } from "@/lib/client/clock";
 import { useTimeFormat } from "@/lib/client/time-format";
 import { useWorkoutEvents } from "@/lib/client/use-workout-events";
@@ -31,7 +32,7 @@ const signed = (ms: number, digits: 0 | 1) => {
  * pace, average vs goal, spread and fade. Live while it's being timed.
  */
 export function WorkoutBoard({ workoutId, initialPlan, people }: { workoutId: string; initialPlan: Plan; people: Person[] }) {
-  const { events, plan } = useWorkoutEvents(workoutId, initialPlan);
+  const { events, plan, recording, send } = useWorkoutEvents(workoutId, initialPlan);
   const { ft, team } = useTimeFormat();
   const digits = team === "tenths" ? 1 : 0;
   const clock = useClock();
@@ -46,6 +47,7 @@ export function WorkoutBoard({ workoutId, initialPlan, people }: { workoutId: st
   const state = useMemo(() => replayWorkout(plan, events), [plan, events]);
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
   const [filter, setFilter] = useState<string>("all");
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const reps = state.reps;
   const anyTimed = [...state.athletes.values()].some((list) => list.some((r) => r.status === "done"));
@@ -64,17 +66,26 @@ export function WorkoutBoard({ workoutId, initialPlan, people }: { workoutId: st
     .sort((a, b) => (a.summary.avgPaceMsPerKm ?? Infinity) - (b.summary.avgPaceMsPerKm ?? Infinity) || (a.goalMs ?? Infinity) - (b.goalMs ?? Infinity));
 
   const paceFor = (msPerKm: number | null) => (msPerKm === null ? "—" : ft((msPerKm * reps[0].meters) / 1000));
+  const shownGroups = plan.groups.filter((g) => !filter.startsWith("g:") || filter === `g:${g.id}`);
+  // The rest each group took after each rep, as a row under the grid: read down a column for "rep 3, then 1:12 of rest".
+  const restRows = shownGroups.map((g) => ({ g, log: new Map((state.groupLog.get(g.id) ?? []).map((l) => [l.repIndex, l])) })).filter(({ log }) => [...log.values()].some((l) => l.restMs !== null));
 
   return (
     <div className="space-y-3">
       {options.length > 1 && <Segmented value={filter} onChange={setFilter} options={options} />}
       {/* Where each group is right now: the same clocks the timing phones show. Picking a group shows just its clocks. */}
-      <div className="grid gap-2 sm:grid-cols-2">
-        {plan.groups
-          .filter((g) => !filter.startsWith("g:") || filter === `g:${g.id}`)
-          .map((g) => (
-            <GroupStatus key={g.id} name={plan.groups.length > 1 ? g.name : "Group"} phase={state.groups.get(g.id)!} log={state.groupLog.get(g.id) ?? []} reps={reps} now={now} />
-          ))}
+      <div className={`grid gap-2 ${shownGroups.length > 1 ? "sm:grid-cols-2" : ""}`}>
+        {shownGroups.map((g) => (
+          <GroupStatus
+            key={g.id}
+            name={plan.groups.length > 1 ? g.name : "Group"}
+            phase={state.groups.get(g.id)!}
+            log={state.groupLog.get(g.id) ?? []}
+            reps={reps}
+            now={now}
+            timers={[...new Set(recording.filter((r) => r.groupId === g.id).map((r) => r.name))]}
+          />
+        ))}
       </div>
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
@@ -97,9 +108,11 @@ export function WorkoutBoard({ workoutId, initialPlan, people }: { workoutId: st
             <tbody>
               {rows.map(({ id, list, summary, goalMs }) => (
                 <tr key={id} className="border-b border-line last:border-0">
-                  <td className="sticky left-0 z-10 bg-surface px-3 py-1.5">
-                    <div className="max-w-36 truncate font-medium text-ink">{byId.get(id)?.name ?? "?"}</div>
-                    <div className="text-[11px] text-ink-3">{plan.groups.length > 1 ? (plan.groups.find((g) => g.id === list.at(-1)?.groupId)?.name ?? "") : byId.get(id)?.level}</div>
+                  <td className="sticky left-0 z-10 bg-surface p-0">
+                    <button type="button" onClick={() => setOpenId(id)} className="block w-full px-3 py-1.5 text-left hover:bg-surface-2">
+                      <span className="block max-w-36 truncate font-medium text-ink">{byId.get(id)?.name ?? "?"}</span>
+                      <span className="block text-[11px] text-ink-3">{plan.groups.length > 1 ? (plan.groups.find((g) => g.id === list.at(-1)?.groupId)?.name ?? "") : byId.get(id)?.level}</span>
+                    </button>
                   </td>
                   <td className="px-2 py-1.5 text-right">
                     <Time className="text-ink-2">{goalMs !== null ? ft(goalMs, "seconds") : "—"}</Time>
@@ -140,70 +153,106 @@ export function WorkoutBoard({ workoutId, initialPlan, people }: { workoutId: st
                 </tr>
               ))}
             </tbody>
+            {restRows.length > 0 && (
+              <tfoot>
+                {restRows.map(({ g, log }, n) => (
+                  <tr key={g.id} className={`bg-surface-2/60 ${n === 0 ? "border-t-2 border-line" : "border-t border-line"}`}>
+                    <td className="sticky left-0 z-10 bg-surface-2 px-3 py-1.5">
+                      <span className="block font-medium text-ink-2">Rest after</span>
+                      {plan.groups.length > 1 && <span className="block text-[11px] text-ink-3">{g.name}</span>}
+                    </td>
+                    <td />
+                    {reps.map((r, i) => {
+                      const l = log.get(i);
+                      const over = l?.restMs != null && l.plannedRestMs !== null ? l.restMs - l.plannedRestMs : null;
+                      return (
+                        <td key={r.id} className={`px-2 py-1.5 text-right align-top ${r.number === 1 && i > 0 ? "border-l border-line" : ""}`}>
+                          {l?.restMs != null ? (
+                            <>
+                              <Time className={`block ${over !== null && over > 10_000 ? "text-gold-text" : "text-ink-2"}`}>{formatElapsed(l.restMs, "seconds")}</Time>
+                              {over !== null && Math.abs(over) >= 5_000 && (
+                                <Time className="block text-[11px] text-ink-3">
+                                  {over > 0 ? "+" : "−"}
+                                  {Math.abs(over) >= 60_000 ? formatElapsed(Math.abs(over), "seconds") : Math.round(Math.abs(over) / 1000)}
+                                </Time>
+                              )}
+                            </>
+                          ) : null}
+                        </td>
+                      );
+                    })}
+                    <td colSpan={4} className="border-l border-line" />
+                  </tr>
+                ))}
+              </tfoot>
+            )}
           </table>
         </div>
       </Card>
+      {openId && state.athletes.get(openId) && (
+        <WorkoutAthleteSheet
+          name={byId.get(openId)?.name ?? "?"}
+          groupName={plan.groups.length > 1 ? (plan.groups.find((g) => g.id === state.athletes.get(openId)!.at(-1)?.groupId)?.name ?? null) : null}
+          reps={reps}
+          list={state.athletes.get(openId)!}
+          onAddTime={(repId, groupId, timeMs, finishEventId) =>
+            finishEventId ? send({ type: "edit", targetEventId: finishEventId, timeMs }) : send({ type: "finish", athleteId: openId, groupId, repId, timeMs })
+          }
+          onClose={() => setOpenId(null)}
+        />
+      )}
       <p className="text-xs leading-relaxed text-ink-3">
         {anyTimed
-          ? `Green is faster than goal, red slower; within a second is on goal. "Skipped": didn't run that rep. "No time": started it but the group went on before they finished. "Done": done for today. Avg, spread and fade are per ${reps[0].label}, so reps of other distances compare fairly. Spread: slowest minus fastest. Fade: the second half against the first. A rest shown in amber ran more than 10 s past the plan.`
+          ? `Green is faster than goal, red slower; within a second is on goal. "Skipped": didn't run that rep. "No time": started it but the group went on before they finished. "Done": done for today. Avg, spread and fade are per ${reps[0].label}, so reps of other distances compare fairly. Spread: slowest minus fastest. Fade: the second half against the first. "Rest after" is the rest each group took, from its last runner in to the next start, with how far off the plan it was; amber is more than 10 s long. Tap a name for that runner's reps.`
           : "Times appear here as the reps are timed."}
       </p>
     </div>
   );
 }
 
-/** "Rep 3 of 12 · 0:45.2" while it runs; "Resting · next in 0:23" between; and the rests actually taken. */
-function GroupStatus({ name, phase, log, reps, now }: { name: string; phase: GroupPhase; log: GroupRepLog[]; reps: ReturnType<typeof replayWorkout>["reps"]; now: number }) {
-  const label = (i: number) => (reps.some((r) => r.setIndex > 0) ? `Set ${reps[i].setIndex + 1} · rep ${reps[i].number}` : `Rep ${reps[i].number} of ${reps[i].setSize}`);
-  const rests = log.filter((l) => l.restMs !== null);
+/**
+ * One group right now: who's timing it, and its clocks, each saying what it times:
+ * "Running rep 6 of 12" while it runs; "Resting" between (with the next start);
+ * both while someone is still out after an early rest.
+ */
+function GroupStatus({ name, phase, log, reps, now, timers }: { name: string; phase: GroupPhase; log: GroupRepLog[]; reps: ReturnType<typeof replayWorkout>["reps"]; now: number; timers: string[] }) {
+  const repName = (i: number) => (reps.some((r) => r.setIndex > 0) ? `set ${reps[i].setIndex + 1}, rep ${reps[i].number} of ${reps[i].setSize}` : `rep ${reps[i].number} of ${reps[i].setSize}`);
   // The rep clock runs while the rep does, and on through the rest while anyone is still out.
   const repStartMs = phase.kind === "running" ? phase.startMs : phase.kind === "rest" && phase.stillOut ? (log.find((l) => l.repIndex === phase.afterRepIndex)?.startMs ?? null) : null;
-  const repNo = phase.kind === "running" ? phase.repIndex + 1 : phase.kind === "rest" ? phase.afterRepIndex + 1 : 0;
+  const repIndex = phase.kind === "running" ? phase.repIndex : phase.kind === "rest" ? phase.afterRepIndex : 0;
+  const live = phase.kind === "running" || phase.kind === "rest";
   return (
     <Card className="px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-            {phase.kind === "running" && <LiveDot />}
+            {live && <LiveDot />}
             {name}
           </div>
           <div className="text-[13px] text-ink-2">
-            {phase.kind === "before" ? "Not started" : phase.kind === "done" ? "All reps done" : phase.kind === "running" ? `${label(phase.repIndex)} · running` : `Resting after ${label(phase.afterRepIndex).toLowerCase()}${phase.rest ? ` · ${describeRest(phase.rest)}` : ""}`}
+            {phase.kind === "before" ? "Not started" : phase.kind === "done" ? `All ${reps.length} reps done` : timers.length > 0 ? `Timed by ${timers.join(", ")}` : "No one timing right now"}
           </div>
         </div>
-        <div className="flex shrink-0 gap-4 text-right">
-          {/* Every clock says what it's timing, so a number on its own is never a guess. */}
-          {repStartMs !== null && <Clock label={`Rep ${repNo}`} value={formatElapsed(Math.max(0, now - repStartMs))} />}
+        <div className="flex shrink-0 gap-5 text-right">
+          {repStartMs !== null && <Clock label={`Running ${repName(repIndex)}`} value={formatElapsed(Math.max(0, now - repStartMs))} note={phase.kind === "rest" ? `${phase.stillOut} still out` : null} />}
           {phase.kind === "rest" && (
             <Clock
-              label="Rest"
+              label="Resting"
               value={formatElapsed(Math.max(0, now - phase.restStartedMs)).replace(/\.\d$/, "")}
               tone={phase.nextStartMs !== null && now > phase.nextStartMs ? "text-danger" : "text-ink"}
               note={
                 phase.nextStartMs === null
-                  ? null
+                  ? phase.rest
+                    ? describeRest(phase.rest)
+                    : null
                   : now < phase.nextStartMs
-                    ? `next in ${formatElapsed(phase.nextStartMs - now).replace(/\.\d$/, "")}`
+                    ? `next rep in ${formatElapsed(phase.nextStartMs - now).replace(/\.\d$/, "")}`
                     : `${formatElapsed(now - phase.nextStartMs).replace(/\.\d$/, "")} over`
               }
             />
           )}
         </div>
       </div>
-      {rests.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-x-2 gap-y-0.5 border-t border-line pt-2 text-[12px] text-ink-2">
-          <span className="text-ink-3">Rests</span>
-          {rests.map((l) => {
-            const over = l.plannedRestMs !== null ? l.restMs! - l.plannedRestMs : null;
-            return (
-              <Time key={l.repIndex} className={over !== null && over > 10_000 ? "text-gold-text" : ""}>
-                {formatElapsed(l.restMs!, "seconds")}
-                {over !== null && Math.abs(over) >= 5_000 && ` (${over > 0 ? "+" : "−"}${Math.abs(over) >= 60_000 ? formatElapsed(Math.abs(over), "seconds") : Math.round(Math.abs(over) / 1000)})`}
-              </Time>
-            );
-          })}
-        </div>
-      )}
     </Card>
   );
 }
@@ -211,7 +260,7 @@ function GroupStatus({ name, phase, log, reps, now }: { name: string; phase: Gro
 function Clock({ label, value, tone = "text-ink", note = null }: { label: string; value: string; tone?: string; note?: string | null }) {
   return (
     <div>
-      <div className="text-[10px] font-semibold tracking-[0.08em] text-ink-3 uppercase">{label}</div>
+      <div className="text-[12px] font-medium text-ink-2 first-letter:uppercase">{label}</div>
       <Time className={`block text-2xl leading-tight font-semibold tracking-tight ${tone}`}>{value}</Time>
       {note && <span className="text-[11px] text-ink-3">{note}</span>}
     </div>

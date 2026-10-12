@@ -1083,19 +1083,19 @@ function OrderControl({
   const [showRaces, setShowRaces] = useState(mode.kind === "race");
   const prevLabel = cpIndex > 0 ? checkpoints[cpIndex - 1].label : null;
   const raceLabel = (id: string) => history.races.find((r) => r.id === id)?.label ?? "a race";
-  // Button label: reads as an ordering, so "Mile 2 order" next to a "Finish" title isn't mistaken for the checkpoint.
+  // Button label, after "Order:", so "Mile 2" next to a "Finish" title isn't mistaken for the checkpoint.
   const describe = (m: OrderMode) => {
     switch (m.kind) {
       case "prev":
-        return prevLabel ? `${prevLabel} order` : "Previous checkpoint";
+        return prevLabel ?? "Previous checkpoint";
       case "last":
-        return "Last-race order";
+        return "Last race";
       case "race":
-        return `${raceLabel(m.raceId)} order`;
+        return raceLabel(m.raceId);
       case "best":
-        return "Season-best order";
+        return "Season best";
       case "coach":
-        return "Coach's order";
+        return "Coach's";
       case "az":
         return "A–Z";
     }
@@ -1113,9 +1113,10 @@ function OrderControl({
   };
   return (
     <>
-      <Button variant="ghost" size="sm" onClick={() => setOpen(true)} className="-mr-2 text-ink-2">
-        <SlidersHorizontal className="size-3.5" />
-        {describe(mode)}
+      <Button variant="secondary" size="sm" onClick={() => setOpen(true)} className="min-w-0 shrink">
+        <SlidersHorizontal className="size-3.5 shrink-0" />
+        <span className="text-ink-2">Order:</span>
+        <span className="truncate">{describe(mode)}</span>
       </Button>
       {open && (
         <Sheet title="Names and tiles" subtitle="Remembered on this phone." onClose={() => setOpen(false)}>

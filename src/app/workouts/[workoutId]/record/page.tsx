@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { SessionMenu } from "@/components/session-menu";
 import { WorkoutRecorder } from "@/components/workout-recorder";
 import { Table2 } from "lucide-react";
 import { AppHeader, LinkButton, Page } from "@/components/ui";
@@ -22,10 +23,13 @@ export default async function RecordWorkoutPage({ params, searchParams }: PagePr
       <AppHeader
         back={{ href: `/workouts/${workout._id}`, label: workout.name }}
         right={
-          <LinkButton href={`/workouts/${workout._id}`} variant="secondary" size="sm">
-            <Table2 className="size-4" />
-            Results
-          </LinkButton>
+          <div className="flex items-center gap-2">
+            <LinkButton href={`/workouts/${workout._id}`} variant="secondary" size="sm">
+              <Table2 className="size-4" />
+              All times
+            </LinkButton>
+            <SessionMenu name={session!.name} role="coach" />
+          </div>
         }
       />
       <Page>

@@ -141,6 +141,21 @@ describe("rests the coach controls", () => {
     const on = replayWorkout(workout, [...base, ev("rep_start", 140_000, { groupId: "g1", repId: "a2" })]);
     expect(on.athletes.get("titus")![0].status).toBe("unfinished");
     expect(on.athletes.get("titus")![1].status).toBe("running");
+    // A time typed in afterwards (from a watch) gives him rep 1 back, without touching rep 2 or the group.
+    const typed = replayWorkout(workout, [...base, ev("rep_start", 140_000, { groupId: "g1", repId: "a2" }), ev("finish", 300_000, { athleteId: "titus", repId: "a1", timeMs: T0 + 84_000 })]);
+    expect(typed.athletes.get("titus")![0]).toMatchObject({ status: "done", elapsedMs: 84_000 });
+    expect(typed.athletes.get("titus")![1].status).toBe("running");
+    expect(typed.groups.get("g1")).toMatchObject({ kind: "running", repIndex: 1 });
+  });
+
+  it("a runner's own late start can be undone or restarted", () => {
+    const start = ev("rep_start", 5_000, { groupId: "g1", athleteId: "titus", repId: "a1", clientEventId: "late1" });
+    const base = [ev("rep_start", 0, { groupId: "g1", repId: "a1" }), start];
+    expect(replayWorkout(workout, base).athletes.get("titus")![0]).toMatchObject({ startMs: T0 + 5_000, ownStartEventId: "late1" });
+    const undone = replayWorkout(workout, [...base, ev("void", 6_000, { targetEventId: "late1" })]);
+    expect(undone.athletes.get("titus")![0]).toMatchObject({ startMs: T0, ownStartEventId: null });
+    const again = replayWorkout(workout, [...base, ev("rep_start", 9_000, { groupId: "g1", athleteId: "titus", repId: "a1", clientEventId: "late2" })]);
+    expect(again.athletes.get("titus")![0]).toMatchObject({ startMs: T0 + 9_000, ownStartEventId: "late2" });
   });
 
   it("logs the rest each group actually took against the plan", () => {
