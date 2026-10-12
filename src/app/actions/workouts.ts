@@ -6,7 +6,8 @@ import { getSession, isSchoolCoach, sessionActor } from "@/lib/auth/session";
 import { getProgram, getSchool, getSeasonFor, listAthletes } from "@/lib/data";
 import { getDb, newId } from "@/lib/db/client";
 import { collection, COLLECTIONS } from "@/lib/db/collections";
-import { expandSets, WorkoutPayload } from "@/lib/workout-plan";
+import { canTimeWorkout } from "@/lib/workout-events";
+import { addRepAtEnd, dropLastRep, expandSets, WorkoutPayload } from "@/lib/workout-plan";
 import { getWorkout } from "@/lib/workouts";
 
 /** Create (workoutId null) or update a workout's plan, groups and goals. Coaches only. */
@@ -152,4 +153,29 @@ export async function regenerateWorkoutCodeAction(): Promise<{ error?: string; c
     await collection(db, "sessions").updateMany({ schoolId: program.schoolId, role: "manager", meetId: null, revokedAt: null }, { $set: { revokedAt: new Date() } });
   }
   return { code: formatCode(code) };
+}
+
+/**
+ * Add a rep at the end, or drop the last one, mid-workout. Whoever is timing
+ * can (a coach's "one more"); a rep any group has started can't be dropped.
+ */
+export async function changeRepsAction(workoutId: string, change: "add" | "drop"): Promise<{ error?: string }> {
+  const workout = await getWorkout(workoutId);
+  if (!workout) return { error: "Workout not found" };
+  const session = await canTimeWorkout(workout);
+  if (!session) return { error: "Not allowed" };
+  const db = await getDb();
+  let sets = workout.sets;
+  if (change === "add") sets = addRepAtEnd(sets);
+  else {
+    const lastId = sets.at(-1)!.reps.at(-1)!.id;
+    const events = await collection(db, "workoutEvents").find({ workoutId: workout._id }, { projection: { clientEventId: 1, type: 1, repId: 1, targetEventId: 1 } }).toArray();
+    const voided = new Set(events.filter((e) => e.type === "void").map((e) => e.targetEventId));
+    if (events.some((e) => e.repId === lastId && !voided.has(e.clientEventId))) return { error: "A group has already started that rep" };
+    const fewer = dropLastRep(sets);
+    if (!fewer) return { error: "It's the only rep" };
+    sets = fewer;
+  }
+  await collection(db, "workouts").updateOne({ _id: workout._id }, { $set: { sets, updatedAt: new Date(), updatedBy: sessionActor(session) } });
+  return {};
 }

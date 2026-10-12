@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Badge, Card, Time } from "@/components/ui";
+import { Badge, Card, Segmented, Time } from "@/components/ui";
 import { WorkoutAthleteSheet } from "@/components/workout-athlete-sheet";
 import { useClock } from "@/lib/client/clock";
 import { useTimeFormat } from "@/lib/client/time-format";
@@ -59,49 +59,42 @@ export function WorkoutBoard({
   }, [offsetMs]);
   const state = useMemo(() => replayWorkout(plan, events), [plan, events]);
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
-  const [filter, setFilter] = useState<string>("all");
+  // Two filters that combine: a group, and girls or boys ("Varsity girls" from a mixed group).
+  const [groupFilter, setGroupFilter] = useState<string>("all");
+  const [genderFilter, setGenderFilter] = useState<string>("all");
   const [openId, setOpenId] = useState<string | null>(null);
 
   const reps = state.reps;
   const anyTimed = [...state.athletes.values()].some((list) => list.some((r) => r.status === "done"));
-  const groupFilters = plan.groups.length > 1 ? plan.groups.map((g) => ({ value: `g:${g.id}`, label: g.name })) : [];
   const genders = [...new Set(people.filter((p) => state.athletes.has(p.id)).map((p) => p.gender))];
-  const options = [{ value: "all", label: "Everyone" }, ...groupFilters, ...(genders.length > 1 ? [{ value: "F", label: "Girls" }, { value: "M", label: "Boys" }] : [])];
 
   const rows = [...state.athletes.entries()]
-    .filter(([id, list]) => {
-      if (filter === "all") return true;
-      if (filter.startsWith("g:")) return list.some((r) => r.groupId === filter.slice(2));
-      return byId.get(id)?.gender === filter;
-    })
+    .filter(([id, list]) => (groupFilter === "all" || list.some((r) => r.groupId === groupFilter)) && (genderFilter === "all" || byId.get(id)?.gender === genderFilter))
     .map(([id, list]) => ({ id, list, summary: summarize(reps, list), goalMs: list.find((r) => r.goalMs !== null)?.goalMs ?? null }))
     // Fastest on average first; nobody-timed-yet by goal.
     .sort((a, b) => (a.summary.avgPaceMsPerKm ?? Infinity) - (b.summary.avgPaceMsPerKm ?? Infinity) || (a.goalMs ?? Infinity) - (b.goalMs ?? Infinity));
 
   const paceFor = (msPerKm: number | null) => (msPerKm === null ? "—" : ft((msPerKm * reps[0].meters) / 1000));
-  const shownGroups = plan.groups.filter((g) => !filter.startsWith("g:") || filter === `g:${g.id}`);
+  const shownGroups = plan.groups.filter((g) => groupFilter === "all" || groupFilter === g.id);
   // The rest each group took after each rep, as a row under the grid: read down a column for "rep 3, then 1:12 of rest".
   const restRows = shownGroups.map((g) => ({ g, log: new Map((state.groupLog.get(g.id) ?? []).map((l) => [l.repIndex, l])) })).filter(({ log }) => [...log.values()].some((l) => l.restMs !== null));
 
   return (
     <div className="space-y-3">
-      {/* Chips, not a segmented control: with several groups the names need their full width, so the row scrolls. */}
-      {options.length > 1 && (
-        <div className="-mx-4 flex [scrollbar-width:none] gap-1.5 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0" role="radiogroup" aria-label="Show">
-          {options.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              role="radio"
-              aria-checked={filter === o.value}
-              onClick={() => setFilter(o.value)}
-              className={`h-8 shrink-0 rounded-full border px-3 text-[13px] font-medium whitespace-nowrap ${
-                filter === o.value ? "border-ink bg-ink text-bg" : "border-line-strong bg-surface text-ink-2 hover:text-ink"
-              }`}
-            >
-              {o.label}
-            </button>
-          ))}
+      {(plan.groups.length > 1 || genders.length > 1) && (
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          {plan.groups.length > 1 && <Segmented value={groupFilter} onChange={setGroupFilter} options={[{ value: "all", label: "All groups" }, ...plan.groups.map((g) => ({ value: g.id, label: g.name }))]} />}
+          {genders.length > 1 && (
+            <Segmented
+              value={genderFilter}
+              onChange={setGenderFilter}
+              options={[
+                { value: "all", label: "Everyone" },
+                { value: "F", label: "Girls" },
+                { value: "M", label: "Boys" },
+              ]}
+            />
+          )}
         </div>
       )}
       {/* Where each group is right now: the same clocks the timing phones show. Picking a group shows just its clocks. */}
@@ -254,25 +247,46 @@ export function WorkoutBoard({
  * both while someone is still out after an early rest.
  */
 function GroupStatus({ name, phase, log, reps, now, timers }: { name: string; phase: GroupPhase; log: GroupRepLog[]; reps: ReturnType<typeof replayWorkout>["reps"]; now: number; timers: string[] }) {
-  const repName = (i: number) => (reps.some((r) => r.setIndex > 0) ? `set ${reps[i].setIndex + 1}, rep ${reps[i].number} of ${reps[i].setSize}` : `rep ${reps[i].number} of ${reps[i].setSize}`);
+  const sets = reps.some((r) => r.setIndex > 0);
+  const repNo = (i: number) => (sets ? `${reps[i].setIndex + 1}.${reps[i].number}` : String(i + 1));
   // The rep clock runs while the rep does, and on through the rest while anyone is still out.
   const repStartMs = phase.kind === "running" ? phase.startMs : phase.kind === "rest" && phase.stillOut ? (log.find((l) => l.repIndex === phase.afterRepIndex)?.startMs ?? null) : null;
-  const repIndex = phase.kind === "running" ? phase.repIndex : phase.kind === "rest" ? phase.afterRepIndex : 0;
   const leftMs = phase.kind === "rest" && phase.nextStartMs !== null ? phase.nextStartMs - now : null;
-  // The card's look says where the group is at a glance: green running, amber resting
-  // (solid once the next rep is close), red when the rest has run over, dashed before, grey when done.
+  // Where the group is, by look: a green tint running, amber resting, plain and dashed before, grey when done.
   const look =
     phase.kind === "running"
-      ? { card: "border-brand/50 bg-surface", badge: <Badge tone="brand" pulse>Running</Badge> }
+      ? { card: "border-brand/40 bg-brand-soft/50", badge: <Badge tone="brand" pulse>Running</Badge> }
       : phase.kind === "rest"
         ? phase.holdEventId
           ? { card: "border-line-strong bg-surface", badge: <Badge tone="neutral">On hold</Badge> }
-          : leftMs !== null && leftMs <= 0
-            ? { card: "border-danger/50 bg-surface", badge: <Badge tone="danger" dot>Rest is over</Badge> }
-            : { card: leftMs !== null && leftMs <= 10_000 ? "border-gold bg-surface" : "border-gold/40 bg-surface", badge: <Badge tone="gold" dot>Resting</Badge> }
+          : { card: "border-gold/40 bg-gold-soft/40", badge: <Badge tone="gold" dot>Resting</Badge> }
         : phase.kind === "done"
-          ? { card: "border-line bg-surface-2", badge: <Badge tone="neutral">{phase.endedEarlyAfter !== null ? "Ended early" : "Done"}</Badge> }
+          ? { card: "border-line bg-surface-2", badge: <Badge tone="neutral">Done</Badge> }
           : { card: "border-dashed border-line-strong bg-surface", badge: <Badge tone="neutral">Not started</Badge> };
+  // How far through: reps run, the one running, and (after an early end) the ones that won't be.
+  const doneThrough = phase.kind === "running" ? phase.repIndex - 1 : phase.kind === "rest" ? phase.afterRepIndex : phase.kind === "done" ? (phase.endedEarlyAfter ?? reps.length - 1) : -1;
+  const headline =
+    phase.kind === "running" ? (
+      <>
+        Rep {repNo(phase.repIndex)} <span className="font-normal text-ink-2">of {reps.length}</span>
+      </>
+    ) : phase.kind === "rest" ? (
+      <>
+        Between reps {repNo(phase.afterRepIndex)} <span className="font-normal text-ink-2">and</span> {repNo(phase.afterRepIndex + 1)}
+      </>
+    ) : phase.kind === "done" ? (
+      phase.endedEarlyAfter !== null ? (
+        <>
+          Ended after rep {repNo(phase.endedEarlyAfter)} <span className="font-normal text-ink-2">of {reps.length}</span>
+        </>
+      ) : (
+        <>All {reps.length} reps</>
+      )
+    ) : (
+      <>
+        Rep 1 <span className="font-normal text-ink-2">up first · {reps[0].label}</span>
+      </>
+    );
   return (
     <div className={`rounded-lg border px-4 py-3 shadow-card ${look.card}`}>
       <div className="flex items-start justify-between gap-3">
@@ -281,50 +295,55 @@ function GroupStatus({ name, phase, log, reps, now, timers }: { name: string; ph
             <span className="text-sm font-semibold text-ink">{name}</span>
             {look.badge}
           </div>
-          <div className="mt-1 text-[13px] text-ink-2">
-            {phase.kind === "before"
-              ? `First up: ${reps[0].label}`
-              : phase.kind === "done"
-                ? phase.endedEarlyAfter !== null
-                  ? `Ended after ${repName(phase.endedEarlyAfter)}`
-                  : `All ${reps.length} reps done`
-                : timers.length > 0
-                  ? `Timed by ${timers.join(", ")}`
-                  : "No one timing right now"}
-          </div>
+          <div className="mt-1.5 text-lg leading-tight font-semibold text-ink">{headline}</div>
+          {phase.kind === "rest" && <div className="text-[13px] text-ink-2">{phase.holdEventId ? "On hold: no countdown" : phase.rest ? `${describeRest(phase.rest)} rest` : "Rest"}</div>}
         </div>
         <div className="flex shrink-0 gap-5 text-right">
-          {repStartMs !== null && <Clock label={`Running ${repName(repIndex)}`} value={formatElapsed(Math.max(0, now - repStartMs))} note={phase.kind === "rest" ? `${phase.stillOut} still out` : null} />}
+          {repStartMs !== null && <Clock label={phase.kind === "rest" ? `Rep ${repNo(phase.afterRepIndex)}, ${phase.stillOut} out` : "Rep clock"} value={formatElapsed(Math.max(0, now - repStartMs))} />}
           {phase.kind === "rest" && (
             <Clock
-              label={phase.holdEventId ? "Resting, on hold" : "Resting"}
+              label="Resting"
               value={formatElapsed(Math.max(0, now - phase.restStartedMs)).replace(/\.\d$/, "")}
               tone={leftMs !== null && leftMs <= 0 ? "text-danger" : "text-ink"}
               note={
                 leftMs === null
-                  ? phase.holdEventId
-                    ? "no countdown"
-                    : phase.rest
-                      ? describeRest(phase.rest)
-                      : null
+                  ? null
                   : leftMs > 0
                     ? `next rep in ${formatElapsed(leftMs).replace(/\.\d$/, "")}`
-                    : `${formatElapsed(-leftMs).replace(/\.\d$/, "")} over`
+                    : `next rep ${formatElapsed(-leftMs).replace(/\.\d$/, "")} past due`
               }
+              noteTone={leftMs !== null && leftMs <= 0 ? "text-danger" : leftMs !== null && leftMs <= 10_000 ? "text-gold-text" : "text-ink-3"}
             />
           )}
         </div>
       </div>
+      <div className="mt-3 flex gap-0.5" aria-hidden>
+        {reps.map((r, i) => (
+          <span
+            key={r.id}
+            className={`h-1.5 flex-1 rounded-full ${r.number === 1 && i > 0 ? "ml-1.5" : ""} ${
+              i <= doneThrough
+                ? "bg-brand"
+                : phase.kind === "running" && i === phase.repIndex
+                  ? "animate-pulse bg-brand/60"
+                  : phase.kind === "done"
+                    ? "bg-line/50"
+                    : "bg-line-strong"
+            }`}
+          />
+        ))}
+      </div>
+      {(phase.kind === "running" || phase.kind === "rest") && <div className="mt-2 text-[12px] text-ink-3">{timers.length > 0 ? `Timed by ${timers.join(", ")}` : "No one timing right now"}</div>}
     </div>
   );
 }
 
-function Clock({ label, value, tone = "text-ink", note = null }: { label: string; value: string; tone?: string; note?: string | null }) {
+function Clock({ label, value, tone = "text-ink", note = null, noteTone = "text-ink-3" }: { label: string; value: string; tone?: string; note?: string | null; noteTone?: string }) {
   return (
     <div>
       <div className="text-[12px] font-medium text-ink-2 first-letter:uppercase">{label}</div>
       <Time className={`block text-2xl leading-tight font-semibold tracking-tight ${tone}`}>{value}</Time>
-      {note && <span className="text-[11px] text-ink-3">{note}</span>}
+      {note && <span className={`block text-[11px] ${noteTone}`}>{note}</span>}
     </div>
   );
 }

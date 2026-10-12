@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { SessionMenu } from "@/components/session-menu";
 import { WorkoutRecorder } from "@/components/workout-recorder";
-import { Table2 } from "lucide-react";
+import { LayoutDashboard } from "lucide-react";
 import { AppHeader, LinkButton, Page } from "@/components/ui";
 import { canUseWorkouts, getSession, isSchoolCoach } from "@/lib/auth/session";
 import { listRoster } from "@/lib/data";
@@ -25,8 +25,8 @@ export default async function RecordWorkoutPage({ params, searchParams }: PagePr
         right={
           <div className="flex items-center gap-2">
             <LinkButton href={`/workouts/${workout._id}`} variant="secondary" size="sm">
-              <Table2 className="size-4" />
-              All times
+              <LayoutDashboard className="size-4" />
+              Overview
             </LinkButton>
             <SessionMenu name={session!.name} role={isSchoolCoach(session) ? "coach" : "manager"} />
           </div>

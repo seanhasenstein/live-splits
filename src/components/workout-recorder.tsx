@@ -1,7 +1,8 @@
 "use client";
 
-import { Check, MoreHorizontal, Play, SlidersHorizontal, UserPlus } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, ListPlus, MoreHorizontal, Play, Plus, SlidersHorizontal, UserPlus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { changeRepsAction } from "@/app/actions/workouts";
 import { Alert, Button, Card, Input, SectionLabel, Segmented, Sheet, Time } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useLocalValue } from "@/lib/client/use-local-value";
@@ -94,7 +95,7 @@ export function WorkoutRecorder({
   const { ft, team } = useTimeFormat();
   const tenths = team === "tenths";
   const [groupId, setGroupId] = useState(() => (initialGroupId && initialPlan.groups.some((g) => g.id === initialGroupId) ? initialGroupId : initialPlan.groups[0].id));
-  const { events, plan, send, online, loaded, unsent } = useWorkoutEvents(workoutId, initialPlan, groupId);
+  const { events, plan, send, online, loaded, unsent, refresh } = useWorkoutEvents(workoutId, initialPlan, groupId);
   const group = plan.groups.find((g) => g.id === groupId) ?? plan.groups[0];
   const state = useMemo(() => replayWorkout(plan, events), [plan, events]);
   const nameOf = useMemo(() => new Map(people.map((p) => [p.id, p.name])), [people]);
@@ -251,6 +252,27 @@ export function WorkoutRecorder({
     }
   }
 
+  // Changing the plan mid-workout: one more rep at the end, or drop the last one.
+  const [repsOpen, setRepsOpen] = useState(false);
+  const [repsError, setRepsError] = useState<string | null>(null);
+  const [changingReps, startChange] = useTransition();
+  const lastRep = reps[reps.length - 1];
+  const lastRepStarted = [...state.athletes.values()].some((list) => list[reps.length - 1]?.startMs != null);
+  const otherGroups = plan.groups.filter((g) => g.id !== group.id).map((g) => ({ g, phase: state.groups.get(g.id) }));
+  // Groups already finished stay finished: the extra rep is for whoever's still out there (and this group).
+  const finishedOthers = otherGroups.filter(({ phase }) => phase?.kind === "done" && phase.endedEarlyAfter === null).map(({ g }) => g);
+  const goingOthers = otherGroups.filter(({ phase }) => phase && phase.kind !== "done").map(({ g }) => g);
+  const changeReps = (change: "add" | "drop") => {
+    setRepsError(null);
+    startChange(async () => {
+      if (change === "add") for (const g of finishedOthers) send({ type: "group_end", groupId: g.id, repId: lastRep.id });
+      const r = await changeRepsAction(workoutId, change);
+      if (r.error) return setRepsError(r.error);
+      await refresh();
+      setRepsOpen(false);
+    });
+  };
+
   const sheetRep = sheetFor ? state.athletes.get(sheetFor) : null;
   const notInWorkout = people.filter((p) => !state.athletes.has(p.id));
 
@@ -278,7 +300,7 @@ export function WorkoutRecorder({
         <Alert tone="gold">{!online ? `Offline: ${unsent} tap${unsent === 1 ? "" : "s"} saved on this phone, sending when the connection's back.` : `Sending ${unsent}…`}</Alert>
       )}
 
-      {plan.finishedAt && <Alert tone="gold">This workout has been ended. Times can still be fixed; reopen it from All times to run more reps.</Alert>}
+      {plan.finishedAt && <Alert tone="gold">This workout has been ended. Times can still be fixed; reopen it from Overview to run more reps.</Alert>}
       {/* Where the group is, and the one clock that matters right now. */}
       <Card className="px-4 py-4">
         <div className="text-[13px] font-medium text-ink-2">
@@ -300,6 +322,11 @@ export function WorkoutRecorder({
           </div>
         ) : phase.kind === "before" ? (
           <p className="mt-1 text-sm text-ink-2">{loaded ? "Start the clock when the group goes." : "Loading…"}</p>
+        ) : phase.kind === "done" && phase.endedEarlyAfter === null && !plan.finishedAt ? (
+          <Button size="lg" className="mt-3 h-14 w-full text-base" disabled={changingReps} onClick={() => changeReps("add")}>
+            <Plus className="size-5" />
+            Add one more rep ({lastRep.label})
+          </Button>
         ) : phase.endEventId && !plan.finishedAt ? (
           <Button variant="secondary" size="sm" className="mt-3" onClick={() => send({ type: "void", targetEventId: phase.endEventId! })}>
             Undo: keep going with rep {phase.endedEarlyAfter! + 2}
@@ -462,11 +489,47 @@ export function WorkoutRecorder({
         </Card>
       )}
 
-      {phase.kind !== "done" && notInWorkout.length > 0 && (
-        <Button variant="ghost" className="w-full text-ink-2" onClick={() => setAdding(true)}>
-          <UserPlus className="size-4" />
-          Add a runner
-        </Button>
+      {!plan.finishedAt && (
+        <div className="grid grid-cols-2 gap-2">
+          {phase.kind !== "done" && notInWorkout.length > 0 && (
+            <Button variant="ghost" className="text-ink-2" onClick={() => setAdding(true)}>
+              <UserPlus className="size-4" />
+              Add a runner
+            </Button>
+          )}
+          <Button variant="ghost" className="col-start-2 text-ink-2" onClick={() => setRepsOpen(true)}>
+            <ListPlus className="size-4" />
+            Change reps
+          </Button>
+        </div>
+      )}
+      {repsError && !repsOpen && <Alert tone="danger">{repsError}</Alert>}
+
+      {repsOpen && (
+        <Sheet title="Change reps" subtitle={`${reps.length} reps now. Changes the plan for every group.`} onClose={() => setRepsOpen(false)}>
+          <div className="space-y-2">
+            <button type="button" disabled={changingReps} onClick={() => changeReps("add")} className="w-full rounded-md border border-line px-3 py-3 text-left text-sm text-ink hover:bg-surface-2 disabled:opacity-50">
+              Add rep {reps.length + 1}: {lastRep.label}
+              <span className="mt-0.5 block text-[13px] text-ink-2">
+                After rep {reps.length}, with the usual rest before it.
+                {goingOthers.length > 0 && ` ${listNames(goingOthers.map((g) => g.name))} ${goingOthers.length === 1 ? "is" : "are"} still going and will run it too.`}
+                {finishedOthers.length > 0 && ` ${listNames(finishedOthers.map((g) => g.name))} ${finishedOthers.length === 1 ? "has" : "have"} finished and won't.`}
+              </span>
+            </button>
+            <button
+              type="button"
+              disabled={changingReps || lastRepStarted || reps.length === 1}
+              onClick={() => changeReps("drop")}
+              className="w-full rounded-md border border-line px-3 py-3 text-left text-sm text-ink hover:bg-surface-2 disabled:opacity-50"
+            >
+              Drop rep {reps.length}
+              <span className="mt-0.5 block text-[13px] text-ink-2">
+                {lastRepStarted ? "A group has started it. To stop one group early, use End after rep." : reps.length === 1 ? "It's the only rep." : "Nobody has started it yet."}
+              </span>
+            </button>
+            {repsError && <Alert tone="danger">{repsError}</Alert>}
+          </div>
+        </Sheet>
       )}
 
       {sheetFor && sheetRep && (

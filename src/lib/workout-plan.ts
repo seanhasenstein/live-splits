@@ -87,3 +87,26 @@ export function describeRest(rest: Rest): string {
   if (rest.kind === "jog") return `${rest.meters}m jog`;
   return "rest until go";
 }
+
+/**
+ * One more rep at the end, like the last one (the "one more" a coach springs on
+ * the team). The old last rep now rests before it with its own between-reps rest.
+ * Ids follow the set's pattern, so the log keeps lining up.
+ */
+export function addRepAtEnd(sets: RepSet[]): RepSet[] {
+  const last = sets[sets.length - 1];
+  const tail = last.reps[last.reps.length - 1];
+  const taken = new Set(sets.flatMap((s) => s.reps.map((r) => r.id)));
+  let n = last.reps.length + 1;
+  while (taken.has(`${last.id}-r${n}`)) n++;
+  return [...sets.slice(0, -1), { ...last, reps: [...last.reps, { ...tail, id: `${last.id}-r${n}` }] }];
+}
+
+/** The plan without its last rep (a set left empty goes too); null when it's the only rep. */
+export function dropLastRep(sets: RepSet[]): RepSet[] | null {
+  const last = sets[sets.length - 1];
+  if (last.reps.length > 1) return [...sets.slice(0, -1), { ...last, reps: last.reps.slice(0, -1) }];
+  if (sets.length === 1) return null;
+  const rest = sets.slice(0, -1);
+  return [...rest.slice(0, -1), { ...rest[rest.length - 1], restAfter: null }];
+}
