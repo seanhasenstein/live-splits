@@ -3,7 +3,7 @@
 import { Check } from "lucide-react";
 import { useActionState, useState, useTransition } from "react";
 import { commitHistoryAction, type HistoryLoadState, loadHistoryAction } from "@/app/actions/history";
-import { Alert, Badge, Button, Card, CardBody, CardHeader, Field, Input, LinkButton, SectionLabel, Select, Stat } from "@/components/ui";
+import { Alert, Badge, Button, Card, CardBody, CardHeader, Field, Input, LinkButton, SectionLabel, Segmented, Select, Stat } from "@/components/ui";
 import { useTimeFormat } from "@/lib/client/time-format";
 import type { HistoryCommitResult, HistoryReview } from "@/lib/results/history-import";
 import type { HistoryMeet } from "@/lib/results/splits-history";
@@ -11,10 +11,10 @@ import { formatLocalDate } from "@/lib/time";
 
 /** A class in a given season and when it graduates: a senior in 2025 is the class of 2026. */
 const CLASSES = [
-  { label: "Senior", yearsIn: 4, yearsLeft: 1 },
-  { label: "Junior", yearsIn: 3, yearsLeft: 2 },
-  { label: "Sophomore", yearsIn: 2, yearsLeft: 3 },
-  { label: "Freshman", yearsIn: 1, yearsLeft: 4 },
+  { short: "Fr", yearsIn: 1, yearsLeft: 4 },
+  { short: "So", yearsIn: 2, yearsLeft: 3 },
+  { short: "Jr", yearsIn: 3, yearsLeft: 2 },
+  { short: "Sr", yearsIn: 4, yearsLeft: 1 },
 ];
 
 export function HistoryImportWizard() {
@@ -107,11 +107,26 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
           <Stat value={resultsCount} label="results" />
           <Stat value={review.athletes.length - unknown.length} label="athletes matched" />
           <Stat value={unknown.filter((a) => namesInChosen.has(a.name)).length} label="names to settle" tone={unknown.some((a) => namesInChosen.has(a.name)) ? "gold" : "ink"} />
-          <p className="col-span-full text-[13px] text-ink-2">
-            Seasons: {years.length === 0 ? "—" : years.map((y) => (newSeasons.includes(y) ? `${y} (will be created)` : String(y))).join(", ")}.
-            {newSeasons.length > 0 && " A season is one calendar year's cross country, August to November; it holds the roster for that year."}
-          </p>
         </CardBody>
+        {years.length > 0 && (
+          <CardBody className="p-0">
+            <div className="px-4 py-2 text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">Seasons</div>
+            <div className="divide-y divide-line border-t border-line">
+              {years.map((y) => {
+                const inYear = chosen.filter((m) => m.date.startsWith(`${y}-`));
+                return (
+                  <div key={y} className="flex items-center gap-3 px-4 py-2 text-sm">
+                    <span className="w-12 font-semibold text-ink">{y}</span>
+                    <span className="flex-1 text-ink-2">
+                      {inYear.length} meet{inYear.length === 1 ? "" : "s"} · {inYear.reduce((n, m) => n + m.rows, 0)} results
+                    </span>
+                    {newSeasons.includes(y) ? <Badge tone="gold">new season</Badge> : <Badge tone="neutral">in the app</Badge>}
+                  </div>
+                );
+              })}
+            </div>
+          </CardBody>
+        )}
       </Card>
 
       <section>
@@ -129,7 +144,7 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
                   disabled={existing}
                   onClick={() => setInclude({ ...include, [m.index]: !checked })}
                   aria-pressed={checked}
-                  className={`flex w-full items-start gap-3 px-4 py-3 text-left ${checked ? "bg-brand-soft" : "bg-surface"} ${existing ? "cursor-default" : "hover:bg-surface-2"}`}
+                  className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors ${checked ? "border-b border-brand/40 bg-brand-soft" : `bg-surface ${existing ? "cursor-default" : "hover:bg-surface-2"}`}`}
                 >
                   <span className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border ${checked ? "border-brand bg-brand text-brand-ink" : "border-line bg-surface"}`} aria-hidden>
                     {checked && <Check className="size-3" strokeWidth={3} />}
@@ -207,40 +222,39 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
 
       <section>
         <SectionLabel className="mb-2">Names the app doesn&rsquo;t know</SectionLabel>
-        <Card>
-          <CardHeader
-            title={unknown.length === 0 ? "Every name matched an athlete in the app" : `${unknown.length} name${unknown.length === 1 ? "" : "s"} to settle`}
-            description={
-              unknown.length === 0
-                ? undefined
-                : "Someone who ran in an earlier season but isn't on this year's roster is added as an athlete, so their results and PRs count. If a name is a different spelling of an athlete the app already has, pick them instead. Their class in their last season gives the app a graduation year, for grades."
-            }
-          />
-          {(["F", "M"] as const).map((g) => {
-            const group = unknown.filter((a) => a.gender === g);
-            if (group.length === 0) return null;
-            return (
-              <CardBody key={g} className="p-0">
-                <div className="bg-surface-2 px-4 py-1.5 text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">{g === "F" ? "Girls" : "Boys"}</div>
-                <div className="divide-y divide-line">
-                  {group.map((a) => {
-                    const inChosen = namesInChosen.has(a.name);
-                    const others = review.allAthletes.filter((x) => (x.gender === a.gender || x.gender === "X") && !a.candidates.some((c) => c.id === x.id));
-                    const last = a.seasons[a.seasons.length - 1];
-                    // Which class they could have been in their last season: with n seasons in the file they
-                    // were at least n years in, so a 2-season runner wasn't a freshman in the second one.
-                    const classes = CLASSES.filter((c) => c.yearsIn >= a.seasons.length);
-                    return (
-                      <div key={a.name} className={`space-y-2 px-4 py-3 ${inChosen ? "" : "opacity-50"}`}>
-                        <div>
-                          <div className="text-sm font-medium text-ink">{a.name}</div>
-                          <div className="text-[13px] text-ink-2">
-                            Ran in {a.seasons.join(", ")}
-                            {!inChosen && " · not in a ticked meet"}
+        {unknown.length === 0 ? (
+          <Card>
+            <CardHeader title="Every name matched an athlete in the app" />
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-[13px] text-ink-2">
+              Someone who ran in an earlier season but isn&rsquo;t on this year&rsquo;s roster is added as an athlete, so their results and PRs count. If a name is a different spelling of an athlete the app already has, pick them instead. Their class in their last season gives the app a graduation year, for grades; leave it if you&rsquo;re not sure.
+            </p>
+            {(["F", "M"] as const).map((g) => {
+              const group = unknown.filter((a) => a.gender === g);
+              if (group.length === 0) return null;
+              return (
+                <Card key={g}>
+                  <CardHeader title={g === "F" ? "Girls" : "Boys"} description={`${group.length} name${group.length === 1 ? "" : "s"}`} />
+                  <CardBody className="divide-y divide-line p-0">
+                    {group.map((a) => {
+                      const inChosen = namesInChosen.has(a.name);
+                      const others = review.allAthletes.filter((x) => (x.gender === a.gender || x.gender === "X") && !a.candidates.some((c) => c.id === x.id));
+                      const last = a.seasons[a.seasons.length - 1];
+                      // Which class they could have been in their last season: with n seasons in the file they
+                      // were at least n years in, so a 2-season runner wasn't a freshman in the second one.
+                      const classes = CLASSES.filter((c) => c.yearsIn >= a.seasons.length);
+                      return (
+                        <div key={a.name} className={`space-y-3 px-4 py-3 ${inChosen ? "" : "opacity-50"}`}>
+                          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                            <span className="text-sm font-medium text-ink">{a.name}</span>
+                            <span className="text-[13px] text-ink-2">
+                              {a.seasons.length > 1 ? `${a.seasons[0]}–${last}` : last}
+                              {!inChosen && " · not in a ticked meet"}
+                            </span>
                           </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Select value={identity[a.name] ?? ""} onChange={(e) => setIdentity({ ...identity, [a.name]: e.target.value })} className="min-w-0 flex-1" aria-label={`Who is ${a.name}`}>
+                          <Select value={identity[a.name] ?? ""} onChange={(e) => setIdentity({ ...identity, [a.name]: e.target.value })} aria-label={`Who is ${a.name}`}>
                             <option value="">Add as a new athlete</option>
                             {a.candidates.map((c) => (
                               <option key={c.id} value={c.id}>
@@ -254,24 +268,25 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
                             ))}
                           </Select>
                           {!identity[a.name] && (
-                            <Select value={gradYears[a.name] ?? ""} onChange={(e) => setGradYears({ ...gradYears, [a.name]: e.target.value })} className="w-52 shrink-0" aria-label={`Class of ${a.name} in ${last}`}>
-                              <option value="">Class in {last}?</option>
-                              {classes.map((c) => (
-                                <option key={c.label} value={String(last + c.yearsLeft)}>
-                                  {c.label} → class of {last + c.yearsLeft}
-                                </option>
-                              ))}
-                            </Select>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                              <span className="text-[13px] text-ink-2">Class in {last}</span>
+                              <Segmented
+                                value={gradYears[a.name] ?? ""}
+                                onChange={(v) => setGradYears({ ...gradYears, [a.name]: v })}
+                                options={[{ value: "", label: "?" }, ...classes.map((c) => ({ value: String(last + c.yearsLeft), label: `${c.short} ’${String(last + c.yearsLeft).slice(2)}` }))]}
+                                className="min-w-0 flex-1"
+                              />
+                            </div>
                           )}
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardBody>
-            );
-          })}
-        </Card>
+                      );
+                    })}
+                  </CardBody>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {error && <Alert tone="danger">{error}</Alert>}
