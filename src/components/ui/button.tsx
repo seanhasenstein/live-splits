@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ComponentProps } from "react";
 
-export type ButtonVariant = "primary" | "secondary" | "subtle" | "ghost" | "danger" | "danger-solid" | "gold" | "ink";
+export type ButtonVariant = "primary" | "secondary" | "subtle" | "tint" | "ghost" | "danger" | "danger-solid" | "gold" | "ink";
 export type ButtonSize = "sm" | "md" | "lg";
 
 const base =
@@ -11,6 +11,8 @@ const variants: Record<ButtonVariant, string> = {
   primary: "bg-brand text-brand-ink hover:bg-brand/90 active:bg-brand/80",
   secondary: "border border-line-strong bg-surface text-ink hover:bg-surface-2 active:bg-line",
   subtle: "border border-ink/10 bg-transparent text-ink-2 hover:border-ink/20 hover:text-ink active:bg-ink/5",
+  // See-through, for buttons on a tinted card: they take the card's colour instead of sitting on it as a block.
+  tint: "border border-ink/15 bg-ink/[0.04] text-ink hover:bg-ink/[0.08] active:bg-ink/[0.12] aria-pressed:border-ink/30 aria-pressed:bg-ink/[0.12]",
   ghost: "text-ink-2 hover:bg-surface-2 hover:text-ink active:bg-line",
   danger: "border border-danger/40 bg-surface text-danger hover:bg-danger-soft active:bg-danger-soft",
   "danger-solid": "bg-danger text-white hover:bg-danger/90 active:bg-danger/80",

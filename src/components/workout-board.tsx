@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card, Segmented, Time } from "@/components/ui";
 import { WorkoutAthleteSheet } from "@/components/workout-athlete-sheet";
-import { groupTint } from "@/components/workout-tint";
+import { groupTint, ON_GOAL_MS, repCellTone } from "@/components/workout-tint";
 import { useClock } from "@/lib/client/clock";
 import { useTimeFormat } from "@/lib/client/time-format";
 import { useWorkoutEvents } from "@/lib/client/use-workout-events";
@@ -15,11 +15,7 @@ import { formatElapsed } from "@/lib/time";
 type Plan = Pick<Workout, "sets" | "groups" | "athletes"> & { finishedAt: string | null };
 type Person = { id: string; name: string; gender: "M" | "F" | "X"; level: string };
 
-/** Within this of the goal counts as on it: a tap is good to a few tenths, and a coach reads ±1 s as "right on". */
-const ON_GOAL_MS = 1000;
-
-const cellTone = (delta: number | null) =>
-  delta === null ? "text-ink" : Math.abs(delta) <= ON_GOAL_MS ? "text-ink" : delta < 0 ? "bg-brand-soft text-brand-text" : "bg-danger-soft text-danger";
+const cellTone = repCellTone;
 
 const signed = (ms: number, digits: 0 | 1) => {
   const v = Math.round(ms / 10 ** (3 - digits)) / 10 ** digits;

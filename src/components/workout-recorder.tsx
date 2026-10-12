@@ -1,9 +1,9 @@
 "use client";
 
-import { Check, ListPlus, MoreHorizontal, Play, Plus, SlidersHorizontal, UserPlus } from "lucide-react";
+import { Check, MoreHorizontal, Play, Plus, SlidersHorizontal, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { changeRepsAction } from "@/app/actions/workouts";
-import { groupTint } from "@/components/workout-tint";
+import { groupTint, repCellTone } from "@/components/workout-tint";
 import { Alert, Button, Card, Input, SectionLabel, Segmented, Sheet, Time } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useLocalValue } from "@/lib/client/use-local-value";
@@ -12,7 +12,7 @@ import { useTimeFormat } from "@/lib/client/time-format";
 import { useWorkoutEvents } from "@/lib/client/use-workout-events";
 import type { Workout } from "@/lib/db/schema";
 import { describeRest } from "@/lib/workout-plan";
-import { type AthleteRep, replayWorkout } from "@/lib/workout-replay";
+import { type AthleteRep, type FlatRep, replayWorkout, summarize } from "@/lib/workout-replay";
 import { formatElapsed, parseTypedTime } from "@/lib/time";
 
 type Plan = Pick<Workout, "sets" | "groups" | "athletes"> & { finishedAt: string | null };
@@ -103,6 +103,8 @@ export function WorkoutRecorder({
   const [sheetFor, setSheetFor] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
+  const [resultsPref, setResultsPref] = useLocalValue("ls_workout_results");
+  const allReps = resultsPref === "all";
   const [orderPref, setOrderPref] = useLocalValue(ORDER_KEY);
   const order: TileOrder = orderPref === "last" || orderPref === "name" ? orderPref : "goal";
   const [largePref, setLargePref] = useLocalValue(LARGE_KEY);
@@ -282,10 +284,18 @@ export function WorkoutRecorder({
             "Timing"
           )}
         </h1>
-        <Button variant="secondary" size="sm" onClick={() => setViewOpen(true)} className="shrink-0">
-          <SlidersHorizontal className="size-3.5" />
-          <span className="text-ink-2">Order:</span> {ORDER_LABEL[order]}
-        </Button>
+        <div className="flex shrink-0 gap-1.5">
+          <Button variant="secondary" size="sm" onClick={() => setViewOpen(true)}>
+            <SlidersHorizontal className="size-3.5" />
+            <span className="text-ink-2">Order:</span> {ORDER_LABEL[order]}
+          </Button>
+          {/* The rare things: add a runner, change the reps, end this group early. */}
+          {!plan.finishedAt && (
+            <Button variant="secondary" size="sm" onClick={() => setRepsOpen(true)} aria-label="More: add a runner, change reps">
+              <MoreHorizontal className="size-4" />
+            </Button>
+          )}
+        </div>
       </div>
       {(!online || unsent > 0) && (
         <Alert tone="gold">{!online ? `Offline: ${unsent} tap${unsent === 1 ? "" : "s"} saved on this phone, sending when the connection's back.` : `Sending ${unsent}…`}</Alert>
@@ -339,27 +349,27 @@ export function WorkoutRecorder({
             Add one more rep ({lastRep.label})
           </Button>
         ) : phase.endEventId && !plan.finishedAt ? (
-          <Button variant="secondary" size="sm" className="mt-3" onClick={() => send({ type: "void", targetEventId: phase.endEventId! })}>
+          <Button variant="tint" size="sm" className="mt-3" onClick={() => send({ type: "void", targetEventId: phase.endEventId! })}>
             Undo: keep going with rep {phase.endedEarlyAfter! + 2}
           </Button>
         ) : null}
         {phase.kind === "running" && !plan.finishedAt && (
           <div className="mt-4 grid grid-cols-2 gap-2">
-            <Button variant={adjusting ? "ink" : "secondary"} className="h-11" disabled={!startEventId} onClick={() => setAdjusting((a) => !a)} aria-expanded={adjusting}>
+            <Button variant="tint" className="h-11" disabled={!startEventId} onClick={() => setAdjusting((a) => !a)} aria-pressed={adjusting}>
               Fix the clock
             </Button>
-            <Button variant={restArmed ? "gold" : "secondary"} className="h-11" onPointerDown={notePointerDown} onClick={startRest}>
+            <Button variant={restArmed ? "gold" : "tint"} className="h-11" onPointerDown={notePointerDown} onClick={startRest}>
               {restArmed ? "Tap again to rest" : "Start rest"}
             </Button>
           </div>
         )}
         {phase.kind === "running" && restArmed && <p className="mt-2 text-[13px] text-ink-2">Starts the rest before everyone&rsquo;s in. Anyone still out can be tapped in after.</p>}
         {phase.kind === "running" && adjusting && (
-          <div className="mt-3 rounded-lg bg-surface-2 p-3">
+          <div className="mt-3 rounded-lg bg-ink/[0.04] p-3">
             <p className="mb-2 text-[13px] text-ink-2">Started the clock late or early? Add or take off seconds.</p>
             <div className="grid grid-cols-4 gap-2">
               {[-5, -1, 1, 5].map((d) => (
-                <Button key={d} variant="secondary" className="h-11 font-mono text-base" onClick={() => nudgeStart(-d * 1000)}>
+                <Button key={d} variant="tint" className="h-11 font-mono text-base" onClick={() => nudgeStart(-d * 1000)}>
                   {d > 0 ? "+" : "−"}
                   {Math.abs(d)}s
                 </Button>
@@ -383,7 +393,7 @@ export function WorkoutRecorder({
         )}
         {/* Between reps: hold the countdown for a water break or a delay. */}
         {canHold && phase.kind === "rest" && !plan.finishedAt && (
-          <Button variant={phase.holdEventId ? "ink" : "secondary"} className="mt-2 h-11 w-full" onClick={toggleHold}>
+          <Button variant="tint" className="mt-2 h-11 w-full" onClick={toggleHold} aria-pressed={!!phase.holdEventId}>
             {phase.holdEventId ? "Back to the countdown" : "Hold the rest"}
           </Button>
         )}
@@ -462,7 +472,29 @@ export function WorkoutRecorder({
 
       {phase.kind !== "running" && finishedRows.length > 0 && (
         <Card>
-          <div className="border-b border-line px-4 py-2 text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">{`Rep ${lastIndex + 1}`}</div>
+          {/* The last rep in finish order, or every rep so far for this group: the numbers to talk about while they rest. */}
+          <div className="flex items-center justify-between gap-2 border-b border-line py-1.5 pr-1.5 pl-4">
+            <span className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">{allReps && lastIndex > 0 ? `Reps 1–${lastIndex + 1}` : `Rep ${lastIndex + 1}`}</span>
+            {lastIndex > 0 && (
+              <Segmented
+                className="w-44"
+                value={allReps ? "all" : "last"}
+                onChange={(v) => setResultsPref(v === "all" ? "all" : null)}
+                options={[
+                  { value: "last", label: `Rep ${lastIndex + 1}` },
+                  { value: "all", label: "All reps" },
+                ]}
+              />
+            )}
+          </div>
+          {allReps && lastIndex > 0 ? (
+            <GroupRepsGrid
+              rows={[...finishedRows, ...notRunning].map(({ id }) => ({ id, name: nameOf.get(id) ?? "?", list: state.athletes.get(id)!.slice(0, lastIndex + 1) }))}
+              reps={reps}
+              ft={ft}
+              onOpen={setSheetFor}
+            />
+          ) : (
           <div className="divide-y divide-line">
             {finishedRows.map(({ id, r }) => (
               <button key={id} type="button" onClick={() => setSheetFor(id)} className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm hover:bg-surface-2">
@@ -478,6 +510,7 @@ export function WorkoutRecorder({
               </button>
             ))}
           </div>
+          )}
         </Card>
       )}
 
@@ -496,25 +529,28 @@ export function WorkoutRecorder({
         </Card>
       )}
 
-      {!plan.finishedAt && (
-        <div className="grid grid-cols-2 gap-2">
-          {phase.kind !== "done" && notInWorkout.length > 0 && (
-            <Button variant="ghost" className="text-ink-2" onClick={() => setAdding(true)}>
-              <UserPlus className="size-4" />
-              Add a runner
-            </Button>
-          )}
-          <Button variant="ghost" className="col-start-2 text-ink-2" onClick={() => setRepsOpen(true)}>
-            <ListPlus className="size-4" />
-            Change reps
-          </Button>
-        </div>
-      )}
       {repsError && !repsOpen && <Alert tone="danger">{repsError}</Alert>}
 
       {repsOpen && (
-        <Sheet title="Reps" subtitle={`${reps.length} reps in the plan.`} onClose={() => setRepsOpen(false)}>
+        <Sheet title="More" subtitle={`${group.name} · ${reps.length} reps in the plan`} onClose={() => setRepsOpen(false)}>
           <div className="space-y-2">
+            {phase.kind !== "done" && notInWorkout.length > 0 && (
+              <>
+                <SectionLabel className="mb-1">Runners</SectionLabel>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRepsOpen(false);
+                    setAdding(true);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-md border border-line px-3 py-3 text-left text-sm text-ink hover:bg-surface-2"
+                >
+                  <UserPlus className="size-4 text-ink-2" />
+                  Add a runner to {group.name}
+                </button>
+                <SectionLabel className="mt-4 mb-1">Reps</SectionLabel>
+              </>
+            )}
             <button type="button" disabled={changingReps} onClick={() => changeReps("add")} className="w-full rounded-md border border-line px-3 py-3 text-left text-sm text-ink hover:bg-surface-2 disabled:opacity-50">
               Add rep {reps.length + 1}: {lastRep.label}
               <span className="mt-0.5 block text-[13px] text-ink-2">
@@ -569,6 +605,8 @@ export function WorkoutRecorder({
             setSheetFor(null);
           }}
           reps={reps}
+          soFar={sheetRep.slice(0, Math.max(phase.kind === "running" ? repIndex : lastIndex + 1, 0))}
+          ft={ft}
         />
       )}
 
@@ -633,6 +671,57 @@ export function WorkoutRecorder({
   );
 }
 
+/**
+ * Every rep so far for the group, one row per runner: times coloured against
+ * goal like the team grid, with the average. Tap a name for their actions.
+ */
+function GroupRepsGrid({ rows, reps, ft, onOpen }: { rows: { id: string; name: string; list: AthleteRep[] }[]; reps: FlatRep[]; ft: (ms: number) => string; onOpen: (id: string) => void }) {
+  const n = rows[0]?.list.length ?? 0;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-line text-[11px] font-semibold text-ink-3">
+            <th className="sticky left-0 bg-surface px-4 py-1.5 text-left font-semibold" />
+            {reps.slice(0, n).map((r, i) => (
+              <th key={r.id} className="px-1 py-1.5 text-right font-semibold">
+                {i + 1}
+              </th>
+            ))}
+            <th className="border-l border-line px-3 py-1.5 text-right font-semibold">Avg</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ id, name, list }) => {
+            const avg = summarize(reps, list).avgPaceMsPerKm;
+            return (
+              <tr key={id} className="border-b border-line last:border-0">
+                <td className="sticky left-0 bg-surface p-0">
+                  <button type="button" onClick={() => onOpen(id)} className="block max-w-32 truncate px-4 py-1.5 text-left text-ink hover:underline">
+                    {name.split(" ")[0]}
+                  </button>
+                </td>
+                {list.map((r) => (
+                  <td key={r.repId} className="px-0.5 py-1 text-right">
+                    {r.status === "done" && r.elapsedMs !== null ? (
+                      <Time className={`inline-block rounded px-1 py-0.5 text-[13px] ${repCellTone(r.deltaMs)}`}>{ft(r.elapsedMs)}</Time>
+                    ) : (
+                      <span className="px-1 text-xs text-ink-3">{r.status === "skipped" ? "skip" : r.status === "unfinished" ? "—" : r.status === "stopped" ? "out" : "·"}</span>
+                    )}
+                  </td>
+                ))}
+                <td className="border-l border-line px-3 py-1 text-right">
+                  <Time className="text-[13px] font-semibold text-ink">{avg !== null ? ft((avg * reps[0].meters) / 1000) : "—"}</Time>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function ChoiceRow({ active, label, hint, onClick }: { active: boolean; label: string; hint: string; onClick: () => void }) {
   return (
     <button
@@ -673,6 +762,8 @@ function AthleteActions({
   onClose,
   act,
   reps,
+  soFar,
+  ft,
 }: {
   name: string;
   /** The rep on screen: running now, or the one just run. */
@@ -687,6 +778,9 @@ function AthleteActions({
   onClose: () => void;
   act: (type: "void" | "edit" | "skip" | "stop" | "rejoin" | "move" | "rep_start" | "finish", extra: { repId?: string; targetEventId?: string; timeMs?: number; groupId?: string }) => void;
   reps: { id: string }[];
+  /** Their reps before the one on screen, for a glance at how it's going. */
+  soFar: AthleteRep[];
+  ft: (ms: number) => string;
 }) {
   const [fixing, setFixing] = useState(false);
   const [typed, setTyped] = useState(rep.elapsedMs !== null ? formatElapsed(rep.elapsedMs) : "");
@@ -696,6 +790,20 @@ function AthleteActions({
   const first = name.split(" ")[0];
   return (
     <Sheet title={name} subtitle={rep.status === "done" && rep.elapsedMs !== null ? `Rep ${repNumber}: ${formatElapsed(rep.elapsedMs)}` : `Rep ${repNumber}`} onClose={onClose}>
+      {soFar.some((r) => r.status === "done") && (
+        <div className="mb-3 flex flex-wrap gap-1">
+          {soFar.map((r, i) => (
+            <span key={r.repId} className="inline-flex flex-col items-center rounded-md border border-line px-1.5 py-0.5">
+              <span className="text-[10px] text-ink-3">{i + 1}</span>
+              {r.status === "done" && r.elapsedMs !== null ? (
+                <Time className={`rounded px-1 text-[13px] ${repCellTone(r.deltaMs)}`}>{ft(r.elapsedMs)}</Time>
+              ) : (
+                <span className="px-1 text-[12px] text-ink-3">{r.status === "skipped" ? "skip" : "—"}</span>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="space-y-2">
         {rep.status === "done" && rep.finishEventId && !fixing && (
           <>

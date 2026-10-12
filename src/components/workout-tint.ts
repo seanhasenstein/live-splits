@@ -14,3 +14,10 @@ export function groupTint(phase: GroupPhase, now: number): string {
   if (phase.kind === "done") return "border-line bg-surface-2";
   return "border-dashed border-line-strong bg-surface";
 }
+
+/** Within this of the goal counts as on it: a tap is good to a few tenths, and a coach reads ±1 s as "right on". */
+export const ON_GOAL_MS = 1000;
+
+/** A rep time's cell against the runner's goal: green under, red over, plain within a second. */
+export const repCellTone = (delta: number | null) =>
+  delta === null ? "text-ink" : Math.abs(delta) <= ON_GOAL_MS ? "text-ink" : delta < 0 ? "bg-brand-soft text-brand-text" : "bg-danger-soft text-danger";
