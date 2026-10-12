@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Fragment, type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, History as HistoryIcon, Pencil, Share } from "lucide-react";
+import { ChevronLeft, ChevronRight, History as HistoryIcon, Info, Pencil, Share } from "lucide-react";
 import { CheckpointCounts, DeltaText, RaceStatusBar, RecordPill, RunningClock } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
 import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, LiveDot, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
@@ -806,15 +806,16 @@ function AthleteSheet({
   const prRaceId = todayIsPR ? null : (finishes[0]?.raceId ?? null);
   const sbRaceId = todayIsSB ? null : ([...season].sort((a, b) => a.ms - b.ms)[0]?.raceId ?? null);
   const tagsFor = (f: PriorFinish) => [...(f.raceId === prRaceId ? ["PR"] : []), ...(f.raceId === sbRaceId ? ["SB"] : []), ...(f.sameCourse ? ["this course"] : [])];
-  const todayTags = [...(todayIsPR && finishes.length > 0 ? ["PR"] : []), ...(todayIsSB && season.length > 0 ? ["SB"] : []), "today"];
+  // "This race", not "today": the sheet is read again long after the meet.
+  const todayTags = [...(todayIsPR && finishes.length > 0 ? ["PR"] : []), ...(todayIsSB && season.length > 0 ? ["SB"] : []), "this race"];
   // On pace for a record while they're still out: the projection against what they came in with.
   const onPace = finish === null && projected !== null && bests ? recordBadge(projected, bests, true) : null;
   // A near miss: top three ever, or top three this season, said in words rather than a pill.
   const nearMiss =
     finish !== null && !row?.record && bests && rank !== null && rank <= 3 && bests.pr
-      ? `${rank}${ordinal(rank)} fastest ever, ${Math.max(1, Math.round((finish - bests.pr.ms) / 1000))}s behind the personal best of ${ft(bests.pr.ms)} at ${bests.pr.meetName} on ${formatDateWithYear(bests.pr.date)}`
+      ? `${rank}${ordinal(rank)} fastest ever, ${Math.max(1, Math.round((finish - bests.pr.ms) / 1000))}s behind the personal best of ${ft(bests.pr.ms)} at ${bests.pr.meetName} on ${formatDateWithYear(bests.pr.date)}.`
       : finish !== null && !row?.record && bests && seasonRank !== null && seasonRank <= 3 && bests.sb
-        ? `${seasonRank}${ordinal(seasonRank)} fastest this season, behind the season best of ${ft(bests.sb.ms)} at ${bests.sb.meetName} on ${formatDateWithYear(bests.sb.date)}`
+        ? `${seasonRank}${ordinal(seasonRank)} fastest this season, behind the season best of ${ft(bests.sb.ms)} at ${bests.sb.meetName} on ${formatDateWithYear(bests.sb.date)}.`
         : null;
   const raceLink = (f: { meetId: string; raceId: string }) => `/meets/${f.meetId}/results?race=${f.raceId}&athlete=${row?.athleteId ?? ""}`;
 
@@ -885,7 +886,7 @@ function AthleteSheet({
                 const prev = bests[row.record.kind]!;
                 const what = { pr: "personal best", sb: "season best", course: "best on this course", meet: "best at this meet" }[row.record.kind];
                 const by = row.record.unofficial && row.record.uncertain ? `, beaten by ${Math.max(1, Math.round((row.record.previousMs - finish!) / 1000))}s` : "";
-                return `Previous ${what} was ${ft(prev.ms)} at ${prev.meetName} on ${formatDateWithYear(prev.date)}${by}`;
+                return `Previous ${what} was ${ft(prev.ms)} at ${prev.meetName} on ${formatDateWithYear(prev.date)}${by}.`;
               })()}
             </span>
           ) : nearMiss ? (
@@ -997,7 +998,7 @@ function AthleteSheet({
             <div className="divide-y divide-line">
               <FinishList
                 title={`Fastest ${race.distanceLabel}s ever`}
-                note={rank !== null ? `Today ranks ${rank}${ordinal(rank)} of ${finishes.length + 1} races` : undefined}
+                note={rank !== null ? `This race ranks ${rank}${ordinal(rank)} of ${finishes.length + 1}` : undefined}
                 rows={fastest}
                 today={finish !== null && rank !== null && rank <= 5 ? { ms: finish, rank, tags: todayTags } : null}
                 meetName={meetName}
@@ -1011,7 +1012,7 @@ function AthleteSheet({
               {season.length > 0 && (
                 <FinishList
                   title={`${seasonYear} season`}
-                  note={seasonRank !== null ? `Today ranks ${seasonRank}${ordinal(seasonRank)} of ${season.length + 1} this season` : undefined}
+                  note={seasonRank !== null ? `This race ranks ${seasonRank}${ordinal(seasonRank)} of ${season.length + 1} this season` : undefined}
                   rows={season}
                   today={finish !== null ? { ms: finish, rank: null, tags: todayTags } : null}
                   meetName={meetName}
@@ -1025,7 +1026,7 @@ function AthleteSheet({
               )}
               {(() => {
                 // The season's arc, once there's enough of it to draw. A career chart belongs on the athlete page.
-                const seasonPoints = [...season.map((f) => ({ ms: f.ms, label: shortDate(f.date), today: false })), ...(finish !== null ? [{ ms: finish, label: "today", today: true }] : [])];
+                const seasonPoints = [...season.map((f) => ({ ms: f.ms, label: shortDate(f.date), today: false })), ...(finish !== null ? [{ ms: finish, label: shortDate(meetDate), today: true }] : [])];
                 return seasonPoints.length >= 3 && <ProgressChart title={`${seasonYear} season`} points={seasonPoints} prMs={bests?.pr?.ms ?? null} ft={ft} />;
               })()}
             </div>
@@ -1043,20 +1044,16 @@ function AthleteSheet({
           <ChevronRight className="size-4 shrink-0" />
         </Button>
       </div>
-      <div className="mt-4 space-y-1 text-xs leading-relaxed text-ink-3">
-        {[
+      <Notes
+        lines={[
           officialCount === 0 && timedCount > 0 && "Times are from the app, not the timing company.",
           officialCount > 0 && officialCount < timedCount && "Times not marked official are from the app.",
           row?.cells.some((c) => c.mark?.estimate && c.official === null) && "An estimate is a time entered by hand, not tapped as they passed.",
           row?.record?.unofficial && "Records are provisional until official results are imported.",
           race.placesDerived && "Places are ranked by the app within our division.",
           finishes.length === 0 && `No earlier ${race.distanceLabel} results in the app to compare with.`,
-        ]
-          .filter((line): line is string => typeof line === "string")
-          .map((line) => (
-            <p key={line}>{line}</p>
-          ))}
-      </div>
+        ].filter((line): line is string => typeof line === "string")}
+      />
     </Sheet>
   );
 }
@@ -1531,6 +1528,27 @@ function FinishList({
         {note && <span className="text-[11px] text-ink-3">{note}</span>}
       </div>
       <div className="flex flex-col divide-y divide-line px-1 pt-1">{items}</div>
+    </div>
+  );
+}
+
+/** The small print, together and labelled rather than loose under the buttons. Nothing when there's nothing to say. */
+function Notes({ lines }: { lines: string[] }) {
+  if (lines.length === 0) return null;
+  return (
+    <div className="mt-4 rounded-lg bg-surface-2 px-3 py-2.5">
+      <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
+        <Info className="size-3.5" />
+        Notes
+      </div>
+      <ul className="space-y-1 text-xs leading-relaxed text-ink-2">
+        {lines.map((line) => (
+          <li key={line} className="flex gap-2">
+            <span aria-hidden className="mt-[7px] size-1 shrink-0 rounded-full bg-ink-3" />
+            <span>{line}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
