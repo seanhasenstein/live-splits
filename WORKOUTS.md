@@ -47,6 +47,15 @@ syncs through `/api/workout-events` and `/api/workouts/[id]/events`.
 | edit       | change an earlier event's time                                   |
 | void       | undo an earlier event                                            |
 | note       | text on a rep, for a group or an athlete                         |
+| hold       | a group's rest has no countdown (water break, weather)           |
+| group_end  | a group stops after a rep; its later reps aren't run             |
+
+An athlete's own rep_start is a late start, or, on a rep they skipped, a
+make-up run later on their own clock. Once a workout is ended the server takes
+only fixes (typed times, edits, undos, notes). Reps can be added at the end or
+the last dropped mid-workout (not once a group has started it); edits from the
+plan form can't remove a rep, group or runner that has times, or regroup a
+runner with times (a move from the record screen does that).
 
 Replay gives each athlete's status and time on every rep (with goal and
 +/−), and where each group is: before, running a rep, resting (with when the
