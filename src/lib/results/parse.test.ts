@@ -47,7 +47,9 @@ test("matching: exact, alias, last-name suggestion, none", () => {
   expect(matchAthlete(entry("Patrick Stroede"), roster).kind).toBe("exact");
   expect(matchAthlete(entry("Jimmy Schulze"), roster)).toMatchObject({ kind: "alias", athlete: { displayName: "James Schulze" } });
   const typo = matchAthlete(entry("Patrick Stoede"), roster);
-  expect(typo.kind).toBe("none"); // no last-name match either; coach picks
+  expect(typo.kind).toBe("none"); // not matched outright; suggested from the same first name and a near-miss surname
+  expect(typo.candidates.map((a) => a.displayName)).toEqual(["Patrick Stroede"]);
+  expect(matchAthlete(entry("Patrick Smith"), roster).candidates).toEqual([]); // too far off to suggest
   const lucy = matchAthlete(entry("Lucie Leibham"), roster);
   expect(lucy.kind).toBe("none"); // two Leibhams: not unique
   expect(lucy.candidates.map((a) => a.displayName)).toEqual(["Lucy Leibham", "Will Leibham"]);
