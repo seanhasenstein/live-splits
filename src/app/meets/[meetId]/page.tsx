@@ -19,7 +19,7 @@ import { can, getSession, isSchoolCoach, isSchoolWide } from "@/lib/auth/session
 import { getMeet, getProgram, gunFiredBy, listRaces, readJoinCodes } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
-import { formatLocalDate, formatTimeOfDay } from "@/lib/time";
+import { formatLocalDateLong, formatTimeOfDay } from "@/lib/time";
 
 export async function generateMetadata({ params }: PageProps<"/meets/[meetId]">): Promise<Metadata> {
   const meet = await getMeet((await params).meetId);
@@ -55,7 +55,7 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
         <AutoRefresh everyMs={races.some((r) => r.gunTimeMs !== null && !r.finishedAt) ? 5000 : 30000} />
         <PageTitle
           title={meet.name}
-          description={`${formatLocalDate(meet.date)}${venue ? ` · ${venue.name}${venue.city ? `, ${venue.city}` : ""}` : ""}${
+          description={`${formatLocalDateLong(meet.date)}${venue ? ` · ${venue.name}${venue.city ? `, ${venue.city}` : ""}` : ""}${
             course && venue && course.name !== venue.name ? ` · ${course.name}` : ""
           }`}
           action={

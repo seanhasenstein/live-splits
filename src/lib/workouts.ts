@@ -53,6 +53,8 @@ export async function fiveKBests(schoolId: string, seasonId: string, athleteIds:
 export type LastTime = {
   workoutId: string;
   date: string;
+  /** On grass then (times on grass and track don't compare straight). */
+  approximateDistances: boolean;
   /** Each rep's time, in order; null where they have none. */
   repMs: (number | null)[];
   avgPaceMsPerKm: number | null;
@@ -83,7 +85,7 @@ export async function lastTimeRan(workout: Workout): Promise<Record<string, Last
     for (const [id, list] of state.athletes) {
       if (!want.has(id) || !list.some((r) => r.status === "done")) continue;
       const s = summarize(state.reps, list);
-      out[id] = { workoutId: w._id, date: w.date, repMs: list.map((r) => (r.status === "done" ? r.elapsedMs : null)), avgPaceMsPerKm: s.avgPaceMsPerKm, avgDeltaMs: s.avgDeltaMs };
+      out[id] = { workoutId: w._id, date: w.date, approximateDistances: w.approximateDistances, repMs: list.map((r) => (r.status === "done" ? r.elapsedMs : null)), avgPaceMsPerKm: s.avgPaceMsPerKm, avgDeltaMs: s.avgDeltaMs };
       want.delete(id);
     }
   }

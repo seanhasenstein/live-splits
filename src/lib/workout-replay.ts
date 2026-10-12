@@ -53,8 +53,11 @@ export function flattenPlan(workout: Pick<Workout, "sets">): FlatRep[] {
   return out;
 }
 
-/** "unfinished": they started it but the group went on to the next rep with no finish for them. */
-export type AthleteRepStatus = "pending" | "running" | "done" | "skipped" | "stopped" | "unfinished";
+/**
+ * "unfinished": they started it but the group went on to the next rep with no finish for them.
+ * "not_run": their group ended before this rep.
+ */
+export type AthleteRepStatus = "pending" | "running" | "done" | "skipped" | "stopped" | "unfinished" | "not_run";
 
 export type AthleteRep = {
   repId: string;
@@ -76,8 +79,18 @@ export type AthleteRep = {
 export type GroupPhase =
   | { kind: "before"; nextRepIndex: 0 }
   | { kind: "running"; repIndex: number; startMs: number; startEventId: string | null }
-  | { kind: "rest"; afterRepIndex: number; restStartedMs: number; nextStartMs: number | null; rest: Rest | null; startEventId: string | null; stillOut: number }
-  | { kind: "done" };
+  | {
+      kind: "rest";
+      afterRepIndex: number;
+      restStartedMs: number;
+      nextStartMs: number | null;
+      rest: Rest | null;
+      startEventId: string | null;
+      stillOut: number;
+      /** The coach put this rest on hold (no countdown); the event, to undo it. */
+      holdEventId: string | null;
+    }
+  | { kind: "done"; endedEarlyAfter: number | null; endEventId: string | null };
 
 /** What a group actually did on each rep it started: when it went, when the rest began, and how long the rest really was. */
 export type GroupRepLog = {
@@ -154,6 +167,10 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
   }
   const restStart = new Map<string, number>(); // `${groupId}:${ri}`: the coach started the rest early
   for (const e of ordered.filter((e) => e.type === "rest_start" && e.groupId)) restStart.set(`${e.groupId}:${repOf(e)}`, at(e));
+  const holds = new Map<string, string>(); // `${groupId}:${ri}` -> event: the rest after it is on hold
+  for (const e of ordered.filter((e) => e.type === "hold" && e.groupId)) holds.set(`${e.groupId}:${repOf(e)}`, e.clientEventId);
+  const groupEnd = new Map<string, { ri: number; eventId: string }>(); // the group's last rep, when it ended early (latest wins)
+  for (const e of ordered.filter((e) => e.type === "group_end" && e.groupId)) groupEnd.set(e.groupId!, { ri: repOf(e), eventId: e.clientEventId });
   // A group's rep counts as over once it has started a later one.
   const lastStarted = new Map<string, number>();
   for (const key of groupStart.keys()) {
@@ -196,7 +213,9 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
                 ? (lastStarted.get(groupId) ?? -1) > rep.index
                   ? "unfinished"
                   : "running"
-                : "pending";
+                : (groupEnd.get(groupId)?.ri ?? Infinity) < rep.index
+                  ? "not_run"
+                  : "pending";
       return {
         repId: rep.id,
         status,
@@ -222,23 +241,27 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
       groups.set(g.id, { kind: "before", nextRepIndex: 0 });
       continue;
     }
+    const end = groupEnd.get(g.id);
+    const endsHere = end?.ri === current.index;
     const members = athleteIds.filter((id) => groupAt(id, current.index) === g.id).map((id) => athletes.get(id)![current.index]);
     const startMs = groupStart.get(`${g.id}:${current.index}`) ?? Math.min(...members.map((m) => m.startMs ?? Infinity));
     const startEventId = groupStartEvent.get(`${g.id}:${current.index}`) ?? null;
     const stillOut = members.filter((m) => m.status === "running" || m.status === "pending").length;
     const earlyRest = restStart.get(`${g.id}:${current.index}`);
-    if (stillOut > 0 && earlyRest === undefined) {
+    // The last rep (planned, or the coach ended the group here) has no rest after it: it runs until everyone's in.
+    if (stillOut > 0 && (earlyRest === undefined || endsHere)) {
       groups.set(g.id, { kind: "running", repIndex: current.index, startMs, startEventId });
       continue;
     }
-    if (current.index === reps.length - 1 && stillOut === 0) {
-      groups.set(g.id, { kind: "done" });
+    if ((current.index === reps.length - 1 || endsHere) && stillOut === 0) {
+      groups.set(g.id, { kind: "done", endedEarlyAfter: endsHere && current.index < reps.length - 1 ? current.index : null, endEventId: endsHere ? end!.eventId : null });
       continue;
     }
     const restStartedMs = earlyRest ?? restBegan(members, startMs);
     const rest = current.restAfter;
-    const nextStartMs = rest?.kind === "time" ? restStartedMs + rest.ms : rest?.kind === "interval" ? startMs + rest.everyMs : null;
-    groups.set(g.id, { kind: "rest", afterRepIndex: current.index, restStartedMs, nextStartMs, rest, startEventId, stillOut });
+    const holdEventId = holds.get(`${g.id}:${current.index}`) ?? null;
+    const nextStartMs = holdEventId ? null : rest?.kind === "time" ? restStartedMs + rest.ms : rest?.kind === "interval" ? startMs + rest.everyMs : null;
+    groups.set(g.id, { kind: "rest", afterRepIndex: current.index, restStartedMs, nextStartMs, rest, startEventId, stillOut, holdEventId });
   }
 
   // The rests a group actually took, rep by rep.
@@ -254,7 +277,8 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
       const restStartMs = early ?? (allIn || (lastStarted.get(g.id) ?? -1) > r.index ? restBegan(members, startMs) : null);
       const next = reps[r.index + 1] ? groupStart.get(`${g.id}:${r.index + 1}`) : undefined;
       const rest = r.restAfter;
-      const plannedRestMs = rest?.kind === "time" ? rest.ms : rest?.kind === "interval" && restStartMs !== null ? Math.max(0, startMs + rest.everyMs - restStartMs) : null;
+      // A rest on hold had no plan to keep to.
+      const plannedRestMs = holds.has(`${g.id}:${r.index}`) ? null : rest?.kind === "time" ? rest.ms : rest?.kind === "interval" && restStartMs !== null ? Math.max(0, startMs + rest.everyMs - restStartMs) : null;
       log.push({
         repIndex: r.index,
         startMs,

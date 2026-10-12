@@ -58,6 +58,11 @@ export function formatLocalDate(date: string): string {
   }).format(Date.UTC(y, m - 1, d));
 }
 
+/** "Monday, Oct 12, 2026": a page's own date, where the year belongs. */
+export function formatLocalDateLong(date: string): string {
+  return `${formatLocalDate(date)}, ${date.slice(0, 4)}`;
+}
+
 /** "7:10 PM" for an "HH:mm" string. */
 export function formatTimeOfDay(hhmm: string): string {
   const [h, m] = hhmm.split(":").map(Number);

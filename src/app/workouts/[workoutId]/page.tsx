@@ -10,7 +10,7 @@ import { getProgram, listRoster } from "@/lib/data";
 import { describePlan, describeRest, EFFORT_LABEL } from "@/lib/workout-plan";
 import { flattenPlan } from "@/lib/workout-replay";
 import { getWorkout, lastTimeRan } from "@/lib/workouts";
-import { formatLocalDate } from "@/lib/time";
+import { formatLocalDateLong } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Workout" };
 
@@ -25,7 +25,9 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
   const levelLabel = (id: string) => program?.settings.levels.find((l) => l.id === id)?.label ?? id;
   const people = roster.map((a) => ({ id: a._id, name: a.displayName, gender: a.gender, level: levelLabel(a.defaultLevelId) }));
   const reps = flattenPlan(workout);
-  const totalKm = reps.reduce((n, r) => n + r.meters, 0) / 1000;
+  // The volume coaches count in: "4,800m", or km past 10K.
+  const totalM = Math.round(reps.reduce((n, r) => n + r.meters, 0));
+  const total = totalM < 10_000 ? `${totalM.toLocaleString("en-US")}m` : `${(totalM / 1000).toFixed(1)} km`;
 
   return (
     <>
@@ -33,7 +35,7 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
       <Page wide>
         <PageTitle
           title={workout.name}
-          description={`${formatLocalDate(workout.date)}${workout.place ? ` · ${workout.place}` : ""} · ${EFFORT_LABEL[workout.effort]}`}
+          description={[formatLocalDateLong(workout.date), workout.place, workout.approximateDistances ? "on grass" : null, EFFORT_LABEL[workout.effort]].filter(Boolean).join(" · ")}
           action={
             coach && (
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -49,18 +51,18 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
         {workout.finishedAt ? (
           <p className="mb-4 text-sm text-ink-2">Ended at {new Intl.DateTimeFormat("en-US", { timeZone: workout.timeZone, hour: "numeric", minute: "2-digit" }).format(workout.finishedAt)}. Reopen it to time more reps.</p>
         ) : (
-          <div className="mb-4 grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(workout.groups.length, 3)}, minmax(0, 1fr))` }}>
+          <div className={`mb-4 grid gap-2 ${workout.groups.length === 1 ? "" : workout.groups.length === 2 ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3"}`}>
             {workout.groups.map((g) => (
-              <LinkButton key={g.id} href={`/workouts/${workout._id}/record?group=${g.id}`} size="lg">
-                <Timer className="size-4" />
-                {workout.groups.length > 1 ? `Time ${g.name}` : "Time it"}
+              <LinkButton key={g.id} href={`/workouts/${workout._id}/record?group=${g.id}`} size="lg" className="min-w-0">
+                <Timer className="size-4 shrink-0" />
+                <span className="truncate">{workout.groups.length > 1 ? `Time ${g.name}` : "Time it"}</span>
               </LinkButton>
             ))}
           </div>
         )}
         <div className="space-y-4">
           <Card>
-            <CardHeader title="Reps" description={`${describePlan(workout.sets)} · ${totalKm.toFixed(totalKm % 1 ? 1 : 0)} km of reps${workout.approximateDistances ? " · distances approximate" : ""}`} />
+            <CardHeader title="Reps" description={`${describePlan(workout.sets)} · ${total} total`} />
             <CardBody flush className="divide-y divide-line">
               {workout.sets.map((set, i) => {
                 const d = set.reps[0].distance;
@@ -84,6 +86,7 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
             initialPlan={{ sets: workout.sets, groups: workout.groups, athletes: workout.athletes, finishedAt: workout.finishedAt?.toISOString() ?? null }}
             people={people}
             lastTimes={lastTimes}
+            onGrass={workout.approximateDistances}
           />
 
           {workout.notes && (

@@ -170,7 +170,7 @@ export function WorkoutForm({
           <Field label="Where">
             <Input value={place} onChange={(e) => setPlace(e.target.value)} placeholder="School grounds" maxLength={120} />
           </Field>
-          <Checkbox label="Grass or measured roughly: show paces as approximate" checked={approx} onChange={(e) => setApprox(e.target.checked)} />
+          <Checkbox label="On grass (distances are rough, so times compare best with other grass days)" checked={approx} onChange={(e) => setApprox(e.target.checked)} />
         </CardBody>
       </Card>
 

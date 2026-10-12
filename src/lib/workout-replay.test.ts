@@ -124,7 +124,7 @@ describe("replayWorkout", () => {
     const evs = [
       ...["a1", "a2", "a3", "b1", "b2"].flatMap((id, i) => [ev("rep_start", i * 200_000, { groupId: "g1", repId: id }), ev("finish", i * 200_000 + 60_000, { athleteId: "eddy", repId: id }), ev("finish", i * 200_000 + 61_000, { athleteId: "titus", repId: id })]),
     ];
-    expect(replayWorkout(workout, evs).groups.get("g1")).toEqual({ kind: "done" });
+    expect(replayWorkout(workout, evs).groups.get("g1")).toEqual({ kind: "done", endedEarlyAfter: null, endEventId: null });
   });
 });
 
@@ -156,6 +156,36 @@ describe("rests the coach controls", () => {
     expect(undone.athletes.get("titus")![0]).toMatchObject({ startMs: T0, ownStartEventId: null });
     const again = replayWorkout(workout, [...base, ev("rep_start", 9_000, { groupId: "g1", athleteId: "titus", repId: "a1", clientEventId: "late2" })]);
     expect(again.athletes.get("titus")![0]).toMatchObject({ startMs: T0 + 9_000, ownStartEventId: "late2" });
+  });
+
+  it("a rest on hold has no countdown and no plan to be over; undoing the hold brings the countdown back", () => {
+    const base = [
+      ev("rep_start", 0, { groupId: "g1", repId: "a1" }),
+      ev("finish", 76_000, { athleteId: "eddy", repId: "a1" }),
+      ev("finish", 80_000, { athleteId: "titus", repId: "a1" }),
+      ev("hold", 85_000, { groupId: "g1", repId: "a1", clientEventId: "h1" }),
+    ];
+    const held = replayWorkout(workout, base);
+    expect(held.groups.get("g1")).toMatchObject({ kind: "rest", nextStartMs: null, holdEventId: "h1" });
+    const after = replayWorkout(workout, [...base, ev("rep_start", 400_000, { groupId: "g1", repId: "a2" })]);
+    expect(after.groupLog.get("g1")![0]).toMatchObject({ restMs: 320_000, plannedRestMs: null });
+    const undone = replayWorkout(workout, [...base, ev("void", 90_000, { targetEventId: "h1" })]);
+    expect(undone.groups.get("g1")).toMatchObject({ kind: "rest", nextStartMs: T0 + 140_000, holdEventId: null });
+  });
+
+  it("ending a group early: done once everyone's in, and the reps after aren't run", () => {
+    const evs = [
+      ev("rep_start", 0, { groupId: "g1", repId: "a1" }),
+      ev("finish", 76_000, { athleteId: "eddy", repId: "a1" }),
+      ev("group_end", 77_000, { groupId: "g1", repId: "a1", clientEventId: "end1" }),
+    ];
+    // Titus is still out: the group is still running its last rep, with no rest after it.
+    expect(replayWorkout(workout, evs).groups.get("g1")).toMatchObject({ kind: "running", repIndex: 0 });
+    const s = replayWorkout(workout, [...evs, ev("finish", 80_000, { athleteId: "titus", repId: "a1" })]);
+    expect(s.groups.get("g1")).toEqual({ kind: "done", endedEarlyAfter: 0, endEventId: "end1" });
+    expect(s.athletes.get("eddy")!.map((r) => r.status)).toEqual(["done", "not_run", "not_run", "not_run", "not_run"]);
+    // Group 2 isn't affected.
+    expect(s.athletes.get("will")![1].status).toBe("pending");
   });
 
   it("logs the rest each group actually took against the plan", () => {

@@ -24,6 +24,7 @@ export function WorkoutAthleteSheet({
   reps,
   list,
   last,
+  onGrass,
   onAddTime,
   onClose,
 }: {
@@ -33,6 +34,8 @@ export function WorkoutAthleteSheet({
   list: AthleteRep[];
   /** Their last run of the same reps, if any. */
   last: LastTime | null;
+  /** Today's workout is on grass. */
+  onGrass: boolean;
   /** A typed time for a rep: a new finish, or an edit to the one there. */
   onAddTime: (repId: string, groupId: string, timeMs: number, finishEventId: string | null) => void;
   onClose: () => void;
@@ -53,7 +56,8 @@ export function WorkoutAthleteSheet({
   const [typed, setTyped] = useState("");
   const typedMs = parseTypedTime(typed);
   // Reps not run yet fold into one line at the end.
-  const shown = list.findLastIndex((r) => r.status !== "pending") + 1;
+  const shown = list.findLastIndex((r) => r.status !== "pending" && r.status !== "not_run") + 1;
+  const endedEarly = list.slice(shown).some((r) => r.status === "not_run");
 
   // Each rep's time over the first rep's distance, so a 200 and a 400 sit on one scale.
   const points = list.map((r, i) => (r.status === "done" && r.elapsedMs !== null ? { i, ms: (r.elapsedMs * base.meters) / reps[i].meters, delta: r.deltaMs } : null)).filter((p) => p !== null);
@@ -69,7 +73,7 @@ export function WorkoutAthleteSheet({
 
       {last && (
         <p className="border-b border-line py-2.5 text-[13px] text-ink-2">
-          <span className="font-medium text-ink">Last time</span> ({formatDateWithYear(last.date)}): {per(last.avgPaceMsPerKm) !== null ? `${ft(per(last.avgPaceMsPerKm)!)} average per ${base.label}` : "no times"}
+          <span className="font-medium text-ink">Last time</span> ({formatDateWithYear(last.date)}{last.approximateDistances !== onGrass ? (last.approximateDistances ? ", on grass" : ", not on grass") : ""}): {per(last.avgPaceMsPerKm) !== null ? `${ft(per(last.avgPaceMsPerKm)!)} average per ${base.label}` : "no times"}
           {last.avgDeltaMs !== null && `, ${signed(last.avgDeltaMs)} vs goal then`}
           {per(last.avgPaceMsPerKm) !== null && per(s.avgPaceMsPerKm) !== null && (() => {
             const d = per(s.avgPaceMsPerKm)! - per(last.avgPaceMsPerKm)!;
@@ -137,7 +141,7 @@ export function WorkoutAthleteSheet({
         })}
         {shown < list.length && (
           <p className="py-2 text-sm text-ink-3">
-            {shown === list.length - 1 ? `Rep ${shown + 1}` : `Reps ${shown + 1}–${list.length}`} to come
+            {shown === list.length - 1 ? `Rep ${shown + 1}` : `Reps ${shown + 1}–${list.length}`} {endedEarly ? "not run: the group ended early" : "to come"}
           </p>
         )}
       </div>

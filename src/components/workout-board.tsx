@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Card, LiveDot, Segmented, Time } from "@/components/ui";
+import { Badge, Card, Time } from "@/components/ui";
 import { WorkoutAthleteSheet } from "@/components/workout-athlete-sheet";
 import { useClock } from "@/lib/client/clock";
 import { useTimeFormat } from "@/lib/client/time-format";
@@ -32,7 +32,19 @@ const signed = (ms: number, digits: 0 | 1) => {
  * runner's goal (green under, red over, plain within a second), with average
  * pace, average vs goal, spread and fade. Live while it's being timed.
  */
-export function WorkoutBoard({ workoutId, initialPlan, people, lastTimes }: { workoutId: string; initialPlan: Plan; people: Person[]; lastTimes: Record<string, LastTime> }) {
+export function WorkoutBoard({
+  workoutId,
+  initialPlan,
+  people,
+  lastTimes,
+  onGrass,
+}: {
+  workoutId: string;
+  initialPlan: Plan;
+  people: Person[];
+  lastTimes: Record<string, LastTime>;
+  onGrass: boolean;
+}) {
   const { events, plan, recording, send } = useWorkoutEvents(workoutId, initialPlan);
   const { ft, team } = useTimeFormat();
   const digits = team === "tenths" ? 1 : 0;
@@ -73,7 +85,25 @@ export function WorkoutBoard({ workoutId, initialPlan, people, lastTimes }: { wo
 
   return (
     <div className="space-y-3">
-      {options.length > 1 && <Segmented value={filter} onChange={setFilter} options={options} />}
+      {/* Chips, not a segmented control: with several groups the names need their full width, so the row scrolls. */}
+      {options.length > 1 && (
+        <div className="-mx-4 flex [scrollbar-width:none] gap-1.5 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0" role="radiogroup" aria-label="Show">
+          {options.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={filter === o.value}
+              onClick={() => setFilter(o.value)}
+              className={`h-8 shrink-0 rounded-full border px-3 text-[13px] font-medium whitespace-nowrap ${
+                filter === o.value ? "border-ink bg-ink text-bg" : "border-line-strong bg-surface text-ink-2 hover:text-ink"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
       {/* Where each group is right now: the same clocks the timing phones show. Picking a group shows just its clocks. */}
       {/* Once the workout is ended there's nothing live to show: the grid is the summary. */}
       {!plan.finishedAt && (
@@ -131,6 +161,8 @@ export function WorkoutBoard({ workoutId, initialPlan, people, lastTimes }: { wo
                         <span className="px-1.5 text-xs text-ink-3" title="Done for today">done</span>
                       ) : r.status === "unfinished" ? (
                         <span className="px-1.5 text-xs whitespace-nowrap text-ink-3">no time</span>
+                      ) : r.status === "not_run" ? (
+                        <span className="px-1.5 text-ink-3" title="The group ended before this rep">—</span>
                       ) : r.status === "running" ? (
                         <span className="px-1.5 text-xs text-gold-text">running</span>
                       ) : (
@@ -200,6 +232,7 @@ export function WorkoutBoard({ workoutId, initialPlan, people, lastTimes }: { wo
           reps={reps}
           list={state.athletes.get(openId)!}
           last={lastTimes[openId] ?? null}
+          onGrass={onGrass}
           onAddTime={(repId, groupId, timeMs, finishEventId) =>
             finishEventId ? send({ type: "edit", targetEventId: finishEventId, timeMs }) : send({ type: "finish", athleteId: openId, groupId, repId, timeMs })
           }
@@ -208,7 +241,7 @@ export function WorkoutBoard({ workoutId, initialPlan, people, lastTimes }: { wo
       )}
       <p className="text-xs leading-relaxed text-ink-3">
         {anyTimed
-          ? `Green is faster than goal, red slower; within a second is on goal. "Skipped": didn't run that rep. "No time": started it but the group went on before they finished. "Done": done for today. Avg, spread and fade are per ${reps[0].label}, so reps of other distances compare fairly. Spread: slowest minus fastest. Fade: the second half against the first. "Rest after" is the rest each group took, from its last runner in to the next start, with how far off the plan it was; amber is more than 10 s long. Tap a name for that runner's reps.`
+          ? `Green is faster than goal, red slower; within a second is on goal. "Skipped": didn't run that rep. "No time": started it but the group went on before they finished. "Done": done for today. "—": the group ended before that rep. Avg, spread and fade are per ${reps[0].label}, so reps of other distances compare fairly. Spread: slowest minus fastest. Fade: the second half against the first. "Rest after" is the rest each group took, from its last runner in to the next start, with how far off the plan it was; amber is more than 10 s long. Tap a name for that runner's reps.`
           : "Times appear here as the reps are timed."}
       </p>
     </div>
@@ -225,40 +258,64 @@ function GroupStatus({ name, phase, log, reps, now, timers }: { name: string; ph
   // The rep clock runs while the rep does, and on through the rest while anyone is still out.
   const repStartMs = phase.kind === "running" ? phase.startMs : phase.kind === "rest" && phase.stillOut ? (log.find((l) => l.repIndex === phase.afterRepIndex)?.startMs ?? null) : null;
   const repIndex = phase.kind === "running" ? phase.repIndex : phase.kind === "rest" ? phase.afterRepIndex : 0;
-  const live = phase.kind === "running" || phase.kind === "rest";
+  const leftMs = phase.kind === "rest" && phase.nextStartMs !== null ? phase.nextStartMs - now : null;
+  // The card's look says where the group is at a glance: green running, amber resting
+  // (solid once the next rep is close), red when the rest has run over, dashed before, grey when done.
+  const look =
+    phase.kind === "running"
+      ? { card: "border-brand/50 bg-surface", badge: <Badge tone="brand" pulse>Running</Badge> }
+      : phase.kind === "rest"
+        ? phase.holdEventId
+          ? { card: "border-line-strong bg-surface", badge: <Badge tone="neutral">On hold</Badge> }
+          : leftMs !== null && leftMs <= 0
+            ? { card: "border-danger/50 bg-surface", badge: <Badge tone="danger" dot>Rest is over</Badge> }
+            : { card: leftMs !== null && leftMs <= 10_000 ? "border-gold bg-surface" : "border-gold/40 bg-surface", badge: <Badge tone="gold" dot>Resting</Badge> }
+        : phase.kind === "done"
+          ? { card: "border-line bg-surface-2", badge: <Badge tone="neutral">{phase.endedEarlyAfter !== null ? "Ended early" : "Done"}</Badge> }
+          : { card: "border-dashed border-line-strong bg-surface", badge: <Badge tone="neutral">Not started</Badge> };
   return (
-    <Card className="px-4 py-3">
+    <div className={`rounded-lg border px-4 py-3 shadow-card ${look.card}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-            {live && <LiveDot />}
-            {name}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-ink">{name}</span>
+            {look.badge}
           </div>
-          <div className="text-[13px] text-ink-2">
-            {phase.kind === "before" ? "Not started" : phase.kind === "done" ? `All ${reps.length} reps done` : timers.length > 0 ? `Timed by ${timers.join(", ")}` : "No one timing right now"}
+          <div className="mt-1 text-[13px] text-ink-2">
+            {phase.kind === "before"
+              ? `First up: ${reps[0].label}`
+              : phase.kind === "done"
+                ? phase.endedEarlyAfter !== null
+                  ? `Ended after ${repName(phase.endedEarlyAfter)}`
+                  : `All ${reps.length} reps done`
+                : timers.length > 0
+                  ? `Timed by ${timers.join(", ")}`
+                  : "No one timing right now"}
           </div>
         </div>
         <div className="flex shrink-0 gap-5 text-right">
           {repStartMs !== null && <Clock label={`Running ${repName(repIndex)}`} value={formatElapsed(Math.max(0, now - repStartMs))} note={phase.kind === "rest" ? `${phase.stillOut} still out` : null} />}
           {phase.kind === "rest" && (
             <Clock
-              label="Resting"
+              label={phase.holdEventId ? "Resting, on hold" : "Resting"}
               value={formatElapsed(Math.max(0, now - phase.restStartedMs)).replace(/\.\d$/, "")}
-              tone={phase.nextStartMs !== null && now > phase.nextStartMs ? "text-danger" : "text-ink"}
+              tone={leftMs !== null && leftMs <= 0 ? "text-danger" : "text-ink"}
               note={
-                phase.nextStartMs === null
-                  ? phase.rest
-                    ? describeRest(phase.rest)
-                    : null
-                  : now < phase.nextStartMs
-                    ? `next rep in ${formatElapsed(phase.nextStartMs - now).replace(/\.\d$/, "")}`
-                    : `${formatElapsed(now - phase.nextStartMs).replace(/\.\d$/, "")} over`
+                leftMs === null
+                  ? phase.holdEventId
+                    ? "no countdown"
+                    : phase.rest
+                      ? describeRest(phase.rest)
+                      : null
+                  : leftMs > 0
+                    ? `next rep in ${formatElapsed(leftMs).replace(/\.\d$/, "")}`
+                    : `${formatElapsed(-leftMs).replace(/\.\d$/, "")} over`
               }
             />
           )}
         </div>
       </div>
-    </Card>
+    </div>
   );
 }
 
