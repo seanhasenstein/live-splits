@@ -518,7 +518,8 @@ export function WorkoutRecorder({
             <span className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">{allReps && lastIndex > 0 ? `Reps 1–${lastIndex + 1}` : `Rep ${lastIndex + 1}`}</span>
             {lastIndex > 0 && (
               <Segmented
-                className="w-44"
+                size="sm"
+                className="w-36"
                 value={allReps ? "all" : "last"}
                 onChange={(v) => setResultsPref(v === "all" ? "all" : null)}
                 options={[
