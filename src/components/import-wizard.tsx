@@ -381,7 +381,8 @@ function DivisionPicker({ contest, teamAliases, teams, onChange }: { contest: Pa
       </button>
     );
   }
-  const chosen = new Set(teams ?? ourTeams);
+  // Once open, what's ticked is exactly the plan; an emptied set shows as "0 of M kept", not as the default again.
+  const chosen = new Set(teams ?? []);
   const preview = restrictToDivision(contest, [...chosen]).contest;
   const toggle = (t: string) => {
     const next = new Set(chosen);

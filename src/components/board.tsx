@@ -733,7 +733,7 @@ function AthleteSheet({
   const { ft } = useTimeFormat();
   const bests = row ? race.bests[row.athleteId] : undefined;
   const finishes = bests?.finishes ?? [];
-  // Their most recent earlier race, for the default comparison; the season list in date order; the top five ever.
+  // The season list in date order; the top five ever.
   const byDate = [...finishes].sort((a, b) => b.date.localeCompare(a.date));
   const season = byDate.filter((f) => f.thisSeason).reverse();
   const seasonYear = meetDate.slice(0, 4);
@@ -801,22 +801,27 @@ function AthleteSheet({
   });
   const checkpointLabels = race.checkpoints.map((c) => ({ meters: String(Math.round(c.meters)), label: c.label }));
   // Tags a row can wear in the lists, today's run included: the fastest ever, the fastest this season, the same course as today.
-  const todayIsPR = finish !== null && (finishes.length === 0 || finish <= finishes[0].ms);
-  const todayIsSB = finish !== null && (season.length === 0 || finish <= Math.min(...season.map((f) => f.ms)));
+  // Nothing about records applies on a meet marked as not counting for them.
+  const records = !race.recordsExcluded && !status;
+  const todayIsPR = records && finish !== null && (finishes.length === 0 || finish <= finishes[0].ms);
+  const todayIsSB = records && finish !== null && (season.length === 0 || finish <= Math.min(...season.map((f) => f.ms)));
   const prRaceId = todayIsPR ? null : (finishes[0]?.raceId ?? null);
   const sbRaceId = todayIsSB ? null : ([...season].sort((a, b) => a.ms - b.ms)[0]?.raceId ?? null);
   const tagsFor = (f: PriorFinish) => [...(f.raceId === prRaceId ? ["PR"] : []), ...(f.raceId === sbRaceId ? ["SB"] : []), ...(f.sameCourse ? ["this course"] : [])];
   // "This race", not "today": the sheet is read again long after the meet.
   const todayTags = [...(todayIsPR && finishes.length > 0 ? ["PR"] : []), ...(todayIsSB && season.length > 0 ? ["SB"] : []), "this race"];
   // On pace for a record while they're still out: the projection against what they came in with.
-  const onPace = finish === null && projected !== null && bests ? recordBadge(projected, bests, true) : null;
+  const onPace = records && finish === null && projected !== null && bests ? recordBadge(projected, bests, true) : null;
   // A near miss: top three ever, or top three this season, said in words rather than a pill.
+  const gapText = (ms: number) => (ms >= 60_000 ? formatElapsed(ms, "seconds") : `${Math.max(1, Math.round(ms / 1000))}s`);
   const nearMiss =
-    finish !== null && !row?.record && bests && rank !== null && rank <= 3 && bests.pr
-      ? `${rank}${ordinal(rank)} fastest ever, ${Math.max(1, Math.round((finish - bests.pr.ms) / 1000))}s behind the personal best of ${ft(bests.pr.ms)} at ${bests.pr.meetName} on ${formatDateWithYear(bests.pr.date)}.`
-      : finish !== null && !row?.record && bests && seasonRank !== null && seasonRank <= 3 && bests.sb
-        ? `${seasonRank}${ordinal(seasonRank)} fastest this season, behind the season best of ${ft(bests.sb.ms)} at ${bests.sb.meetName} on ${formatDateWithYear(bests.sb.date)}.`
+    records && finish !== null && !row?.record && bests && rank !== null && rank <= 3 && finishes.length >= 2 && bests.pr
+      ? `${rank}${ordinal(rank)} fastest ever, ${gapText(finish - bests.pr.ms)} behind the personal best of ${ft(bests.pr.ms, bests.pr.precision)} at ${bests.pr.meetName} on ${formatDateWithYear(bests.pr.date)}.`
+      : records && finish !== null && !row?.record && bests && seasonRank !== null && seasonRank <= 3 && season.length >= 2 && bests.sb
+        ? `${seasonRank}${ordinal(seasonRank)} fastest this season, behind the season best of ${ft(bests.sb.ms, bests.sb.precision)} at ${bests.sb.meetName} on ${formatDateWithYear(bests.sb.date)}.`
         : null;
+  // "5Ks" reads; "3 mis" doesn't.
+  const plural = /[A-Za-z]$/.test(race.distanceLabel) && !/ mi$/.test(race.distanceLabel) ? `${race.distanceLabel}s` : `${race.distanceLabel} races`;
   const raceLink = (f: { meetId: string; raceId: string }) => `/meets/${f.meetId}/results?race=${f.raceId}&athlete=${row?.athleteId ?? ""}`;
 
   return (
@@ -885,15 +890,15 @@ function AthleteSheet({
               {(() => {
                 const prev = bests[row.record.kind]!;
                 const what = { pr: "personal best", sb: "season best", course: "best on this course", meet: "best at this meet" }[row.record.kind];
-                const by = row.record.unofficial && row.record.uncertain ? `, beaten by ${Math.max(1, Math.round((row.record.previousMs - finish!) / 1000))}s` : "";
-                return `Previous ${what} was ${ft(prev.ms)} at ${prev.meetName} on ${formatDateWithYear(prev.date)}${by}.`;
+                const by = row.record.unofficial && row.record.uncertain && row.record.previousMs > finish! ? `, beaten by ${Math.max(1, Math.round((row.record.previousMs - finish!) / 1000))}s` : row.record.unofficial && row.record.uncertain ? ", matched" : "";
+                return `Previous ${what} was ${ft(prev.ms, prev.precision)} at ${prev.meetName} on ${formatDateWithYear(prev.date)}${by}.`;
               })()}
             </span>
           ) : nearMiss ? (
             <span className="block text-[13px] text-ink-2">{nearMiss}</span>
           ) : onPace && bests ? (
             <span className="block text-[13px] text-brand-text">
-              On pace for a {RECORD_LABEL[onPace.kind].short} · {RECORD_LABEL[onPace.kind].short} {ft(bests[onPace.kind]!.ms)}
+              On pace for a {RECORD_LABEL[onPace.kind].short} · {RECORD_LABEL[onPace.kind].short} {ft(bests[onPace.kind]!.ms, bests[onPace.kind]!.precision)}
             </span>
           ) : (
             avgPace !== null && <Time className="block text-[13px] text-ink-2">{formatElapsed(avgPace).replace(/\.\d$/, "")}/mi average</Time>
@@ -988,19 +993,18 @@ function AthleteSheet({
             <HistoryIcon className="size-4 text-ink-2" />
             <span className="flex-1">History</span>
             <span className="text-[13px] font-normal text-ink-2">
-              {!historyOpen && !todayIsPR && bests?.pr ? `PR ${ft(bests.pr.ms)} · ` : ""}
-              {finishes.length} earlier {race.distanceLabel}
-              {finishes.length === 1 ? "" : "s"}
+              {!historyOpen && !todayIsPR && bests?.pr ? `PR ${ft(bests.pr.ms, bests.pr.precision)} · ` : ""}
+              {finishes.length} earlier {finishes.length === 1 ? race.distanceLabel : plural}
             </span>
             <ChevronRight className={`size-4 text-ink-3 transition-transform ${historyOpen ? "rotate-90" : ""}`} />
           </button>
           {historyOpen && (
             <div className="divide-y divide-line">
               <FinishList
-                title={`Fastest ${race.distanceLabel}s ever`}
+                title={`Fastest ${plural} ever`}
                 note={rank !== null ? `This race ranks ${rank}${ordinal(rank)} of ${finishes.length + 1}` : undefined}
                 rows={fastest}
-                today={finish !== null && rank !== null && rank <= 5 ? { ms: finish, rank, tags: todayTags } : null}
+                today={finish !== null && rank !== null && rank <= 5 ? { ms: finish, precision: row?.cells[finishIndex]?.precision ?? null, rank, tags: todayTags } : null}
                 meetName={meetName}
                 todaySplits={todaySplits}
                 checkpoints={checkpointLabels}
@@ -1014,7 +1018,7 @@ function AthleteSheet({
                   title={`${seasonYear} season`}
                   note={seasonRank !== null ? `This race ranks ${seasonRank}${ordinal(seasonRank)} of ${season.length + 1} this season` : undefined}
                   rows={season}
-                  today={finish !== null ? { ms: finish, rank: null, tags: todayTags } : null}
+                  today={finish !== null ? { ms: finish, precision: row?.cells[finishIndex]?.precision ?? null, rank: null, tags: todayTags } : null}
                   meetName={meetName}
                   todaySplits={todaySplits}
                   checkpoints={checkpointLabels}
@@ -1027,7 +1031,7 @@ function AthleteSheet({
               {(() => {
                 // The season's arc, once there's enough of it to draw. A career chart belongs on the athlete page.
                 const seasonPoints = [...season.map((f) => ({ ms: f.ms, label: shortDate(f.date), today: false })), ...(finish !== null ? [{ ms: finish, label: shortDate(meetDate), today: true }] : [])];
-                return seasonPoints.length >= 3 && <ProgressChart title={`${seasonYear} season`} points={seasonPoints} prMs={bests?.pr?.ms ?? null} ft={ft} />;
+                return seasonPoints.length >= 3 && <ProgressChart title="Race by race" points={seasonPoints} prMs={bests?.pr?.ms ?? null} ft={ft} />;
               })()}
             </div>
           )}
@@ -1051,6 +1055,7 @@ function AthleteSheet({
           row?.cells.some((c) => c.mark?.estimate && c.official === null) && "An estimate is a time entered by hand, not tapped as they passed.",
           row?.record?.unofficial && "Records are provisional until official results are imported.",
           race.placesDerived && "Places are ranked by the app within our division.",
+          race.recordsExcluded && "This meet doesn't count for PRs, season bests or course bests.",
           finishes.length === 0 && `No earlier ${race.distanceLabel} results in the app to compare with.`,
         ].filter((line): line is string => typeof line === "string")}
       />
@@ -1395,9 +1400,13 @@ function ProgressChart({ title, points, prMs, ft }: { title: string; points: { m
   const padX = 14;
   const padTop = 10;
   const padBottom = 22;
-  const all = [...points.map((p) => p.ms), ...(prMs !== null ? [prMs] : [])];
-  const lo = Math.min(...all);
-  const hi = Math.max(...all);
+  // Scale to the races themselves; a PR far below them would squash the line, so it's drawn only when it's near.
+  const times = points.map((p) => p.ms);
+  const pLo = Math.min(...times);
+  const pHi = Math.max(...times);
+  const prNear = prMs !== null && prMs >= pLo - (pHi - pLo) * 0.5 - 15_000 && prMs <= pHi;
+  const lo = prNear ? Math.min(pLo, prMs!) : pLo;
+  const hi = pHi;
   const span = Math.max(hi - lo, 30_000); // never flatter than a 30 s window
   const x = (i: number) => padX + (points.length === 1 ? (W - 2 * padX) / 2 : (i * (W - 2 * padX)) / (points.length - 1));
   const y = (ms: number) => padTop + ((ms - lo) / span) * (H - padTop - padBottom);
@@ -1409,13 +1418,18 @@ function ProgressChart({ title, points, prMs, ft }: { title: string; points: { m
         <span className="text-[11px] text-ink-3">lower is faster</span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full px-2 pt-1" role="img" aria-label={`${title}: ${points.map((p) => `${p.label} ${ft(p.ms)}`).join(", ")}`}>
-        {prMs !== null && (
+        {prMs !== null && prNear && (
           <>
             <line x1={padX} x2={W - padX} y1={y(prMs)} y2={y(prMs)} className="stroke-brand/50" strokeDasharray="3 3" />
             <text x={W - padX} y={y(prMs) - 3} textAnchor="end" className="fill-brand-text text-[9px] font-semibold">
               PR {ft(prMs)}
             </text>
           </>
+        )}
+        {prMs !== null && !prNear && (
+          <text x={W - padX} y={padTop} textAnchor="end" className="fill-brand-text text-[9px] font-semibold">
+            PR {ft(prMs)} ↑
+          </text>
         )}
         <path d={path} fill="none" className="stroke-ink-2" strokeWidth="1.5" />
         {points.map((p, i) => (
@@ -1453,7 +1467,7 @@ function FinishList({
   note?: string;
   rows: PriorFinish[];
   /** Today's finish; rank null means "append in date order" (a season list). */
-  today: { ms: number; rank: number | null; tags: string[] } | null;
+  today: { ms: number; precision: Precision | null; rank: number | null; tags: string[] } | null;
   meetName: string;
   todaySplits: Record<string, number>;
   checkpoints: { meters: string; label: string }[];
@@ -1482,7 +1496,7 @@ function FinishList({
             <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 gap-y-1 text-[13px]">
               <span />
               <span className="text-right text-[10px] font-semibold tracking-wide text-ink-3 uppercase">then</span>
-              <span className="text-right text-[10px] font-semibold tracking-wide text-ink-3 uppercase">today</span>
+              <span className="text-right text-[10px] font-semibold tracking-wide text-ink-3 uppercase">this race</span>
               <span className="w-12 text-right text-[10px] font-semibold tracking-wide text-ink-3 uppercase">diff</span>
               {checkpoints.map((c) => {
                 const then = c.meters === checkpoints[checkpoints.length - 1].meters ? f.ms : (f.splits[c.meters] ?? null);
@@ -1491,7 +1505,7 @@ function FinishList({
                   <Fragment key={c.meters}>
                     <span className="text-ink-2">{c.label}</span>
                     <Time className="text-right text-ink-2">{then !== null ? ft(then, f.precision) : "—"}</Time>
-                    <Time className="text-right font-medium text-ink">{now !== null ? ft(now) : "—"}</Time>
+                    <Time className="text-right font-medium text-ink">{now !== null ? ft(now, c.meters === checkpoints[checkpoints.length - 1].meters ? today?.precision : null) : "—"}</Time>
                     <Time className="w-12 text-right">{then !== null && now !== null ? <DeltaText ms={now - then} /> : <span className="text-ink-3">—</span>}</Time>
                   </Fragment>
                 );
@@ -1517,7 +1531,7 @@ function FinishList({
             {text}
           </span>
         ))}
-        <Time className="shrink-0 font-semibold text-ink">{ft(today.ms)}</Time>
+        <Time className="shrink-0 font-semibold text-ink">{ft(today.ms, today.precision)}</Time>
       </div>,
     );
   }

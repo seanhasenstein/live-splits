@@ -24,7 +24,7 @@ export function Segmented<T extends string>({
             aria-selected={active}
             disabled={o.disabled}
             onClick={() => onChange(o.value)}
-            className={`h-9 flex-1 rounded-md px-3 text-sm font-medium transition-colors disabled:opacity-40 ${
+            className={`h-9 min-w-0 flex-1 truncate rounded-md px-3 text-sm font-medium transition-colors disabled:opacity-40 ${
               active ? "bg-surface-3 text-ink shadow-card" : "text-ink-2 hover:text-ink"
             }`}
           >

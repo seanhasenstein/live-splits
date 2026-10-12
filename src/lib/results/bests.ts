@@ -17,7 +17,7 @@ import { normalizeName } from "./match";
  * Only results from other, earlier (or same-day) meets count: this race is
  * what's being judged.
  */
-export type Best = { ms: number; meetName: string; date: string };
+export type Best = { ms: number; precision: Precision; meetName: string; date: string };
 
 /** One earlier finish at this distance, with enough to list it, link to it and compare splits against it. */
 export type PriorFinish = {
@@ -80,7 +80,7 @@ export async function getLineupBests(meet: Meet, race: Pick<Race, "lineup" | "di
     if (r.mark?.type !== "time") continue;
     const race = raceById.get(r.raceId!)!;
     const m = meetById.get(race.meetId)!;
-    const best: Best = { ms: r.mark.value, meetName: m.name, date: m.date };
+    const best: Best = { ms: r.mark.value, precision: r.mark.precision, meetName: m.name, date: m.date };
     const b = out[r.athleteId!];
     b.pr = better(b.pr, best);
     const thisSeason = m.seasonId === meet.seasonId;
