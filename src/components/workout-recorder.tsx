@@ -5,9 +5,9 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { changeRepsAction } from "@/app/actions/workouts";
 import { AthleteBreakdown } from "@/components/workout-athlete-sheet";
 import { RepCell, SHOW_DELTAS_KEY } from "@/components/workout-rep-cell";
-import { groupTint, repCellTone } from "@/components/workout-tint";
+import { groupTint, ON_GOAL_MS, repCellTone } from "@/components/workout-tint";
 import { Alert, Button, Card, SectionLabel, Segmented, Sheet, Switch, Time } from "@/components/ui";
-import { useClock } from "@/lib/client/clock";
+import { offsetForTap, useClock } from "@/lib/client/clock";
 import { useLocalValue } from "@/lib/client/use-local-value";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
 import { useTimeFormat } from "@/lib/client/time-format";
@@ -72,7 +72,7 @@ function deltaText(ms: number, tenths: boolean): string {
   const abs = Math.abs(t);
   return `${t > 0 ? "+" : "−"}${abs >= 60 ? formatElapsed(abs * 1000, tenths ? "tenths" : "seconds") : tenths ? abs.toFixed(1) : String(abs)}`;
 }
-const deltaTone = (ms: number) => (Math.abs(ms) < 500 ? "text-ink-2" : ms < 0 ? "text-brand-text" : "text-danger");
+const deltaTone = (ms: number) => (Math.abs(ms) <= ON_GOAL_MS ? "text-ink-2" : ms < 0 ? "text-brand-text" : "text-danger");
 
 /** How the runners are laid out, remembered on this phone. */
 type TileOrder = "goal" | "last" | "name";
@@ -98,7 +98,7 @@ export function WorkoutRecorder({
   const { ft, team } = useTimeFormat();
   const tenths = team === "tenths";
   const [groupId, setGroupId] = useState(() => (initialGroupId && initialPlan.groups.some((g) => g.id === initialGroupId) ? initialGroupId : initialPlan.groups[0].id));
-  const { events, plan, send, online, loaded, unsent, refresh } = useWorkoutEvents(workoutId, initialPlan, groupId);
+  const { events, plan, send, online, loaded, unsent, refresh, signedOut } = useWorkoutEvents(workoutId, initialPlan, groupId);
   const group = plan.groups.find((g) => g.id === groupId) ?? plan.groups[0];
   const state = useMemo(() => replayWorkout(plan, events), [plan, events]);
   const nameOf = useMemo(() => new Map(people.map((p) => [p.id, p.name])), [people]);
@@ -119,7 +119,7 @@ export function WorkoutRecorder({
   const offsetMs = clock.sync?.offsetMs ?? 0;
   const [now, setNow] = useState(0);
   useEffect(() => {
-    const tick = () => setNow(Date.now() + offsetMs);
+    const tick = () => setNow(Date.now() + offsetForTap()); // the same offset the taps are stamped with
     tick();
     const t = setInterval(tick, 100);
     return () => clearInterval(t);
@@ -169,7 +169,8 @@ export function WorkoutRecorder({
   const notRunning = lastIndex >= 0 ? rowsAt(lastIndex).filter(({ r }) => r.status === "skipped" || r.status === "stopped" || r.status === "unfinished") : [];
   // Runners still out when the coach started the rest: they can still be tapped in for that rep.
   const stillOut = phase.kind === "rest" ? sortRows(rowsAt(phase.afterRepIndex).filter(({ r }) => r.status === "running"), phase.afterRepIndex) : [];
-  const upNext = phase.kind !== "running" && phase.kind !== "done" ? sortRows(rowsAt(repIndex).filter(({ r }) => r.status === "pending"), repIndex) : [];
+  // Between reps: who's going next, and who's set to skip it (so a skip can be seen, and undone, before the start).
+  const upNext = phase.kind !== "running" && phase.kind !== "done" ? sortRows(rowsAt(repIndex).filter(({ r }) => r.status === "pending" || r.status === "skipped"), repIndex) : [];
   // Make-ups on the go: a rep someone skipped, run later on their own clock (often after everyone's done).
   const makeUps = allIds.flatMap((id) =>
     state.athletes
@@ -180,28 +181,32 @@ export function WorkoutRecorder({
 
   // Starting the next rep while someone is still out on the last one leaves them with no time for it,
   // so it takes a second tap that says who. (A time can still be added for them afterwards.)
-  const [startArmed, setStartArmed] = useState(false);
+  // Armed for this group and this moment only: switching groups or the rep moving on disarms it.
+  const armKey = `${group.id}:${phase.kind}:${repIndex}`;
+  const [startArmedKey, setStartArmedKey] = useState<string | null>(null);
+  const startArmed = startArmedKey === armKey;
   useEffect(() => {
-    if (!startArmed) return;
-    const t = setTimeout(() => setStartArmed(false), 4000);
+    if (!startArmedKey) return;
+    const t = setTimeout(() => setStartArmedKey(null), 4000);
     return () => clearTimeout(t);
-  }, [startArmed]);
+  }, [startArmedKey]);
   const startRep = () => {
-    if (stillOut.length > 0 && !startArmed) return setStartArmed(true);
-    setStartArmed(false);
+    if (stillOut.length > 0 && !startArmed) return setStartArmedKey(armKey);
+    setStartArmedKey(null);
     send({ type: "rep_start", groupId: group.id, repId: rep.id, at: tapTime() });
   };
   const finish = (athleteId: string, repId = rep.id) => send({ type: "finish", groupId: group.id, athleteId, repId, at: tapTime() });
   // Starting the rest early takes two taps: the first arms it for a few seconds, so a stray tap mid-rep does nothing.
-  const [restArmed, setRestArmed] = useState(false);
+  const [restArmedKey, setRestArmedKey] = useState<string | null>(null);
+  const restArmed = restArmedKey === armKey;
   useEffect(() => {
-    if (!restArmed) return;
-    const t = setTimeout(() => setRestArmed(false), 3000);
+    if (!restArmedKey) return;
+    const t = setTimeout(() => setRestArmedKey(null), 3000);
     return () => clearTimeout(t);
-  }, [restArmed]);
+  }, [restArmedKey]);
   const startRest = () => {
-    if (!restArmed) return setRestArmed(true);
-    setRestArmed(false);
+    if (!restArmed) return setRestArmedKey(armKey);
+    setRestArmedKey(null);
     send({ type: "rest_start", groupId: group.id, repId: rep.id, at: tapTime() });
   };
   // Ending this group early, from the Reps sheet: after the rep running now, or the one just run.
@@ -219,15 +224,18 @@ export function WorkoutRecorder({
   const startEventId = phase.kind === "running" || phase.kind === "rest" ? phase.startEventId : null;
   const startMsNow = phase.kind === "running" ? phase.startMs : null;
   const nudgeStart = (deltaMs: number) => startEventId && startMsNow !== null && send({ type: "edit", targetEventId: startEventId, timeMs: startMsNow + deltaMs });
-  const [adjusting, setAdjusting] = useState(false);
+  const [adjustingKey, setAdjustingKey] = useState<string | null>(null);
+  const adjusting = adjustingKey === armKey;
 
   // After an early rest the rep clock keeps going for whoever is still out: coaches call those times.
   const outRepStartMs = phase.kind === "rest" && stillOut.length > 0 ? (state.groupLog.get(group.id)?.find((l) => l.repIndex === phase.afterRepIndex)?.startMs ?? null) : null;
 
   // Beep as the rest counts down: once at 10 s to go, twice at Go. Only on a change seen
   // here, so opening the screen mid-countdown doesn't beep for a moment already past.
-  const countdownStage = phase.kind === "rest" && phase.nextStartMs !== null ? (now >= phase.nextStartMs ? 2 : phase.nextStartMs - now <= 10_000 ? 1 : 0) : -1;
-  const restKey = phase.kind === "rest" ? `${group.id}:${phase.afterRepIndex}` : "";
+  // (Nothing until the clock has ticked once: `now` starts at 0, which would read as a countdown just begun.)
+  const ticking = now > 0;
+  const countdownStage = ticking && phase.kind === "rest" && phase.nextStartMs !== null ? (now >= phase.nextStartMs ? 2 : phase.nextStartMs - now <= 10_000 ? 1 : 0) : -1;
+  const restKey = ticking && phase.kind === "rest" ? `${group.id}:${phase.afterRepIndex}` : "";
   const lastStage = useRef({ key: "", stage: -1 });
   useEffect(() => {
     const prev = lastStage.current;
@@ -267,14 +275,22 @@ export function WorkoutRecorder({
   const changeReps = (change: "add" | "drop") => {
     setRepsError(null);
     startChange(async () => {
+      // Groups already finished stay finished (sent first, so they never flash back to resting; harmless if the add fails).
       if (change === "add") for (const g of finishedOthers) send({ type: "group_end", groupId: g.id, repId: lastRep.id });
-      const r = await changeRepsAction(workoutId, change);
-      if (r.error) return setRepsError(r.error);
+      try {
+        const r = await changeRepsAction(workoutId, change);
+        if (r.error) return setRepsError(r.error);
+      } catch {
+        // Offline: a plan change needs the server, unlike taps.
+        return setRepsError("Couldn't reach the server to change the reps. Try again when you have a connection.");
+      }
       await refresh();
       setRepsOpen(false);
     });
   };
 
+  // A runner added mid-rep joins from the next rep: the one running started without them.
+  const joinIndex = phase.kind === "running" ? Math.min(repIndex + 1, reps.length - 1) : repIndex;
   const sheetRep = sheetFor ? state.athletes.get(sheetFor) : null;
   const notInWorkout = people.filter((p) => !state.athletes.has(p.id));
 
@@ -306,8 +322,21 @@ export function WorkoutRecorder({
           )}
         </div>
       </div>
-      {(!online || unsent > 0) && (
-        <Alert tone="gold">{!online ? `Offline: ${unsent} tap${unsent === 1 ? "" : "s"} saved on this phone, sending when the connection's back.` : `Sending ${unsent}…`}</Alert>
+      {signedOut ? (
+        <Alert tone="danger">
+          This phone isn&rsquo;t signed in to time anymore{unsent > 0 ? `; ${unsent} tap${unsent === 1 ? " is" : "s are"} saved on it` : ""}. Sign in again with the workout code
+          {unsent > 0 ? " and they'll send" : ""}.
+        </Alert>
+      ) : (
+        (!online || unsent > 0) && (
+          <Alert tone="gold">
+            {!online
+              ? unsent > 0
+                ? `Offline: ${unsent} tap${unsent === 1 ? "" : "s"} saved on this phone, sending when the connection's back.`
+                : "Offline: keep tapping; taps are saved on this phone until the connection's back."
+              : `Sending ${unsent}…`}
+          </Alert>
+        )
       )}
 
       {plan.finishedAt && <Alert tone="gold">This workout has been ended. Times can still be fixed; reopen it from Overview to run more reps.</Alert>}
@@ -341,7 +370,7 @@ export function WorkoutRecorder({
           <div className="mt-3 flex items-end justify-between gap-4">
             {outRepStartMs !== null && (
               <div className="min-w-0">
-                <div className="text-[11px] font-semibold tracking-[0.08em] text-gold-text uppercase">Rep {phase.kind === "rest" ? phase.afterRepIndex + 1 : ""} clock</div>
+                <div className="text-[11px] font-semibold tracking-[0.08em] text-gold-text uppercase">Rep {lastIndex + 1} clock</div>
                 <Time className="block text-5xl leading-tight font-semibold tracking-tight text-ink">{formatElapsed(Math.max(0, now - outRepStartMs))}</Time>
               </div>
             )}
@@ -353,7 +382,7 @@ export function WorkoutRecorder({
         ) : phase.kind === "before" ? (
           <p className="mt-1 text-sm text-ink-2">{loaded ? "Start the clock when the group goes." : "Loading…"}</p>
         ) : phase.kind === "done" && phase.endedEarlyAfter === null && !plan.finishedAt ? (
-          <Button size="lg" className="mt-3 h-14 w-full text-base" disabled={changingReps} onClick={() => changeReps("add")}>
+          <Button size="xl" className="mt-3 w-full" disabled={changingReps} onClick={() => changeReps("add")}>
             <Plus className="size-5" />
             Add one more rep ({lastRep.label})
           </Button>
@@ -364,12 +393,15 @@ export function WorkoutRecorder({
         ) : null}
         {phase.kind === "running" && !plan.finishedAt && (
           <div className="mt-4 grid grid-cols-2 gap-2">
-            <Button variant="tint" className="h-11" disabled={!startEventId} onClick={() => setAdjusting((a) => !a)} aria-pressed={adjusting}>
+            <Button variant="tint" size="touch" disabled={!startEventId} onClick={() => setAdjustingKey(adjusting ? null : armKey)} aria-pressed={adjusting}>
               Fix the clock
             </Button>
-            <Button variant={restArmed ? "gold" : "tint"} className="h-11" onPointerDown={notePointerDown} onClick={startRest}>
-              {restArmed ? "Tap again to rest" : "Start rest"}
-            </Button>
+            {/* No rest after the last rep: it's over when everyone's in. */}
+            {repIndex < reps.length - 1 && (
+              <Button variant={restArmed ? "gold" : "tint"} size="touch" onPointerDown={notePointerDown} onClick={startRest}>
+                {restArmed ? "Tap again to rest" : "Start rest"}
+              </Button>
+            )}
           </div>
         )}
         {phase.kind === "running" && restArmed && <p className="mt-2 text-[13px] text-ink-2">Starts the rest before everyone&rsquo;s in. Anyone still out can be tapped in after.</p>}
@@ -378,7 +410,7 @@ export function WorkoutRecorder({
             <p className="mb-2 text-[13px] text-ink-2">Started the clock late or early? Add or take off seconds.</p>
             <div className="grid grid-cols-4 gap-2">
               {[-5, -1, 1, 5].map((d) => (
-                <Button key={d} variant="tint" className="h-11 font-mono text-base" onClick={() => nudgeStart(-d * 1000)}>
+                <Button key={d} variant="tint" size="touch" className="font-mono" onClick={() => nudgeStart(-d * 1000)}>
                   {d > 0 ? "+" : "−"}
                   {Math.abs(d)}s
                 </Button>
@@ -394,7 +426,7 @@ export function WorkoutRecorder({
                 {stillOut.length === 1 ? "them" : "them each"} with no time for rep {repIndex}. You can add one later by tapping their name.
               </p>
             )}
-            <Button size="lg" variant={startArmed ? "gold" : "primary"} className="mt-3 h-14 w-full text-base" onPointerDown={notePointerDown} onClick={startRep}>
+            <Button size="xl" variant={startArmed ? "gold" : "primary"} className="mt-3 w-full" onPointerDown={notePointerDown} onClick={startRep}>
               <Play className="size-5" />
               {startArmed ? `Tap again to start rep ${repIndex + 1}` : `Start rep ${repIndex + 1}`}
             </Button>
@@ -402,7 +434,7 @@ export function WorkoutRecorder({
         )}
         {/* Between reps: hold the countdown for a water break or a delay. */}
         {canHold && phase.kind === "rest" && !plan.finishedAt && (
-          <Button variant="tint" className="mt-2 h-11 w-full" onClick={toggleHold} aria-pressed={!!phase.holdEventId}>
+          <Button variant="tint" size="touch" className="mt-2 w-full" onClick={toggleHold} aria-pressed={!!phase.holdEventId}>
             {phase.holdEventId ? "Back to the countdown" : "Hold the rest"}
           </Button>
         )}
@@ -446,7 +478,10 @@ export function WorkoutRecorder({
                         <Time className="text-sm font-semibold text-ink">{formatElapsed(Math.max(0, now - r.startMs))}</Time>
                       </span>
                     )}
-                    {r.goalMs !== null && <Time className={`${large ? "text-sm" : "text-xs"} text-ink-3`}>goal {formatElapsed(r.goalMs, "seconds")}</Time>}
+                    {/* No room for both on a phone tile: the late clock wins. */}
+                    {r.goalMs !== null && !(phase.kind === "running" && r.startMs !== null && r.startMs !== phase.startMs) && (
+                      <Time className={`${large ? "text-sm" : "text-xs"} text-ink-3`}>goal {formatElapsed(r.goalMs, "seconds")}</Time>
+                    )}
                   </span>
                 )}
               </button>
@@ -491,7 +526,7 @@ export function WorkoutRecorder({
         </div>
       )}
 
-      {/* This rep's (or the last rep's) finishers, in order. */}
+      {/* After an early rest: who's still out on the last rep, tapped in from here. */}
       {stillOut.length > 0 && phase.kind === "rest" && (
         <div>
           <div className="mb-1.5 text-[11px] font-semibold tracking-[0.08em] text-gold-text uppercase">Still out on rep {phase.afterRepIndex + 1}</div>
@@ -512,6 +547,7 @@ export function WorkoutRecorder({
         </div>
       )}
 
+      {/* The last rep's finishers in order, or every rep so far. */}
       {phase.kind !== "running" && finishedRows.length > 0 && (
         <Card>
           {/* The last rep in finish order, or every rep so far for this group: the numbers to talk about while they rest. */}
@@ -533,7 +569,7 @@ export function WorkoutRecorder({
           </div>
           {allReps && lastIndex > 0 ? (
             <GroupRepsGrid
-              rows={[...finishedRows, ...notRunning].map(({ id }) => ({ id, name: nameOf.get(id) ?? "?", list: state.athletes.get(id)!.slice(0, lastIndex + 1) }))}
+              rows={[...finishedRows, ...stillOut, ...notRunning].map(({ id }) => ({ id, name: nameOf.get(id) ?? "?", list: state.athletes.get(id)!.slice(0, lastIndex + 1) }))}
               reps={reps}
               ft={ft}
               tenths={tenths}
@@ -574,7 +610,7 @@ export function WorkoutRecorder({
             {upNext.map(({ id, r }) => (
               <button key={id} type="button" onClick={() => setSheetFor(id)} className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm hover:bg-surface-2">
                 <span className="min-w-0 flex-1 truncate text-ink">{nameOf.get(id) ?? "?"}</span>
-                {r.goalMs !== null && <Time className="text-[13px] text-ink-3">goal {formatElapsed(r.goalMs, "seconds")}</Time>}
+                {r.status === "skipped" ? <span className="text-[13px] text-ink-3">skipping</span> : r.goalMs !== null && <Time className="text-[13px] text-ink-3">goal {formatElapsed(r.goalMs, "seconds")}</Time>}
               </button>
             ))}
           </div>
@@ -646,7 +682,7 @@ export function WorkoutRecorder({
         <AthleteActions
           name={nameOf.get(sheetFor) ?? "?"}
           rep={sheetRep[phase.kind === "running" ? repIndex : Math.max(0, lastIndex)]}
-          repNumber={phase.kind === "running" ? repIndex + 1 : lastIndex + 1}
+          repNumber={phase.kind === "running" ? repIndex + 1 : Math.max(0, lastIndex) + 1}
           next={phase.kind === "done" ? null : { index: repIndex, entry: sheetRep[repIndex] }}
           running={phase.kind === "running"}
           groupStartMs={startMsNow}
@@ -667,14 +703,14 @@ export function WorkoutRecorder({
       )}
 
       {adding && (
-        <Sheet title="Add a runner" subtitle={`Joins ${group.name} from rep ${repIndex + 1}`} onClose={() => setAdding(false)}>
+        <Sheet title="Add a runner" subtitle={`Joins ${group.name} from rep ${joinIndex + 1}`} onClose={() => setAdding(false)}>
           <div className="max-h-[60dvh] divide-y divide-line overflow-y-auto">
             {notInWorkout.map((p) => (
               <button
                 key={p.id}
                 type="button"
                 onClick={() => {
-                  send({ type: "move", athleteId: p.id, groupId: group.id, repId: rep.id });
+                  send({ type: "move", athleteId: p.id, groupId: group.id, repId: reps[joinIndex].id });
                   setAdding(false);
                 }}
                 className="block w-full py-2.5 text-left text-sm text-ink hover:bg-surface-2"
@@ -748,7 +784,6 @@ function GroupRepsGrid({
   const [deltasPref, setDeltasPref] = useLocalValue(SHOW_DELTAS_KEY);
   const showDeltas = deltasPref !== "off";
   return (
-    <div>
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
@@ -762,7 +797,7 @@ function GroupRepsGrid({
                 {i + 1}
               </th>
             ))}
-            <th className="border-l border-line px-3 py-1.5 text-right font-semibold">Avg</th>
+            <th className="border-l border-line px-3 py-1.5 text-right font-semibold whitespace-nowrap">Avg{reps.slice(0, n).some((r) => r.meters !== reps[0].meters) ? ` / ${reps[0].label}` : ""}</th>
           </tr>
         </thead>
         <tbody>
@@ -784,7 +819,7 @@ function GroupRepsGrid({
                     {r.status === "done" && r.elapsedMs !== null ? (
                       <RepCell time={ft(r.elapsedMs)} delta={showDeltas && r.deltaMs !== null ? deltaText(r.deltaMs, tenths) : null} tone={repCellTone(r.deltaMs)} />
                     ) : (
-                      <span className="px-1 text-xs text-ink-3">{r.status === "skipped" ? "skip" : r.status === "unfinished" ? "—" : r.status === "stopped" ? "out" : r.status === "running" ? "now" : "·"}</span>
+                      <span className="px-1 text-xs text-ink-3">{r.status === "skipped" ? "skip" : r.status === "unfinished" ? "no time" : r.status === "stopped" ? "done" : r.status === "running" ? "now" : "·"}</span>
                     )}
                   </td>
                 ))}
@@ -796,7 +831,6 @@ function GroupRepsGrid({
           })}
         </tbody>
       </table>
-    </div>
     </div>
   );
 }
@@ -905,13 +939,19 @@ function AthleteActions({
         {/* A rep they skipped, run now on their own clock while the group carries on (or after it's done). */}
         {soFar
           .map((r, i) => ({ r, i }))
-          .filter(({ r, i }) => r.status === "skipped" && !(running && i === repNumber - 1))
+          .filter(({ r }) => r.status === "skipped")
           .map(({ r, i }) => (
             <button key={r.repId} type="button" className={btn} onClick={() => act("rep_start", { repId: r.repId })}>
               Run rep {i + 1} now (make-up)
               <span className="mt-0.5 block text-[13px] text-ink-2">They skipped it. Starts their own clock; tap them in when they finish.</span>
             </button>
           ))}
+        {next && upId && next.entry.status === "skipped" && next.entry.skipEventId && (
+          <button type="button" className={btn} onClick={() => act("void", { targetEventId: next.entry.skipEventId! })}>
+            Don&rsquo;t skip rep {next.index + 1}
+            <span className="mt-0.5 block text-[13px] text-ink-2">They&rsquo;re running it after all.</span>
+          </button>
+        )}
         {next && upId && next.entry.status !== "done" && next.entry.status !== "stopped" && next.entry.status !== "skipped" && (
           <button type="button" className={btn} onClick={() => act("skip", { repId: upId })}>
             Skip rep {next.index + 1}

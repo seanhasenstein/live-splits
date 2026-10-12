@@ -260,6 +260,12 @@ describe("edge cases from review", () => {
     expect(replayWorkout(workout, evs).groups.get("g1")).toMatchObject({ kind: "rest", afterRepIndex: 0, nextStartMs: T0 + 136_000 });
   });
 
+  it("a skip can be undone before (or during) the rep", () => {
+    const evs = [ev("skip", 0, { athleteId: "titus", repId: "a1", clientEventId: "sk1" }), ev("rep_start", 1_000, { groupId: "g1", repId: "a1" })];
+    expect(replayWorkout(workout, evs).athletes.get("titus")![0]).toMatchObject({ status: "skipped", skipEventId: "sk1" });
+    expect(replayWorkout(workout, [...evs, ev("void", 2_000, { targetEventId: "sk1" })]).athletes.get("titus")![0]).toMatchObject({ status: "running", skipEventId: null });
+  });
+
   it("moving someone back counts, even when it's sent at an earlier rep than the move out", () => {
     const evs = [ev("move", 0, { athleteId: "eddy", groupId: "g2", repId: "a3" }), ev("move", 10_000, { athleteId: "eddy", groupId: "g1", repId: "a2" })];
     const s = replayWorkout(workout, evs);

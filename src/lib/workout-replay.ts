@@ -76,6 +76,8 @@ export type AthleteRep = {
   ownStartEventId: string | null;
   /** Skipped with the group, then run later on their own ("make-up"). */
   makeUp: boolean;
+  /** Their own skip of this rep, to undo it. */
+  skipEventId: string | null;
 };
 
 export type GroupPhase =
@@ -189,10 +191,10 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
   }
   const finishes = new Map<string, WorkoutEvent>(); // `${athleteId}:${ri}`, latest
   for (const e of ordered.filter((e) => e.type === "finish" && e.athleteId)) finishes.set(`${e.athleteId}:${repOf(e)}`, e);
-  const skipped = new Set<string>(); // `${athleteId}:${ri}` or `group:${groupId}:${ri}`
+  const skipped = new Map<string, string>(); // `${athleteId}:${ri}` or `group:${groupId}:${ri}` -> the skip event
   for (const e of ordered.filter((e) => e.type === "skip")) {
-    if (e.athleteId) skipped.add(`${e.athleteId}:${repOf(e)}`);
-    else if (e.groupId) skipped.add(`group:${e.groupId}:${repOf(e)}`);
+    if (e.athleteId) skipped.set(`${e.athleteId}:${repOf(e)}`, e.clientEventId);
+    else if (e.groupId) skipped.set(`group:${e.groupId}:${repOf(e)}`, e.clientEventId);
   }
   const stopEvents = ordered.filter((e) => (e.type === "stop" || e.type === "rejoin") && e.athleteId).sort((a, b) => repOf(a) - repOf(b) || a.serverTimeMs - b.serverTimeMs);
   const stoppedAt = (athleteId: string, ri: number) => {
@@ -243,6 +245,7 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
         finishEventId: fin?.clientEventId ?? null,
         ownStartEventId: ownStartEvent.get(`${id}:${rep.index}`) ?? null,
         makeUp,
+        skipEventId: skipped.get(`${id}:${rep.index}`) ?? null,
       };
     });
     athletes.set(id, list);

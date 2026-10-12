@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ComponentProps } from "react";
 
 export type ButtonVariant = "primary" | "secondary" | "subtle" | "tint" | "ghost" | "danger" | "danger-solid" | "gold" | "ink";
-export type ButtonSize = "sm" | "md" | "lg";
+export type ButtonSize = "sm" | "md" | "touch" | "lg" | "xl";
 
 const base =
   "inline-flex items-center justify-center gap-1.5 rounded-md font-medium whitespace-nowrap select-none transition-colors disabled:pointer-events-none disabled:opacity-45";
@@ -23,7 +23,11 @@ const variants: Record<ButtonVariant, string> = {
 const sizes: Record<ButtonSize, string> = {
   sm: "h-8 px-2.5 text-[13px]",
   md: "h-10 px-3.5 text-sm",
+  /** A md button a thumb hits easily mid-workout. */
+  touch: "h-11 px-3.5 text-sm",
   lg: "h-12 px-5 text-base",
+  /** The one big action on a timing screen. */
+  xl: "h-14 px-5 text-base",
 };
 
 export function buttonClass(variant: ButtonVariant = "primary", size: ButtonSize = "md", className = "") {

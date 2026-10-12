@@ -1,6 +1,6 @@
 "use client";
 
-/** Pill tabs: Overview | Rewards | Manage. */
+/** Pill switch for one choice: Everyone | Girls | Boys. (Radio semantics: these pick a view, they don't own panels.) */
 export function Segmented<T extends string>({
   value,
   onChange,
@@ -23,15 +23,15 @@ export function Segmented<T extends string>({
 }) {
   if (joined) {
     return (
-      <div role="tablist" className={`flex divide-x divide-line-strong overflow-hidden rounded-md border border-line-strong ${className}`}>
+      <div role="radiogroup" className={`flex divide-x divide-line-strong overflow-hidden rounded-md border border-line-strong ${className}`}>
         {options.map((o) => {
           const active = o.value === value;
           return (
             <button
               key={o.value}
-              role="tab"
+              role="radio"
               type="button"
-              aria-selected={active}
+              aria-checked={active}
               disabled={o.disabled}
               onClick={() => onChange(o.value)}
               className={`${size === "sm" ? "h-7 px-2.5 text-xs" : "h-9 px-3 text-sm"} min-w-0 flex-1 truncate font-medium transition-colors disabled:opacity-40 ${
@@ -46,15 +46,15 @@ export function Segmented<T extends string>({
     );
   }
   return (
-    <div role="tablist" className={`flex rounded-lg bg-surface-2 ${size === "sm" ? "p-0.5" : "p-1"} ${scroll ? "[scrollbar-width:none] overflow-x-auto" : ""} ${className}`}>
+    <div role="radiogroup" className={`flex rounded-lg bg-surface-2 ${size === "sm" ? "p-0.5" : "p-1"} ${scroll ? "[scrollbar-width:none] overflow-x-auto" : ""} ${className}`}>
       {options.map((o) => {
         const active = o.value === value;
         return (
           <button
             key={o.value}
-            role="tab"
+            role="radio"
             type="button"
-            aria-selected={active}
+            aria-checked={active}
             disabled={o.disabled}
             onClick={() => onChange(o.value)}
             className={`${size === "sm" ? "h-7 px-2.5 text-xs" : "h-9 px-3 text-sm"} rounded-md ${scroll ? "flex-[1_0_auto] whitespace-nowrap" : "min-w-0 flex-1 truncate"} font-medium transition-colors disabled:opacity-40 ${

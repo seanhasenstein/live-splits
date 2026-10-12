@@ -45,15 +45,24 @@ export function useWorkoutEvents(workoutId: string, initial: Plan, timingGroupId
   const failures = useRef(0);
   const retry = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flushRef = useRef<() => Promise<void>>(async () => {});
+  // Polls can overlap (the interval and a refresh after a plan change): an older answer must not undo a newer one.
+  const pollSeq = useRef(0);
+  const appliedSeq = useRef(0);
+  /** The server refused this phone (signed out, code replaced): taps wait here until it signs in again. */
+  const [signedOut, setSignedOut] = useState(false);
 
   const poll = useCallback(async () => {
+    const seq = ++pollSeq.current;
     try {
       const res = await fetch(`/api/workouts/${workoutId}/events?since=${since.current}${timingGroupId ? `&at=${encodeURIComponent(timingGroupId)}` : ""}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const body = (await res.json()) as { events: WorkoutEvent[]; serverTimeMs: number; workout: Plan; recording: { name: string; groupId: string }[] };
-      since.current = body.serverTimeMs;
-      setPlan(body.workout);
-      setRecording(body.recording);
+      if (seq > appliedSeq.current) {
+        appliedSeq.current = seq;
+        since.current = body.serverTimeMs;
+        setPlan(body.workout);
+        setRecording(body.recording);
+      }
       if (body.events.length) {
         setServerEvents((prev) => {
           const next = new Map(prev);
@@ -105,7 +114,13 @@ export function useWorkoutEvents(workoutId: string, initial: Plan, timingGroupId
       if (pending.length === 0) return;
       const batch = pending.slice(0, 100);
       const res = await fetch("/api/workout-events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ events: batch }) });
-      if (res.status === 400 || res.status === 403 || res.status === 404) {
+      if (res.status === 403) {
+        // Signed out or the code was replaced: keep every tap and say so; they send once signed in again.
+        setSignedOut(true);
+        return;
+      }
+      setSignedOut(false);
+      if (res.status === 400 || res.status === 404) {
         // Nothing to retry: drop them so the queue can't jam, and say so in the console.
         console.error("workout events rejected", res.status);
         const ids = new Set(batch.map((e) => e.clientEventId));
@@ -188,7 +203,7 @@ export function useWorkoutEvents(workoutId: string, initial: Plan, timingGroupId
     return [...all.values()];
   }, [serverEvents, queue]);
 
-  return { events, plan, send, online, loaded, unsent: queue.length, refresh: poll, recording };
+  return { events, plan, send, online, loaded, unsent: queue.length, refresh: poll, recording, signedOut };
 }
 
 function asEvent(e: Queued): WorkoutEvent {

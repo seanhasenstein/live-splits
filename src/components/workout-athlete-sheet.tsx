@@ -2,13 +2,12 @@
 
 import { useState } from "react";
 import { Button, Input, SectionLabel, Sheet, Time } from "@/components/ui";
+import { ON_GOAL_MS } from "@/components/workout-tint";
 import { useTimeFormat } from "@/lib/client/time-format";
 import { type AthleteRep, type FlatRep, summarize } from "@/lib/workout-replay";
 import { formatDateWithYear, formatElapsed, parseTypedTime } from "@/lib/time";
 import type { LastTime } from "@/lib/workouts";
 
-/** Within this of the goal counts as on it, as on the grid. */
-const ON_GOAL_MS = 1000;
 
 const tone = (delta: number | null) => (delta === null || Math.abs(delta) <= ON_GOAL_MS ? "text-ink-2" : delta < 0 ? "text-brand-text" : "text-danger");
 
@@ -151,7 +150,7 @@ export function AthleteBreakdown({
               </button>
               {editing === i && canType && (
                 <div className="space-y-2 pb-3">
-                  <Input autoFocus onFocus={(e) => e.target.select()} value={typed} onChange={(e) => setTyped(e.target.value)} inputMode="decimal" className="h-11 font-mono text-lg" aria-label={`Rep ${i + 1} time`} />
+                  <Input autoFocus onFocus={(e) => e.target.select()} value={typed} onChange={(e) => setTyped(e.target.value)} inputMode="decimal" className="h-11! font-mono text-lg!" aria-label={`Rep ${i + 1} time`} />
                   <p className="text-[13px] text-ink-2">{typed.trim() ? (typedMs !== null ? `= ${formatElapsed(typedMs)}` : "Not a time yet") : "Digits are enough: 116 is 1:16, 116.4 is 1:16.4."}</p>
                   <Button
                     className="w-full"

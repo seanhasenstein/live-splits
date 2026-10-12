@@ -6,7 +6,7 @@ import { WorkoutAthleteSheet } from "@/components/workout-athlete-sheet";
 import { RepCell, SHOW_DELTAS_KEY } from "@/components/workout-rep-cell";
 import { useLocalValue } from "@/lib/client/use-local-value";
 import { groupTint, ON_GOAL_MS, repCellTone } from "@/components/workout-tint";
-import { useClock } from "@/lib/client/clock";
+import { offsetForTap, useClock } from "@/lib/client/clock";
 import { useTimeFormat } from "@/lib/client/time-format";
 import { useWorkoutEvents } from "@/lib/client/use-workout-events";
 import type { Workout } from "@/lib/db/schema";
@@ -16,8 +16,6 @@ import { formatElapsed } from "@/lib/time";
 
 type Plan = Pick<Workout, "sets" | "groups" | "athletes"> & { finishedAt: string | null };
 type Person = { id: string; name: string; gender: "M" | "F" | "X"; level: string };
-
-const cellTone = repCellTone;
 
 const signed = (ms: number, digits: 0 | 1) => {
   const v = Math.round(ms / 10 ** (3 - digits)) / 10 ** digits;
@@ -50,7 +48,7 @@ export function WorkoutBoard({
   const offsetMs = clock.sync?.offsetMs ?? 0;
   const [now, setNow] = useState(0);
   useEffect(() => {
-    const tick = () => setNow(Date.now() + offsetMs);
+    const tick = () => setNow(Date.now() + offsetForTap()); // the same offset the taps are stamped with
     tick();
     const t = setInterval(tick, 100);
     return () => clearInterval(t);
@@ -142,7 +140,7 @@ export function WorkoutBoard({
                   {list.map((r, i) => (
                     <td key={r.repId} className={`px-1 py-1 text-right ${reps[i].number === 1 && i > 0 ? "border-l border-line" : ""}`}>
                       {r.status === "done" && r.elapsedMs !== null ? (
-                        <RepCell time={ft(r.elapsedMs)} delta={showDeltas && r.deltaMs !== null ? signed(r.deltaMs, digits) : null} tone={cellTone(r.deltaMs)} />
+                        <RepCell time={ft(r.elapsedMs)} delta={showDeltas && r.deltaMs !== null ? signed(r.deltaMs, digits) : null} tone={repCellTone(r.deltaMs)} />
                       ) : r.status === "skipped" ? (
                         <span className="px-1.5 text-xs whitespace-nowrap text-ink-3">skipped</span>
                       ) : r.status === "stopped" ? (
@@ -243,7 +241,9 @@ export function WorkoutBoard({
  */
 function GroupStatus({ name, phase, log, reps, now, timers }: { name: string; phase: GroupPhase; log: GroupRepLog[]; reps: ReturnType<typeof replayWorkout>["reps"]; now: number; timers: string[] }) {
   const sets = reps.some((r) => r.setIndex > 0);
-  const repNo = (i: number) => (sets ? `${reps[i].setIndex + 1}.${reps[i].number}` : String(i + 1));
+  // Reps count through the whole workout ("rep 5 of 12"); with sets, which set it's in goes alongside.
+  const repNo = (i: number) => String(i + 1);
+  const setNote = (i: number) => (sets ? <span className="font-normal text-ink-2"> · set {reps[i].setIndex + 1}</span> : null);
   // The rep clock runs while the rep does, and on through the rest while anyone is still out.
   const repStartMs = phase.kind === "running" ? phase.startMs : phase.kind === "rest" && phase.stillOut ? (log.find((l) => l.repIndex === phase.afterRepIndex)?.startMs ?? null) : null;
   const leftMs = phase.kind === "rest" && phase.nextStartMs !== null ? phase.nextStartMs - now : null;
@@ -255,6 +255,7 @@ function GroupStatus({ name, phase, log, reps, now, timers }: { name: string; ph
     phase.kind === "running" ? (
       <>
         Rep {repNo(phase.repIndex)} <span className="font-normal text-ink-2">of {reps.length}</span>
+        {setNote(phase.repIndex)}
       </>
     ) : phase.kind === "rest" ? (
       <>

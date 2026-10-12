@@ -279,8 +279,9 @@ export function WorkoutForm({
           description={`Goal per ${mainLabel}. Proposed from each runner's 5K (season best, else PR) at ${EFFORT_LABEL[effort]}; type over any of them. Other distances scale from the same pace.`}
           action={
             effort !== "custom" && (
-              <Button variant="secondary" size="sm" onClick={() => fillGoals(athletes.some((a) => a.goal !== null) ? "all" : "empty")}>
-                Fill goals from 5Ks
+              <Button variant="secondary" size="sm" onClick={() => fillGoals(athletes.some((a) => a.in && a.goal === null) ? "empty" : "all")}>
+                {/* Fills the blanks and keeps what's typed; once every goal is set, it refills them all. */}
+                {athletes.some((a) => a.in && a.goal === null) ? "Fill goals from 5Ks" : "Refill goals from 5Ks"}
               </Button>
             )
           }
@@ -335,7 +336,7 @@ export function WorkoutForm({
                             onChange={(e) => setGoalFromText(a.athleteId, e.target.value)}
                             placeholder="goal"
                             inputMode="decimal"
-                            className={`text-right font-mono ${draft && parsed === null ? "border-danger" : ""}`}
+                            className={`text-right font-mono ${draft && parsed === null ? "border-danger!" : ""}`}
                             aria-label={`${r.name}'s goal per ${mainLabel}`}
                           />
                         </div>
