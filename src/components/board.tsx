@@ -966,55 +966,59 @@ function AthleteSheet({
         })}
       </div>
       {finishes.length > 0 && (
-        <button
-          type="button"
-          onClick={() => setHistoryOpen((o) => !o)}
-          aria-expanded={historyOpen}
-          className={`mt-3 flex w-full items-center gap-2 rounded-lg border border-line px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-surface-2 ${historyOpen ? "bg-surface-2" : ""}`}
-        >
-          <HistoryIcon className="size-4 text-ink-2" />
-          <span className="flex-1">History</span>
-          <span className="text-[13px] font-normal text-ink-2">
-            {finishes.length} earlier {race.distanceLabel}
-            {finishes.length === 1 ? "" : "s"}
-          </span>
-          <ChevronRight className={`size-4 text-ink-3 transition-transform ${historyOpen ? "rotate-90" : ""}`} />
-        </button>
-      )}
-      {historyOpen && finishes.length > 0 && (
-        <div className="mt-3 space-y-3">
-          {(() => {
-            // The season's arc, once there's enough of it to draw. A career chart belongs on the athlete page.
-            const seasonPoints = [...season.map((f) => ({ ms: f.ms, label: shortDate(f.date), today: false })), ...(finish !== null ? [{ ms: finish, label: "today", today: true }] : [])];
-            return seasonPoints.length >= 3 && <ProgressChart title={`${seasonYear} season`} points={seasonPoints} prMs={bests?.pr?.ms ?? null} ft={ft} />;
-          })()}
-          <FinishList
-            title={`Fastest ${race.distanceLabel}s ever`}
-            note={rank !== null ? `Today ranks ${rank}${ordinal(rank)} of ${finishes.length + 1} races` : undefined}
-            rows={fastest}
-            today={finish !== null && rank !== null && rank <= 5 ? { ms: finish, rank, tags: todayTags } : null}
-            meetName={meetName}
-            todaySplits={todaySplits}
-            checkpoints={checkpointLabels}
-            tags={tagsFor}
-            link={raceLink}
-            ft={ft}
-            when={(f) => `${f.meetName}, ${year(f.date)}`}
-          />
-          {season.length > 0 && (
-            <FinishList
-              title={`${seasonYear} season`}
-              note={seasonRank !== null ? `Today ranks ${seasonRank}${ordinal(seasonRank)} of ${season.length + 1} this season` : undefined}
-              rows={season}
-              today={finish !== null ? { ms: finish, rank: null, tags: todayTags } : null}
-              meetName={meetName}
-              todaySplits={todaySplits}
-              checkpoints={checkpointLabels}
-              tags={tagsFor}
-              link={raceLink}
-              ft={ft}
-              when={(f) => `${f.meetName} · ${shortDate(f.date)}`}
-            />
+        <div className="mt-3 rounded-lg border border-line">
+          {/* The row is the section's header; open, the lists and the chart sit inside the same card. */}
+          <button
+            type="button"
+            onClick={() => setHistoryOpen((o) => !o)}
+            aria-expanded={historyOpen}
+            className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-surface-2 ${historyOpen ? "rounded-b-none border-b border-line bg-surface-2" : ""}`}
+          >
+            <HistoryIcon className="size-4 text-ink-2" />
+            <span className="flex-1">History</span>
+            <span className="text-[13px] font-normal text-ink-2">
+              {!historyOpen && !todayIsPR && bests?.pr ? `PR ${ft(bests.pr.ms)} · ` : ""}
+              {finishes.length} earlier {race.distanceLabel}
+              {finishes.length === 1 ? "" : "s"}
+            </span>
+            <ChevronRight className={`size-4 text-ink-3 transition-transform ${historyOpen ? "rotate-90" : ""}`} />
+          </button>
+          {historyOpen && (
+            <div className="divide-y divide-line">
+              <FinishList
+                title={`Fastest ${race.distanceLabel}s ever`}
+                note={rank !== null ? `Today ranks ${rank}${ordinal(rank)} of ${finishes.length + 1} races` : undefined}
+                rows={fastest}
+                today={finish !== null && rank !== null && rank <= 5 ? { ms: finish, rank, tags: todayTags } : null}
+                meetName={meetName}
+                todaySplits={todaySplits}
+                checkpoints={checkpointLabels}
+                tags={tagsFor}
+                link={raceLink}
+                ft={ft}
+                when={(f) => `${f.meetName}, ${year(f.date)}`}
+              />
+              {season.length > 0 && (
+                <FinishList
+                  title={`${seasonYear} season`}
+                  note={seasonRank !== null ? `Today ranks ${seasonRank}${ordinal(seasonRank)} of ${season.length + 1} this season` : undefined}
+                  rows={season}
+                  today={finish !== null ? { ms: finish, rank: null, tags: todayTags } : null}
+                  meetName={meetName}
+                  todaySplits={todaySplits}
+                  checkpoints={checkpointLabels}
+                  tags={tagsFor}
+                  link={raceLink}
+                  ft={ft}
+                  when={(f) => `${f.meetName} · ${shortDate(f.date)}`}
+                />
+              )}
+              {(() => {
+                // The season's arc, once there's enough of it to draw. A career chart belongs on the athlete page.
+                const seasonPoints = [...season.map((f) => ({ ms: f.ms, label: shortDate(f.date), today: false })), ...(finish !== null ? [{ ms: finish, label: "today", today: true }] : [])];
+                return seasonPoints.length >= 3 && <ProgressChart title={`${seasonYear} season`} points={seasonPoints} prMs={bests?.pr?.ms ?? null} ft={ft} />;
+              })()}
+            </div>
           )}
         </div>
       )}
@@ -1029,7 +1033,7 @@ function AthleteSheet({
           <ChevronRight className="size-4 shrink-0" />
         </Button>
       </div>
-      <p className="mt-2 text-xs text-ink-3">
+      <p className="mt-4 text-xs leading-relaxed text-ink-3">
         {officialCount === 0 && timedCount > 0 && "Times are from the app, not the timing company. "}
         {officialCount > 0 && officialCount < timedCount && "Times not marked official are from the app. "}
         {row?.record?.unofficial && "Records are provisional until official results are imported. "}
@@ -1385,8 +1389,8 @@ function ProgressChart({ title, points, prMs, ft }: { title: string; points: { m
   const y = (ms: number) => padTop + ((ms - lo) / span) * (H - padTop - padBottom);
   const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.ms).toFixed(1)}`).join(" ");
   return (
-    <div className="rounded-lg border border-line">
-      <div className="flex items-baseline justify-between border-b border-line px-3 py-2">
+    <div className="pb-1">
+      <div className="flex items-baseline justify-between px-3 pt-2.5 pb-1">
         <SectionLabel>{title}</SectionLabel>
         <span className="text-[11px] text-ink-3">lower is faster</span>
       </div>
@@ -1500,12 +1504,12 @@ function FinishList({
     );
   }
   return (
-    <div className="rounded-lg border border-line">
-      <div className="flex items-baseline justify-between gap-3 border-b border-line px-3 py-2">
+    <div className="pb-1">
+      <div className="flex items-baseline justify-between gap-3 px-3 pt-2.5 pb-1">
         <SectionLabel>{title}</SectionLabel>
         {note && <span className="text-[11px] text-ink-3">{note}</span>}
       </div>
-      <div className="flex flex-col p-1">{items}</div>
+      <div className="flex flex-col px-1">{items}</div>
     </div>
   );
 }
