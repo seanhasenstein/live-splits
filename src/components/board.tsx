@@ -955,11 +955,9 @@ function AthleteSheet({
       {historyOpen && finishes.length > 0 && (
         <div className="mt-4 space-y-5">
           {(() => {
-            // The season's story once there's enough of it to draw; before that, the years.
+            // The season's arc, once there's enough of it to draw. A career chart belongs on the athlete page.
             const seasonPoints = [...season.map((f) => ({ ms: f.ms, label: shortDate(f.date), today: false })), ...(finish !== null ? [{ ms: finish, label: "today", today: true }] : [])];
-            const allPoints = [...[...finishes].sort((a, b) => a.date.localeCompare(b.date)).map((f) => ({ ms: f.ms, label: year(f.date), today: false })), ...(finish !== null ? [{ ms: finish, label: "today", today: true }] : [])];
-            const pts = seasonPoints.length >= 3 ? seasonPoints : allPoints.length >= 3 ? allPoints : null;
-            return pts && <ProgressChart title={pts === seasonPoints ? `${seasonYear} season` : "All time"} points={pts} prMs={bests?.pr?.ms ?? null} ft={ft} />;
+            return seasonPoints.length >= 3 && <ProgressChart title={`${seasonYear} season`} points={seasonPoints} prMs={bests?.pr?.ms ?? null} ft={ft} />;
           })()}
           <FinishList
             title={`Fastest ${race.distanceLabel}s ever`}
