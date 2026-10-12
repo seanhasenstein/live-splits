@@ -33,6 +33,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps<"/
     <Board
       meetId={meet._id}
       meetName={meet.name}
+      meetDate={meet.date}
       session={{ name: session.name, role: isSchoolCoach(session) ? "coach" : session.role }}
       initialRaceId={typeof race === "string" ? race : null}
       timeZone={meet.timeZone}

@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Pencil, Share } from "lucide-react";
+import { Fragment, type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, History as HistoryIcon, Pencil, Share } from "lucide-react";
 import { CheckpointCounts, DeltaText, RaceStatusBar, RecordPill, RunningClock } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
-import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, LiveDot, SectionLabel, Segmented, Select, Sheet, Time, Toast } from "@/components/ui";
+import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, LiveDot, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useTimeFormat } from "@/lib/client/time-format";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
@@ -38,6 +38,8 @@ type RaceInfo = {
 type Props = {
   meetId: string;
   meetName: string;
+  /** Local ISO date; the season year for History. */
+  meetDate: string;
   session: { name: string; role: string };
   initialRaceId: string | null;
   timeZone: string;
@@ -62,7 +64,7 @@ const OVERDUE_MS = 60_000;
 const eventTimeMs = (_e: SyntheticEvent) => Date.now();
 
 
-export function Board({ meetId, meetName, session, initialRaceId, timeZone, races, athletes, genders, grades, initialAthleteId, canFix, canTap }: Props) {
+export function Board({ meetId, meetName, meetDate, session, initialRaceId, timeZone, races, athletes, genders, grades, initialAthleteId, canFix, canTap }: Props) {
   const [raceId, setRaceId] = useState(() => (races.some((r) => r.id === initialRaceId) ? initialRaceId! : (races[0]?.id ?? "")));
   const race = races.find((r) => r.id === raceId) ?? races[0];
 
@@ -99,6 +101,7 @@ export function Board({ meetId, meetName, session, initialRaceId, timeZone, race
           key={race.id}
           meetId={meetId}
           meetName={meetName}
+          meetDate={meetDate}
           race={race}
           timeZone={timeZone}
           athletes={athletes}
@@ -121,6 +124,7 @@ type Row = { athleteId: string; marks: (Mark | undefined)[]; cells: Cell[]; reac
 function RaceBoard({
   meetId,
   meetName,
+  meetDate,
   race,
   timeZone,
   athletes,
@@ -133,6 +137,7 @@ function RaceBoard({
 }: {
   meetId: string;
   meetName: string;
+  meetDate: string;
   race: RaceInfo;
   timeZone: string;
   athletes: Record<string, string>;
@@ -607,6 +612,7 @@ function RaceBoard({
         <AthleteSheet
           race={race}
           meetName={meetName}
+          meetDate={meetDate}
           row={allRows.find((r) => r.athleteId === openAthlete)}
           name={athletes[openAthlete] ?? "?"}
           grade={grades[openAthlete] ?? null}
@@ -686,6 +692,7 @@ type Send = ReturnType<typeof useRaceTaps>["send"];
 function AthleteSheet({
   race,
   meetName,
+  meetDate,
   row,
   name,
   grade,
@@ -702,6 +709,7 @@ function AthleteSheet({
 }: {
   race: RaceInfo;
   meetName: string;
+  meetDate: string;
   row: Row | undefined;
   name: string;
   grade: number | null;
@@ -727,13 +735,13 @@ function AthleteSheet({
   const finishes = bests?.finishes ?? [];
   // Their most recent earlier race, for the default comparison; the season list in date order; the top five ever.
   const byDate = [...finishes].sort((a, b) => b.date.localeCompare(a.date));
-  const lastRace = byDate[0] ?? null;
   const season = byDate.filter((f) => f.thisSeason).reverse();
+  const seasonYear = meetDate.slice(0, 4);
+  const year = (date: string) => date.slice(0, 4);
+  const shortDate = (date: string) => formatLocalDate(date).replace(/^[A-Za-z]+, /, "");
   const fastest = finishes.slice(0, 5);
   // History is closed until asked for: the race in front of you comes first.
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [compareId, setCompareId] = useState<string | null>(null);
-  const compareTo = historyOpen ? (compareId ? (finishes.find((f) => f.raceId === compareId) ?? null) : lastRace) : null;
   const t = (i: number): number | null => {
     const c = row?.cells[i];
     return c ? (c.official ?? c.elapsedMs) : null;
@@ -782,16 +790,30 @@ function AthleteSheet({
       // dismissed
     }
   };
-  const refAt = (i: number): number | null => {
-    if (!compareTo) return null;
-    const c = race.checkpoints[i];
-    return c.kind === "finish" ? compareTo.ms : (compareTo.splits[String(c.meters)] ?? null);
-  };
-  // Where today's run sits among everything they've done at this distance.
+  // Where today's run sits among everything they've done at this distance, and this season.
   const rank = finish !== null ? finishes.filter((f) => f.ms < finish).length + 1 : null;
+  const seasonRank = finish !== null ? season.filter((f) => f.ms < finish).length + 1 : null;
+  // Today's cumulative times by checkpoint meters, for comparing against an earlier race.
+  const todaySplits: Record<string, number> = {};
+  race.checkpoints.forEach((c, i) => {
+    const v = t(i);
+    if (v !== null) todaySplits[String(Math.round(c.meters))] = v;
+  });
+  const checkpointLabels = race.checkpoints.map((c) => ({ meters: String(Math.round(c.meters)), label: c.label }));
+  // Lines a row can wear in the lists: the fastest ever, the fastest this season, the same course as today.
+  const prRaceId = finishes[0]?.raceId ?? null;
+  const sbRaceId = [...season].sort((a, b) => a.ms - b.ms)[0]?.raceId ?? null;
+  const tagsFor = (f: PriorFinish) => [...(f.raceId === prRaceId ? ["PR"] : []), ...(f.raceId === sbRaceId ? ["SB"] : []), ...(f.sameCourse ? ["this course"] : [])];
+  // On pace for a record while they're still out: the projection against what they came in with.
+  const onPace = finish === null && projected !== null && bests ? recordBadge(projected, bests, true) : null;
+  // A near miss: top three ever, or top three this season, said in words rather than a pill.
+  const nearMiss =
+    finish !== null && !row?.record && bests && rank !== null && rank <= 3 && bests.pr
+      ? `${rank}${ordinal(rank)} fastest ever · ${Math.max(1, Math.round((finish - bests.pr.ms) / 1000))} s off their PR (${ft(bests.pr.ms)}, ${bests.pr.meetName} ${year(bests.pr.date)})`
+      : finish !== null && !row?.record && bests && seasonRank !== null && seasonRank <= 3 && bests.sb
+        ? `${seasonRank}${ordinal(seasonRank)} fastest this season · SB ${ft(bests.sb.ms)} at ${bests.sb.meetName}`
+        : null;
   const raceLink = (f: { meetId: string; raceId: string }) => `/meets/${f.meetId}/results?race=${f.raceId}&athlete=${row?.athleteId ?? ""}`;
-  const year = (date: string) => date.slice(0, 4);
-  const shortDate = (date: string) => formatLocalDate(date).replace(/^[A-Za-z]+, /, "");
 
   return (
     <Sheet
@@ -832,7 +854,13 @@ function AthleteSheet({
                     const where = row.record.kind === "course" ? `here, ${year(prev.date)}` : row.record.kind === "sb" ? `at ${prev.meetName}` : `${prev.meetName}, ${year(prev.date)}`;
                     return `${row.record.kind === "pr" ? "Previous best" : `${RECORD_LABEL[row.record.kind].short} · previous`} ${ft(prev.ms)} · ${where}`;
                   })()}
-                  {row.record.unofficial && (row.record.uncertain ? ` · by ${Math.max(1, Math.round((row.record.previousMs - finish!) / 1000))} s, pending official results` : " · pending official results")}
+                  {row.record.unofficial && row.record.uncertain && ` · by ${Math.max(1, Math.round((row.record.previousMs - finish!) / 1000))} s`}
+                </span>
+              ) : nearMiss ? (
+                <span className="block text-[13px] text-ink-2">{nearMiss}</span>
+              ) : onPace && bests ? (
+                <span className="block text-[13px] text-brand-text">
+                  On pace for a {RECORD_LABEL[onPace.kind].short} · {RECORD_LABEL[onPace.kind].short} {ft(bests[onPace.kind]!.ms)}
                 </span>
               ) : (
                 avgPace !== null && <Time className="block text-[13px] text-ink-2">{formatElapsed(avgPace).replace(/\.\d$/, "")}/mi average</Time>
@@ -876,7 +904,8 @@ function AthleteSheet({
             <SmallStat value={`${formatElapsed(Math.max(0, raceClockMs - lastSeen.at)).replace(/\.\d$/, "")} ago`} label={`passed ${lastSeen.label}`} align="right" />
           ) : (
             finishes.length > 0 && (
-              <Button size="sm" variant={historyOpen ? "secondary" : "ghost"} onClick={() => setHistoryOpen((o) => !o)} aria-expanded={historyOpen} className="shrink-0">
+              <Button size="sm" variant="secondary" onClick={() => setHistoryOpen((o) => !o)} aria-expanded={historyOpen} className="shrink-0">
+                <HistoryIcon className="size-3.5" />
                 History
               </Button>
             )
@@ -889,14 +918,13 @@ function AthleteSheet({
           <span className="min-w-0 flex-1">Checkpoint</span>
           <span className="w-16 shrink-0 text-right">Time</span>
           <span className="w-32 shrink-0 text-right">Split · pace</span>
-          {compareTo && <span className="w-14 shrink-0 text-right">vs</span>}
+
         </div>
         {race.checkpoints.map((c, i) => {
           const here = t(i);
           const before = i > 0 ? t(i - 1) : here !== null ? 0 : null;
           const split = here !== null && before !== null ? here - before : null;
           const segMeters = c.meters - (i > 0 ? race.checkpoints[i - 1].meters : 0);
-          const ref = refAt(i);
           const cell = row?.cells[i];
           return (
             <div key={c.id} className="flex items-center gap-x-3 px-3 py-2 text-sm">
@@ -919,42 +947,46 @@ function AthleteSheet({
               <Time className="w-32 shrink-0 text-right whitespace-nowrap text-ink-2">
                 {split !== null && segMeters > 0 ? `${ft(split)} · ${formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}/mi` : "—"}
               </Time>
-              {compareTo && (
-                <Time className="w-14 shrink-0 text-right">{here !== null && ref !== null ? <DeltaText ms={here - ref} /> : ref !== null ? <span className="text-ink-3">{ft(ref, compareTo.precision)}</span> : <span className="text-ink-3">—</span>}</Time>
-              )}
+
             </div>
           );
         })}
       </div>
       {historyOpen && finishes.length > 0 && (
-        <div className="mt-4 space-y-4">
-          {compareTo && (
-            <label className="flex items-center gap-2 text-[13px] text-ink-2">
-              <span className="shrink-0">Splits compared to</span>
-              <Select value={compareTo.raceId} onChange={(e) => setCompareId(e.target.value)} className="min-w-0 flex-1" aria-label="Compare splits to">
-                {byDate.map((f) => (
-                  <option key={f.raceId} value={f.raceId}>
-                    {f.meetName} {year(f.date)} · {ft(f.ms, f.precision)}
-                    {Object.keys(f.splits).length === 0 ? " (finish only)" : ""}
-                  </option>
-                ))}
-              </Select>
-            </label>
-          )}
+        <div className="mt-4 space-y-5">
+          {(() => {
+            // The season's story once there's enough of it to draw; before that, the years.
+            const seasonPoints = [...season.map((f) => ({ ms: f.ms, label: shortDate(f.date), today: false })), ...(finish !== null ? [{ ms: finish, label: "today", today: true }] : [])];
+            const allPoints = [...[...finishes].sort((a, b) => a.date.localeCompare(b.date)).map((f) => ({ ms: f.ms, label: year(f.date), today: false })), ...(finish !== null ? [{ ms: finish, label: "today", today: true }] : [])];
+            const pts = seasonPoints.length >= 3 ? seasonPoints : allPoints.length >= 3 ? allPoints : null;
+            return pts && <ProgressChart title={pts === seasonPoints ? `${seasonYear} season` : "All time"} points={pts} prMs={bests?.pr?.ms ?? null} ft={ft} />;
+          })()}
           <FinishList
-            title={`Fastest ${race.distanceLabel}s`}
+            title={`Fastest ${race.distanceLabel}s ever`}
+            note={rank !== null ? `today ranks ${rank}${ordinal(rank)} of ${finishes.length + 1}` : undefined}
             rows={fastest}
             today={finish !== null && rank !== null && rank <= 5 ? { ms: finish, rank } : null}
+            meetName={meetName}
+            todaySplits={todaySplits}
+            checkpoints={checkpointLabels}
+            tags={tagsFor}
             link={raceLink}
             ft={ft}
             when={(f) => `${f.meetName}, ${year(f.date)}`}
           />
-          {season.length > 0 && <FinishList title="This season" rows={season} today={finish !== null ? { ms: finish, rank: null } : null} link={raceLink} ft={ft} when={(f) => `${f.meetName} · ${shortDate(f.date)}`} />}
-          {rank !== null && finishes.length > 0 && (
-            <p className="text-[13px] text-ink-2">
-              Today: {rank}
-              {ordinal(rank)} fastest of their {finishes.length + 1} {race.distanceLabel}s.
-            </p>
+          {season.length > 0 && (
+            <FinishList
+              title={`${seasonYear} season`}
+              rows={season}
+              today={finish !== null ? { ms: finish, rank: null } : null}
+              meetName={meetName}
+              todaySplits={todaySplits}
+              checkpoints={checkpointLabels}
+              tags={tagsFor}
+              link={raceLink}
+              ft={ft}
+              when={(f) => `${f.meetName} · ${shortDate(f.date)}`}
+            />
           )}
         </div>
       )}
@@ -972,6 +1004,8 @@ function AthleteSheet({
       <p className="mt-2 text-xs text-ink-3">
         {officialCount === 0 && timedCount > 0 && "Times are from the app, not the timing company. "}
         {officialCount > 0 && officialCount < timedCount && "Times not marked official are from the app. "}
+        {row?.record?.unofficial && "Records are provisional until official results are imported. "}
+        {race.placesDerived && "Places are ranked by the app within our division. "}
         {finishes.length === 0 && `No earlier ${race.distanceLabel} results in the app to compare with.`}
       </p>
     </Sheet>
@@ -1308,40 +1342,141 @@ function Btn({ onClick, children, danger, active }: { onClick: (e: SyntheticEven
   );
 }
 
-/** A short list of earlier finishes, each a link to that meet, with today's run slotted in where it ranks. */
+/** Season (or career) finishes as a small line: lower is faster, today marked, the PR as a faint line. */
+function ProgressChart({ title, points, prMs, ft }: { title: string; points: { ms: number; label: string; today: boolean }[]; prMs: number | null; ft: (ms: number) => string }) {
+  const W = 320;
+  const H = 96;
+  const padX = 14;
+  const padTop = 10;
+  const padBottom = 22;
+  const all = [...points.map((p) => p.ms), ...(prMs !== null ? [prMs] : [])];
+  const lo = Math.min(...all);
+  const hi = Math.max(...all);
+  const span = Math.max(hi - lo, 30_000); // never flatter than a 30 s window
+  const x = (i: number) => padX + (points.length === 1 ? (W - 2 * padX) / 2 : (i * (W - 2 * padX)) / (points.length - 1));
+  const y = (ms: number) => padTop + ((ms - lo) / span) * (H - padTop - padBottom);
+  const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.ms).toFixed(1)}`).join(" ");
+  return (
+    <div>
+      <div className="mb-1 flex items-baseline justify-between px-2">
+        <SectionLabel>{title}</SectionLabel>
+        <span className="text-[11px] text-ink-3">lower is faster</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full" role="img" aria-label={`${title}: ${points.map((p) => `${p.label} ${ft(p.ms)}`).join(", ")}`}>
+        {prMs !== null && (
+          <>
+            <line x1={padX} x2={W - padX} y1={y(prMs)} y2={y(prMs)} className="stroke-brand/50" strokeDasharray="3 3" />
+            <text x={W - padX} y={y(prMs) - 3} textAnchor="end" className="fill-brand-text text-[9px] font-semibold">
+              PR {ft(prMs)}
+            </text>
+          </>
+        )}
+        <path d={path} fill="none" className="stroke-ink-2" strokeWidth="1.5" />
+        {points.map((p, i) => (
+          <g key={i}>
+            <circle cx={x(i)} cy={y(p.ms)} r={p.today ? 4 : 2.5} className={p.today ? "fill-brand" : "fill-ink"} />
+            <text x={x(i)} y={H - 8} textAnchor={i === 0 ? "start" : i === points.length - 1 ? "end" : "middle"} className={`text-[9px] ${p.today ? "fill-brand-text font-semibold" : "fill-ink-3"}`}>
+              {p.label}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+/**
+ * A short list of earlier finishes with today's run slotted in where it
+ * ranks. Tap a row to see that race's splits beside today's; "Open" goes
+ * to that meet.
+ */
 function FinishList({
   title,
+  note,
   rows,
   today,
+  meetName,
+  todaySplits,
+  checkpoints,
+  tags,
   link,
   ft,
   when,
 }: {
   title: string;
+  note?: string;
   rows: PriorFinish[];
   /** Today's finish; rank null means "append in date order" (a season list). */
   today: { ms: number; rank: number | null } | null;
+  meetName: string;
+  todaySplits: Record<string, number>;
+  checkpoints: { meters: string; label: string }[];
+  tags: (f: PriorFinish) => string[];
   link: (f: PriorFinish) => string;
   ft: (ms: number, p?: Precision | null) => string;
   when: (f: PriorFinish) => string;
 }) {
-  const todayRow = <span className="flex items-center gap-x-3 rounded-md bg-brand-soft px-2 py-1 text-sm">
-    <span className="min-w-0 flex-1 font-medium text-ink">Today</span>
-    <Time className="shrink-0 font-semibold text-ink">{today ? ft(today.ms) : ""}</Time>
-  </span>;
-  const items: ReactNode[] = rows.map((f) => (
-    <Link key={f.raceId} href={link(f)} className="flex items-center gap-x-3 rounded-md px-2 py-1 text-sm hover:bg-surface-2">
-      <span className="min-w-0 flex-1 truncate text-ink-2">{when(f)}</span>
-      <Time className="shrink-0 font-medium text-ink">{ft(f.ms, f.precision)}</Time>
-    </Link>
-  ));
+  const [open, setOpen] = useState<string | null>(null);
+  const tag = (text: string) => (
+    <span key={text} className="rounded border border-line px-1 text-[10px] font-semibold tracking-wide text-ink-2 uppercase">
+      {text}
+    </span>
+  );
+  const items: ReactNode[] = rows.map((f) => {
+    const isOpen = open === f.raceId;
+    return (
+      <div key={f.raceId} className="rounded-md">
+        <button type="button" onClick={() => setOpen(isOpen ? null : f.raceId)} aria-expanded={isOpen} className={`flex w-full items-center gap-x-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-2 ${isOpen ? "bg-surface-2" : ""}`}>
+          <span className="min-w-0 flex-1 truncate text-ink-2">{when(f)}</span>
+          {tags(f).map(tag)}
+          <Time className="shrink-0 font-medium text-ink">{ft(f.ms, f.precision)}</Time>
+        </button>
+        {isOpen && (
+          <div className="px-2 pt-1 pb-2">
+            <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 gap-y-1 text-[13px]">
+              <span />
+              <span className="text-right text-[10px] font-semibold tracking-wide text-ink-3 uppercase">then</span>
+              <span className="text-right text-[10px] font-semibold tracking-wide text-ink-3 uppercase">today</span>
+              <span className="w-12 text-right text-[10px] font-semibold tracking-wide text-ink-3 uppercase">diff</span>
+              {checkpoints.map((c) => {
+                const then = c.meters === checkpoints[checkpoints.length - 1].meters ? f.ms : (f.splits[c.meters] ?? null);
+                const now = todaySplits[c.meters] ?? null;
+                return (
+                  <Fragment key={c.meters}>
+                    <span className="text-ink-2">{c.label}</span>
+                    <Time className="text-right text-ink-2">{then !== null ? ft(then, f.precision) : "—"}</Time>
+                    <Time className="text-right font-medium text-ink">{now !== null ? ft(now) : "—"}</Time>
+                    <Time className="w-12 text-right">{then !== null && now !== null ? <DeltaText ms={now - then} /> : <span className="text-ink-3">—</span>}</Time>
+                  </Fragment>
+                );
+              })}
+            </div>
+            <Link href={link(f)} className="mt-2 inline-block text-[13px] text-ink underline decoration-line underline-offset-2">
+              Open {f.meetName} {f.date.slice(0, 4)}
+            </Link>
+          </div>
+        )}
+      </div>
+    );
+  });
   if (today) {
     const at = today.rank === null ? items.length : Math.min(today.rank - 1, items.length);
-    items.splice(at, 0, <span key="today">{todayRow}</span>);
+    items.splice(
+      at,
+      0,
+      <div key="today" className="flex items-center gap-x-2 rounded-md bg-brand-soft px-2 py-1.5 text-sm">
+        <span className="min-w-0 flex-1 truncate font-medium text-ink">{meetName}</span>
+        {tag("today")}
+        <Time className="shrink-0 font-semibold text-ink">{ft(today.ms)}</Time>
+      </div>,
+    );
   }
   return (
     <div>
-      <SectionLabel className="mb-1 px-2">{title}</SectionLabel>
+      <div className="mb-1 flex items-baseline justify-between gap-3 px-2">
+        <SectionLabel>{title}</SectionLabel>
+        {note && <span className="text-[11px] text-ink-3">{note}</span>}
+      </div>
       <div className="-mx-2 flex flex-col">{items}</div>
     </div>
   );
