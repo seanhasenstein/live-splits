@@ -121,6 +121,30 @@ export function parseTypedTime(text: string): number | null {
   return Math.round(((hours * 60 + minutes) * 60 + seconds + Number(m[2] ?? 0)) * 1000);
 }
 
+/**
+ * A duration typed for a rest or a rep goal: "60" and "78.5" are seconds
+ * (how coaches say rests and 400s), "1:30" and "3:20" are minutes:seconds,
+ * and three or more digits read like a microwave ("320" is 3:20).
+ */
+export function parseDuration(text: string): number | null {
+  const t = text.trim();
+  if (!t) return null;
+  if (t.includes(":")) return parseTypedTime(t);
+  const n = Number(t);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (n < 100) return Math.round(n * 1000);
+  return parseTypedTime(t);
+}
+
+/** How a duration is written back into a field, the way parseDuration reads it: "45", "78.5"→"1:18.5", "3:20". */
+export function formatDuration(ms: number): string {
+  if (ms < 60_000) {
+    const s = ms / 1000;
+    return `${Number.isInteger(s) ? s : s.toFixed(1)}`;
+  }
+  return formatElapsed(ms, ms % 1000 === 0 ? "seconds" : "tenths");
+}
+
 export function parseElapsed(text: string): number | null {
   const m = text.trim().match(/^(?:(\d+):)?(?:(\d{1,2}):)?(\d{1,4}(?:\.\d{1,3})?)$/);
   if (!m) return null;

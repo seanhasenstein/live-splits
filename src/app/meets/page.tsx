@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { CalendarDays, History, Plus } from "lucide-react";
 import { redirect } from "next/navigation";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { SectionTabs } from "@/components/section-tabs";
 import { SessionMenu } from "@/components/session-menu";
 import { ShareSeason } from "@/components/share-season";
 import { AppHeader, Badge, Card, EmptyState, LinkButton, LiveDot, Page, PageTitle, SectionLabel } from "@/components/ui";
@@ -93,6 +94,7 @@ export default async function MeetsPage() {
       <AppHeader right={<SessionMenu name={session.name} role={coach ? "coach" : "viewer"} />} />
       <Page>
         <AutoRefresh everyMs={anyLive ? 10000 : 60000} />
+        {coach && <SectionTabs active="meets" />}
         <PageTitle
           title="Meets"
           description={school?.name ?? "This season"}

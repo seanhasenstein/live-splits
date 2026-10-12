@@ -115,7 +115,7 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
           <Stat value={unknown.filter((a) => namesInChosen.has(a.name)).length} label="names to settle" tone={unknown.some((a) => namesInChosen.has(a.name)) ? "gold" : "ink"} />
         </CardBody>
         {years.length > 0 && (
-          <CardBody className="p-0">
+          <CardBody flush>
             <div className="px-4 py-2 text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">Seasons</div>
             <div className="divide-y divide-line border-t border-line">
               {years.map((y) => {
@@ -173,7 +173,7 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
                   </CardBody>
                 )}
                 {!existing && (
-                  <CardBody className="overflow-x-auto p-0">
+                  <CardBody flush className="overflow-x-auto">
                     <table className={`w-full text-sm ${checked ? "" : "opacity-50"}`}>
                       <thead>
                         <tr className="border-b border-line text-left text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
@@ -250,7 +250,7 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
               return (
                 <Card key={g}>
                   <CardHeader title={g === "F" ? "Girls" : "Boys"} action={<span className="text-[13px] text-ink-2">{group.length} name{group.length === 1 ? "" : "s"}</span>} />
-                  <CardBody className="divide-y divide-line p-0">
+                  <CardBody flush className="divide-y divide-line">
                     {group.map((a) => {
                       const inChosen = namesInChosen.has(a.name);
                       const others = review.allAthletes.filter((x) => (x.gender === a.gender || x.gender === "X") && !a.candidates.some((c) => c.id === x.id));

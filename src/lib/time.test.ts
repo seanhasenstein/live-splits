@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { coarser, formatElapsed, parseElapsed, parseTypedTime } from "./time";
+import { coarser, formatDuration, formatElapsed, parseDuration, parseElapsed, parseTypedTime } from "./time";
 
 test("formatElapsed at each precision truncates, never rounds", () => {
   const ms = 16 * 60_000 + 16_987;
@@ -40,4 +40,16 @@ test("parseTypedTime reads keypad digits like a microwave and colon forms as wri
   expect(parseTypedTime("6:4")).toBeNull();
   expect(parseTypedTime("abc")).toBeNull();
   expect(parseTypedTime("6.40")).toBeNull(); // a dot is tenths, not a colon
+});
+
+test("parseDuration: plain numbers under 100 are seconds, colons are minutes, longer digits read like a microwave", () => {
+  expect(parseDuration("60")).toBe(60_000);
+  expect(parseDuration("78.5")).toBe(78_500);
+  expect(parseDuration("1:30")).toBe(90_000);
+  expect(parseDuration("320")).toBe(200_000);
+  expect(parseDuration("")).toBeNull();
+  expect(parseDuration("abc")).toBeNull();
+  expect(formatDuration(45_000)).toBe("45");
+  expect(formatDuration(78_500)).toBe("1:18.5");
+  expect(formatDuration(200_000)).toBe("3:20");
 });
