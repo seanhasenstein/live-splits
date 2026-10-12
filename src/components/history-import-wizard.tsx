@@ -3,7 +3,7 @@
 import { Check } from "lucide-react";
 import { useActionState, useState, useTransition } from "react";
 import { commitHistoryAction, type HistoryLoadState, loadHistoryAction } from "@/app/actions/history";
-import { Alert, Badge, Button, Card, CardBody, CardHeader, Field, Input, LinkButton, SectionLabel, Segmented, Select, Stat } from "@/components/ui";
+import { Alert, Badge, Button, Card, CardBody, CardHeader, Field, Input, LinkButton, SectionLabel, Select, Stat } from "@/components/ui";
 import { useTimeFormat } from "@/lib/client/time-format";
 import type { HistoryCommitResult, HistoryReview } from "@/lib/results/history-import";
 import type { HistoryMeet } from "@/lib/results/splits-history";
@@ -11,10 +11,10 @@ import { formatLocalDate } from "@/lib/time";
 
 /** A class in a given season and when it graduates: a senior in 2025 is the class of 2026. */
 const CLASSES = [
-  { short: "Fr", yearsIn: 1, yearsLeft: 4 },
-  { short: "So", yearsIn: 2, yearsLeft: 3 },
-  { short: "Jr", yearsIn: 3, yearsLeft: 2 },
-  { short: "Sr", yearsIn: 4, yearsLeft: 1 },
+  { short: "Fr", label: "Freshman", yearsIn: 1, yearsLeft: 4 },
+  { short: "So", label: "Sophomore", yearsIn: 2, yearsLeft: 3 },
+  { short: "Jr", label: "Junior", yearsIn: 3, yearsLeft: 2 },
+  { short: "Sr", label: "Senior", yearsIn: 4, yearsLeft: 1 },
 ];
 
 export function HistoryImportWizard() {
@@ -236,7 +236,7 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
               if (group.length === 0) return null;
               return (
                 <Card key={g}>
-                  <CardHeader title={g === "F" ? "Girls" : "Boys"} description={`${group.length} name${group.length === 1 ? "" : "s"}`} />
+                  <CardHeader title={g === "F" ? "Girls" : "Boys"} action={<span className="text-[13px] text-ink-2">{group.length} name{group.length === 1 ? "" : "s"}</span>} />
                   <CardBody className="divide-y divide-line p-0">
                     {group.map((a) => {
                       const inChosen = namesInChosen.has(a.name);
@@ -254,28 +254,33 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
                               {!inChosen && " · not in a ticked meet"}
                             </span>
                           </div>
-                          <Select value={identity[a.name] ?? ""} onChange={(e) => setIdentity({ ...identity, [a.name]: e.target.value })} aria-label={`Who is ${a.name}`}>
-                            <option value="">Add as a new athlete</option>
-                            {a.candidates.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name} — same last name
-                              </option>
-                            ))}
-                            {others.map((x) => (
-                              <option key={x.id} value={x.id}>
-                                {x.name}
-                              </option>
-                            ))}
-                          </Select>
+                          <Identity
+                            name={a.name}
+                            candidates={a.candidates}
+                            others={others}
+                            value={identity[a.name] ?? ""}
+                            onChange={(v) => setIdentity({ ...identity, [a.name]: v })}
+                          />
                           {!identity[a.name] && (
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                              <span className="text-[13px] text-ink-2">Class in {last}</span>
-                              <Segmented
-                                value={gradYears[a.name] ?? ""}
-                                onChange={(v) => setGradYears({ ...gradYears, [a.name]: v })}
-                                options={[{ value: "", label: "?" }, ...classes.map((c) => ({ value: String(last + c.yearsLeft), label: `${c.short} ’${String(last + c.yearsLeft).slice(2)}` }))]}
-                                className="min-w-0 flex-1"
-                              />
+                            <div>
+                              <div className="mb-1.5 text-[13px] text-ink-2">Class in {last}</div>
+                              <div className="grid grid-cols-4 gap-2">
+                                {classes.map((c) => {
+                                  const year = String(last + c.yearsLeft);
+                                  const active = gradYears[a.name] === year;
+                                  return (
+                                    <button
+                                      key={c.short}
+                                      type="button"
+                                      aria-pressed={active}
+                                      onClick={() => setGradYears({ ...gradYears, [a.name]: active ? "" : year })}
+                                      className={`h-9 rounded-md border text-[13px] font-medium transition-colors ${active ? "border-brand bg-brand-soft text-ink" : "border-line bg-surface text-ink-2 hover:text-ink"}`}
+                                    >
+                                      {c.label} <span className={active ? "text-ink-2" : "text-ink-3"}>’{year.slice(2)}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -298,6 +303,71 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
           {pending ? "Importing…" : `Import ${chosen.length} meet${chosen.length === 1 ? "" : "s"}`}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Who an unknown name is. The usual answer is "nobody yet": they're added. A
+ * same-surname athlete is put as a question; anyone else is behind a link.
+ */
+function Identity({ name, candidates, others, value, onChange }: { name: string; candidates: { id: string; name: string }[]; others: { id: string; name: string }[]; value: string; onChange: (id: string) => void }) {
+  const [picking, setPicking] = useState(false);
+  const chosen = value ? [...candidates, ...others].find((x) => x.id === value) : null;
+  if (chosen) {
+    return (
+      <p className="text-[13px] text-ink-2">
+        Same person as <span className="font-medium text-ink">{chosen.name}</span>; &ldquo;{name}&rdquo; is kept as a spelling.{" "}
+        <button type="button" onClick={() => onChange("")} className="text-ink underline decoration-line underline-offset-2">
+          Undo
+        </button>
+      </p>
+    );
+  }
+  if (picking) {
+    return (
+      <Select
+        autoFocus
+        value=""
+        onChange={(e) => {
+          if (e.target.value) onChange(e.target.value);
+          setPicking(false);
+        }}
+        onBlur={() => setPicking(false)}
+        aria-label={`Who is ${name}`}
+      >
+        <option value="">Pick who this is…</option>
+        {[...candidates, ...others].map((x) => (
+          <option key={x.id} value={x.id}>
+            {x.name}
+          </option>
+        ))}
+      </Select>
+    );
+  }
+  const suggested = candidates[0];
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-2">
+      {suggested ? (
+        <>
+          <span>
+            Same person as <span className="font-medium text-ink">{suggested.name}</span>?
+          </span>
+          <Button size="sm" variant="secondary" onClick={() => onChange(suggested.id)}>
+            Yes
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setPicking(true)}>
+            Someone else
+          </Button>
+        </>
+      ) : (
+        <>
+          <span>Added as a new athlete.</span>
+          <button type="button" onClick={() => setPicking(true)} className="text-ink underline decoration-line underline-offset-2">
+            Already in the app under another spelling?
+          </button>
+        </>
+      )}
     </div>
   );
 }
