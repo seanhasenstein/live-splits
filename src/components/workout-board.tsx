@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Card, Checkbox, Segmented, Time } from "@/components/ui";
+import { Card, Segmented, Switch, Time } from "@/components/ui";
 import { WorkoutAthleteSheet } from "@/components/workout-athlete-sheet";
 import { RepCell, SHOW_DELTAS_KEY } from "@/components/workout-rep-cell";
 import { useLocalValue } from "@/lib/client/use-local-value";
@@ -103,17 +103,18 @@ export function WorkoutBoard({
         ))}
       </div>
       )}
-      {anyTimed && (
-        <div className="flex justify-end">
-          <Checkbox label="Show +/− under times" checked={showDeltas} onChange={(e) => setDeltasPref(e.target.checked ? null : "off")} className="text-[13px] text-ink-2" />
-        </div>
-      )}
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-[11px] font-semibold tracking-[0.06em] text-ink-2 uppercase">
-                <th className="sticky left-0 z-10 bg-surface px-3 py-2 text-left font-semibold">Athlete</th>
+                <th className="sticky left-0 z-10 bg-surface px-3 py-2 text-left font-semibold">
+                  {/* The +/− switch lives in the corner: it's about the table, and the corner is otherwise empty. */}
+                  <span className="flex items-center justify-between gap-3">
+                    Athlete
+                    <Switch checked={showDeltas} onChange={(on) => setDeltasPref(on ? null : "off")} label="+/−" className="tracking-normal normal-case" />
+                  </span>
+                </th>
                 <th className="px-2 py-2 text-right font-semibold whitespace-nowrap">Goal</th>
                 {reps.map((r, i) => (
                   <th key={r.id} className={`px-2 py-2 text-right font-semibold whitespace-nowrap ${r.number === 1 && i > 0 ? "border-l border-line" : ""}`}>
@@ -228,7 +229,7 @@ export function WorkoutBoard({
       )}
       <p className="text-xs leading-relaxed text-ink-3">
         {anyTimed
-          ? `Green is faster than goal, red slower; within a second is on goal. The small number under each time is how far off goal it was (turn it off above the grid). "Skipped": didn't run that rep. "No time": started it but the group went on before they finished. "Done": done for today. "—": the group ended before that rep. Avg, spread and fade are per ${reps[0].label}, so reps of other distances compare fairly. Spread: slowest minus fastest. Fade: the second half against the first. "Rest after" is the rest each group took, from its last runner in to the next start, with how far off the plan it was; amber is more than 10 s long. Tap a name for that runner's reps.`
+          ? `Green is faster than goal, red slower; within a second is on goal. The small number under each time is how far off goal it was (the +/− switch at the top of the grid turns it off). "Skipped": didn't run that rep. "No time": started it but the group went on before they finished. "Done": done for today. "—": the group ended before that rep. Avg, spread and fade are per ${reps[0].label}, so reps of other distances compare fairly. Spread: slowest minus fastest. Fade: the second half against the first. "Rest after" is the rest each group took, from its last runner in to the next start, with how far off the plan it was; amber is more than 10 s long. Tap a name for that runner's reps.`
           : "Times appear here as the reps are timed."}
       </p>
     </div>

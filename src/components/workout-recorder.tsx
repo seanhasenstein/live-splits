@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { changeRepsAction } from "@/app/actions/workouts";
 import { RepCell, SHOW_DELTAS_KEY } from "@/components/workout-rep-cell";
 import { groupTint, repCellTone } from "@/components/workout-tint";
-import { Alert, Button, Card, Checkbox, Input, SectionLabel, Segmented, Sheet, Time } from "@/components/ui";
+import { Alert, Button, Card, Input, SectionLabel, Segmented, Sheet, Switch, Time } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useLocalValue } from "@/lib/client/use-local-value";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
@@ -169,6 +169,13 @@ export function WorkoutRecorder({
   // Runners still out when the coach started the rest: they can still be tapped in for that rep.
   const stillOut = phase.kind === "rest" ? sortRows(rowsAt(phase.afterRepIndex).filter(({ r }) => r.status === "running"), phase.afterRepIndex) : [];
   const upNext = phase.kind !== "running" && phase.kind !== "done" ? sortRows(rowsAt(repIndex).filter(({ r }) => r.status === "pending"), repIndex) : [];
+  // Make-ups on the go: a rep someone skipped, run later on their own clock (often after everyone's done).
+  const makeUps = allIds.flatMap((id) =>
+    state.athletes
+      .get(id)!
+      .map((r, i) => ({ id, r, i }))
+      .filter(({ r }) => r.makeUp && r.status === "running" && r.groupId === group.id),
+  );
 
   // Starting the next rep while someone is still out on the last one leaves them with no time for it,
   // so it takes a second tap that says who. (A time can still be added for them afterwards.)
@@ -450,6 +457,39 @@ export function WorkoutRecorder({
         </div>
       )}
 
+      {makeUps.length > 0 && (
+        <div>
+          <div className="mb-1.5 text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">Make-ups</div>
+          <div className={`grid gap-2 ${large ? "grid-cols-1" : "grid-cols-2 sm:grid-cols-3"}`}>
+            {makeUps.map(({ id, r, i }) => (
+              <div key={`${id}:${i}`} className="relative">
+                <button
+                  type="button"
+                  onPointerDown={notePointerDown}
+                  onClick={() => finish(id, r.repId)}
+                  className="flex h-20 w-full flex-col items-start justify-between rounded-lg border border-line-strong bg-surface px-3 py-2 text-left shadow-card active:bg-brand-soft"
+                >
+                  <span className="line-clamp-1 pr-6 text-[15px] font-semibold text-ink">{nameOf.get(id) ?? "?"}</span>
+                  <span className="flex items-baseline gap-2">
+                    <span className="text-[11px] font-medium text-ink-2">Rep {i + 1}</span>
+                    {r.startMs !== null && <Time className="text-sm font-semibold text-ink">{formatElapsed(Math.max(0, now - r.startMs))}</Time>}
+                    {r.goalMs !== null && <Time className="text-xs text-ink-3">goal {formatElapsed(r.goalMs, "seconds")}</Time>}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => r.ownStartEventId && send({ type: "void", targetEventId: r.ownStartEventId })}
+                  className="absolute top-1 right-1 rounded p-1.5 text-[11px] text-ink-3 hover:bg-surface-2 hover:text-ink"
+                  aria-label={`Cancel ${nameOf.get(id)}'s make-up`}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* This rep's (or the last rep's) finishers, in order. */}
       {stillOut.length > 0 && phase.kind === "rest" && (
         <div>
@@ -706,7 +746,9 @@ function GroupRepsGrid({
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-line text-[11px] font-semibold text-ink-3">
-            <th className="sticky left-0 bg-surface px-4 py-1.5 text-left font-semibold" />
+            <th className="sticky left-0 bg-surface px-4 py-1.5 text-left font-semibold">
+              <Switch checked={showDeltas} onChange={(on) => setDeltasPref(on ? null : "off")} label="+/−" />
+            </th>
             <th className="px-2 py-1.5 text-right font-semibold">Goal</th>
             {reps.slice(0, n).map((r, i) => (
               <th key={r.id} className="px-1 py-1.5 text-right font-semibold">
@@ -735,7 +777,7 @@ function GroupRepsGrid({
                     {r.status === "done" && r.elapsedMs !== null ? (
                       <RepCell time={ft(r.elapsedMs)} delta={showDeltas && r.deltaMs !== null ? deltaText(r.deltaMs, tenths) : null} tone={repCellTone(r.deltaMs)} />
                     ) : (
-                      <span className="px-1 text-xs text-ink-3">{r.status === "skipped" ? "skip" : r.status === "unfinished" ? "—" : r.status === "stopped" ? "out" : "·"}</span>
+                      <span className="px-1 text-xs text-ink-3">{r.status === "skipped" ? "skip" : r.status === "unfinished" ? "—" : r.status === "stopped" ? "out" : r.status === "running" ? "now" : "·"}</span>
                     )}
                   </td>
                 ))}
@@ -748,9 +790,6 @@ function GroupRepsGrid({
         </tbody>
       </table>
     </div>
-      <div className="flex justify-end border-t border-line px-4 py-2">
-        <Checkbox label="Show +/− under times" checked={showDeltas} onChange={(e) => setDeltasPref(e.target.checked ? null : "off")} className="text-[13px] text-ink-2" />
-      </div>
     </div>
   );
 }
@@ -891,6 +930,16 @@ function AthleteActions({
             </button>
           </>
         )}
+        {/* A rep they skipped, run now on their own clock while the group carries on (or after it's done). */}
+        {soFar
+          .map((r, i) => ({ r, i }))
+          .filter(({ r, i }) => r.status === "skipped" && !(running && i === repNumber - 1))
+          .map(({ r, i }) => (
+            <button key={r.repId} type="button" className={btn} onClick={() => act("rep_start", { repId: r.repId })}>
+              Run rep {i + 1} now (make-up)
+              <span className="mt-0.5 block text-[13px] text-ink-2">They skipped it. Starts their own clock; tap them in when they finish.</span>
+            </button>
+          ))}
         {next && upId && next.entry.status !== "done" && next.entry.status !== "stopped" && next.entry.status !== "skipped" && (
           <button type="button" className={btn} onClick={() => act("skip", { repId: upId })}>
             Skip rep {next.index + 1}

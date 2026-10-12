@@ -148,6 +148,22 @@ describe("rests the coach controls", () => {
     expect(typed.groups.get("g1")).toMatchObject({ kind: "running", repIndex: 1 });
   });
 
+  it("a skipped rep can be made up later on the runner's own clock", () => {
+    const base = [
+      ev("rep_start", 0, { groupId: "g1", repId: "a1" }),
+      ev("skip", 1_000, { athleteId: "titus", repId: "a1" }),
+      ev("finish", 76_000, { athleteId: "eddy", repId: "a1" }),
+      ev("rep_start", 140_000, { groupId: "g1", repId: "a2" }),
+    ];
+    expect(replayWorkout(workout, base).athletes.get("titus")![0].status).toBe("skipped");
+    const going = replayWorkout(workout, [...base, ev("rep_start", 600_000, { groupId: "g1", athleteId: "titus", repId: "a1" })]);
+    expect(going.athletes.get("titus")![0]).toMatchObject({ status: "running", makeUp: true, startMs: T0 + 600_000 });
+    // The group carries on with rep 2 regardless.
+    expect(going.groups.get("g1")).toMatchObject({ kind: "running", repIndex: 1 });
+    const done = replayWorkout(workout, [...base, ev("rep_start", 600_000, { groupId: "g1", athleteId: "titus", repId: "a1" }), ev("finish", 681_000, { athleteId: "titus", repId: "a1" })]);
+    expect(done.athletes.get("titus")![0]).toMatchObject({ status: "done", makeUp: true, elapsedMs: 81_000 });
+  });
+
   it("a runner's own late start can be undone or restarted", () => {
     const start = ev("rep_start", 5_000, { groupId: "g1", athleteId: "titus", repId: "a1", clientEventId: "late1" });
     const base = [ev("rep_start", 0, { groupId: "g1", repId: "a1" }), start];

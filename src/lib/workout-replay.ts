@@ -74,6 +74,8 @@ export type AthleteRep = {
   finishEventId: string | null;
   /** Their own start (a late start), when they have one: undo it to go back to the group's clock. */
   ownStartEventId: string | null;
+  /** Skipped with the group, then run later on their own ("make-up"). */
+  makeUp: boolean;
 };
 
 export type GroupPhase =
@@ -202,12 +204,17 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
       const pace = goalPace.get(id) ?? null;
       const goalMs = pace !== null ? Math.round((pace * rep.meters) / 1000) : null;
       const notYetIn = (joinedAt.get(id) ?? 0) > rep.index;
+      const wasSkipped = skipped.has(`${id}:${rep.index}`) || skipped.has(`group:${groupId}:${rep.index}`);
+      // A make-up: they skipped the rep with the group and ran it later on their own clock.
+      const makeUp = wasSkipped && ownStart.has(`${id}:${rep.index}`);
       const status: AthleteRepStatus =
         fin && finishMs !== null
           ? "done"
           : notYetIn || stoppedAt(id, rep.index)
             ? "stopped"
-            : skipped.has(`${id}:${rep.index}`) || skipped.has(`group:${groupId}:${rep.index}`)
+            : makeUp
+              ? "running"
+              : wasSkipped
               ? "skipped"
               : startMs !== null
                 ? (lastStarted.get(groupId) ?? -1) > rep.index
@@ -227,6 +234,7 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
         deltaMs: elapsedMs !== null && goalMs !== null ? elapsedMs - goalMs : null,
         finishEventId: fin?.clientEventId ?? null,
         ownStartEventId: ownStartEvent.get(`${id}:${rep.index}`) ?? null,
+        makeUp,
       };
     });
     athletes.set(id, list);
