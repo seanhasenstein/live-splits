@@ -1,10 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Card, Segmented, Time } from "@/components/ui";
+import { useEffect, useMemo, useState } from "react";
+import { Card, LiveDot, Segmented, Time } from "@/components/ui";
+import { useClock } from "@/lib/client/clock";
+import { useTimeFormat } from "@/lib/client/time-format";
 import { useWorkoutEvents } from "@/lib/client/use-workout-events";
 import type { Workout } from "@/lib/db/schema";
-import { replayWorkout, summarize } from "@/lib/workout-replay";
+import { describeRest } from "@/lib/workout-plan";
+import { type GroupPhase, type GroupRepLog, replayWorkout, summarize } from "@/lib/workout-replay";
 import { formatElapsed } from "@/lib/time";
 
 type Plan = Pick<Workout, "sets" | "groups" | "athletes"> & { finishedAt: string | null };
@@ -16,7 +19,7 @@ const ON_GOAL_MS = 1000;
 const cellTone = (delta: number | null) =>
   delta === null ? "text-ink" : Math.abs(delta) <= ON_GOAL_MS ? "text-ink" : delta < 0 ? "bg-brand-soft text-brand-text" : "bg-danger-soft text-danger";
 
-const signed = (ms: number, digits = 1) => {
+const signed = (ms: number, digits: 0 | 1) => {
   const v = Math.round(ms / 10 ** (3 - digits)) / 10 ** digits;
   if (v === 0) return "±0";
   return `${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(digits)}`;
@@ -29,6 +32,17 @@ const signed = (ms: number, digits = 1) => {
  */
 export function WorkoutBoard({ workoutId, initialPlan, people }: { workoutId: string; initialPlan: Plan; people: Person[] }) {
   const { events, plan } = useWorkoutEvents(workoutId, initialPlan);
+  const { ft, team } = useTimeFormat();
+  const digits = team === "tenths" ? 1 : 0;
+  const clock = useClock();
+  const offsetMs = clock.sync?.offsetMs ?? 0;
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    const tick = () => setNow(Date.now() + offsetMs);
+    tick();
+    const t = setInterval(tick, 100);
+    return () => clearInterval(t);
+  }, [offsetMs]);
   const state = useMemo(() => replayWorkout(plan, events), [plan, events]);
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
   const [filter, setFilter] = useState<string>("all");
@@ -49,10 +63,16 @@ export function WorkoutBoard({ workoutId, initialPlan, people }: { workoutId: st
     // Fastest on average first; nobody-timed-yet by goal.
     .sort((a, b) => (a.summary.avgPaceMsPerKm ?? Infinity) - (b.summary.avgPaceMsPerKm ?? Infinity) || (a.goalMs ?? Infinity) - (b.goalMs ?? Infinity));
 
-  const paceFor = (msPerKm: number | null) => (msPerKm === null ? "—" : formatElapsed((msPerKm * reps[0].meters) / 1000));
+  const paceFor = (msPerKm: number | null) => (msPerKm === null ? "—" : ft((msPerKm * reps[0].meters) / 1000));
 
   return (
     <div className="space-y-3">
+      {/* Where each group is right now: the same clocks the timing phones show. */}
+      <div className="grid gap-2 sm:grid-cols-2">
+        {plan.groups.map((g) => (
+          <GroupStatus key={g.id} name={plan.groups.length > 1 ? g.name : "Group"} phase={state.groups.get(g.id)!} log={state.groupLog.get(g.id) ?? []} reps={reps} now={now} />
+        ))}
+      </div>
       {options.length > 1 && <Segmented value={filter} onChange={setFilter} options={options} />}
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
@@ -80,18 +100,20 @@ export function WorkoutBoard({ workoutId, initialPlan, people }: { workoutId: st
                     <div className="text-[11px] text-ink-3">{plan.groups.length > 1 ? (plan.groups.find((g) => g.id === list.at(-1)?.groupId)?.name ?? "") : byId.get(id)?.level}</div>
                   </td>
                   <td className="px-2 py-1.5 text-right">
-                    <Time className="text-ink-2">{goalMs !== null ? formatElapsed(goalMs, "seconds") : "—"}</Time>
+                    <Time className="text-ink-2">{goalMs !== null ? ft(goalMs, "seconds") : "—"}</Time>
                   </td>
                   {list.map((r, i) => (
                     <td key={r.repId} className={`px-1 py-1 text-right ${reps[i].number === 1 && i > 0 ? "border-l border-line" : ""}`}>
                       {r.status === "done" && r.elapsedMs !== null ? (
-                        <Time className={`inline-block rounded px-1.5 py-0.5 ${cellTone(r.deltaMs)}`}>{formatElapsed(r.elapsedMs)}</Time>
+                        <Time className={`inline-block rounded px-1.5 py-0.5 ${cellTone(r.deltaMs)}`}>{ft(r.elapsedMs)}</Time>
                       ) : r.status === "skipped" ? (
-                        <span className="px-1.5 text-xs text-ink-3">skip</span>
+                        <span className="px-1.5 text-xs whitespace-nowrap text-ink-3">sat out</span>
                       ) : r.status === "stopped" ? (
-                        <span className="px-1.5 text-xs text-ink-3">—</span>
+                        <span className="px-1.5 text-xs text-ink-3" title="Done for today">done</span>
+                      ) : r.status === "unfinished" ? (
+                        <span className="px-1.5 text-xs whitespace-nowrap text-ink-3">no time</span>
                       ) : r.status === "running" ? (
-                        <span className="px-1.5 text-xs text-gold-text">out</span>
+                        <span className="px-1.5 text-xs text-gold-text">running</span>
                       ) : (
                         <span className="px-1.5 text-ink-3">·</span>
                       )}
@@ -102,15 +124,15 @@ export function WorkoutBoard({ workoutId, initialPlan, people }: { workoutId: st
                   </td>
                   <td className="px-2 py-1.5 text-right">
                     <Time className={summary.avgDeltaMs === null ? "text-ink-3" : Math.abs(summary.avgDeltaMs) <= ON_GOAL_MS ? "text-ink-2" : summary.avgDeltaMs < 0 ? "text-brand-text" : "text-danger"}>
-                      {summary.avgDeltaMs === null ? "—" : signed(summary.avgDeltaMs)}
+                      {summary.avgDeltaMs === null ? "—" : signed(summary.avgDeltaMs, digits)}
                     </Time>
                   </td>
                   <td className="px-2 py-1.5 text-right">
-                    <Time className="text-ink-2">{summary.spreadMsPerKm === null ? "—" : (summary.spreadMsPerKm * reps[0].meters) / 1000 / 1000 < 0.05 ? "0.0" : ((summary.spreadMsPerKm * reps[0].meters) / 1000 / 1000).toFixed(1)}</Time>
+                    <Time className="text-ink-2">{summary.spreadMsPerKm === null ? "—" : ((summary.spreadMsPerKm * reps[0].meters) / 1000 / 1000).toFixed(digits)}</Time>
                   </td>
                   <td className="px-3 py-1.5 text-right">
                     <Time className={summary.fadeMsPerKm === null ? "text-ink-3" : summary.fadeMsPerKm > 0 ? "text-danger" : "text-brand-text"}>
-                      {summary.fadeMsPerKm === null ? "—" : signed((summary.fadeMsPerKm * reps[0].meters) / 1000)}
+                      {summary.fadeMsPerKm === null ? "—" : signed((summary.fadeMsPerKm * reps[0].meters) / 1000, digits)}
                     </Time>
                   </td>
                 </tr>
@@ -121,9 +143,55 @@ export function WorkoutBoard({ workoutId, initialPlan, people }: { workoutId: st
       </Card>
       <p className="text-xs leading-relaxed text-ink-3">
         {anyTimed
-          ? `Green is faster than goal, red slower; within a second is on goal. Avg, spread and fade are per ${reps[0].label}, so reps of other distances compare fairly. Spread: slowest minus fastest. Fade: the second half against the first.`
+          ? `Green is faster than goal, red slower; within a second is on goal. "Sat out": skipped that rep. "No time": started it but the group went on before they finished. "Done": done for today. Avg, spread and fade are per ${reps[0].label}, so reps of other distances compare fairly. Spread: slowest minus fastest. Fade: the second half against the first. A rest shown in amber ran more than 10 s past the plan.`
           : "Times appear here as the reps are timed."}
       </p>
     </div>
+  );
+}
+
+/** "Rep 3 of 12 · 0:45.2" while it runs; "Resting · next in 0:23" between; and the rests actually taken. */
+function GroupStatus({ name, phase, log, reps, now }: { name: string; phase: GroupPhase; log: GroupRepLog[]; reps: ReturnType<typeof replayWorkout>["reps"]; now: number }) {
+  const label = (i: number) => (reps.some((r) => r.setIndex > 0) ? `Set ${reps[i].setIndex + 1} · rep ${reps[i].number}` : `Rep ${reps[i].number} of ${reps[i].setSize}`);
+  const rests = log.filter((l) => l.restMs !== null);
+  return (
+    <Card className="px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+            {phase.kind === "running" && <LiveDot />}
+            {name}
+          </div>
+          <div className="text-[13px] text-ink-2">
+            {phase.kind === "before" ? "Not started" : phase.kind === "done" ? "All reps done" : phase.kind === "running" ? `${label(phase.repIndex)} · running` : `Resting after ${label(phase.afterRepIndex).toLowerCase()}${phase.rest ? ` · ${describeRest(phase.rest)}` : ""}`}
+          </div>
+        </div>
+        {phase.kind === "running" && <Time className="text-2xl font-semibold tracking-tight text-ink">{formatElapsed(Math.max(0, now - phase.startMs))}</Time>}
+        {phase.kind === "rest" && (
+          <div className="text-right">
+            <Time className={`block text-2xl font-semibold tracking-tight ${phase.nextStartMs !== null && now > phase.nextStartMs ? "text-danger" : "text-ink"}`}>
+              {formatElapsed(Math.max(0, now - phase.restStartedMs)).replace(/\.\d$/, "")}
+            </Time>
+            {phase.nextStartMs !== null && (
+              <span className="text-[11px] text-ink-3">{now < phase.nextStartMs ? `next in ${formatElapsed(phase.nextStartMs - now).replace(/\.\d$/, "")}` : `${formatElapsed(now - phase.nextStartMs).replace(/\.\d$/, "")} over`}</span>
+            )}
+          </div>
+        )}
+      </div>
+      {rests.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-x-2 gap-y-0.5 border-t border-line pt-2 text-[12px] text-ink-2">
+          <span className="text-ink-3">Rests</span>
+          {rests.map((l) => {
+            const over = l.plannedRestMs !== null ? l.restMs! - l.plannedRestMs : null;
+            return (
+              <Time key={l.repIndex} className={over !== null && over > 10_000 ? "text-gold-text" : ""}>
+                {formatElapsed(l.restMs!, "seconds")}
+                {over !== null && Math.abs(over) >= 5_000 && ` (${over > 0 ? "+" : "−"}${Math.abs(over) >= 60_000 ? formatElapsed(Math.abs(over), "seconds") : Math.round(Math.abs(over) / 1000)})`}
+              </Time>
+            );
+          })}
+        </div>
+      )}
+    </Card>
   );
 }

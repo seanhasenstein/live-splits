@@ -98,6 +98,7 @@ export type WorkoutTemplate = z.infer<typeof WorkoutTemplate>;
 
 export const WorkoutEventType = z.enum([
   "rep_start", // a group (athleteId null) or one athlete (staggered) started repId
+  "rest_start", // the coach started the group's rest after repId, before everyone was in
   "finish", // athleteId finished repId
   "skip", // athleteId (or the whole group when null) skips repId
   "stop", // athleteId is done for the day, from repId on (not run)

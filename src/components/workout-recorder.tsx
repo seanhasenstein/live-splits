@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Card, Input, LinkButton, Segmented, Sheet, Time } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
+import { useTimeFormat } from "@/lib/client/time-format";
 import { useWorkoutEvents } from "@/lib/client/use-workout-events";
 import type { Workout } from "@/lib/db/schema";
 import { describeRest } from "@/lib/workout-plan";
@@ -26,14 +27,14 @@ const tapTime = () => {
   return lastPointerDownMs && now - lastPointerDownMs < 1500 ? lastPointerDownMs : now;
 };
 
-/** "+1.4" / "−2.0": a rep against its goal, to the tenth (a 400 is won and lost in tenths); a minute or more as m:ss. */
-function deltaText(ms: number): string {
-  const t = Math.round(ms / 100) / 10;
-  if (t === 0) return "±0.0";
+/** "+2" / "−1.4": a rep against its goal, in whole seconds or tenths as the team shows times; a minute or more as m:ss. */
+function deltaText(ms: number, tenths: boolean): string {
+  const t = tenths ? Math.round(ms / 100) / 10 : Math.round(ms / 1000);
+  if (t === 0) return "±0";
   const abs = Math.abs(t);
-  return `${t > 0 ? "+" : "−"}${abs >= 60 ? formatElapsed(abs * 1000) : abs.toFixed(1)}`;
+  return `${t > 0 ? "+" : "−"}${abs >= 60 ? formatElapsed(abs * 1000, tenths ? "tenths" : "seconds") : tenths ? abs.toFixed(1) : String(abs)}`;
 }
-const deltaTone = (ms: number) => (Math.round(ms / 100) === 0 ? "text-ink-2" : ms < 0 ? "text-brand-text" : "text-danger");
+const deltaTone = (ms: number) => (Math.abs(ms) < 500 ? "text-ink-2" : ms < 0 ? "text-brand-text" : "text-danger");
 
 export function WorkoutRecorder({
   workoutId,
@@ -51,6 +52,9 @@ export function WorkoutRecorder({
 }) {
   useWakeLock();
   const clock = useClock();
+  // Rep times the team's way; the running clocks stay at tenths.
+  const { ft, team } = useTimeFormat();
+  const tenths = team === "tenths";
   const { events, plan, send, online, loaded, unsent } = useWorkoutEvents(workoutId, initialPlan);
   const [groupId, setGroupId] = useState(() => (initialGroupId && initialPlan.groups.some((g) => g.id === initialGroupId) ? initialGroupId : initialPlan.groups[0].id));
   const group = plan.groups.find((g) => g.id === groupId) ?? plan.groups[0];
@@ -101,11 +105,19 @@ export function WorkoutRecorder({
           .sort((a, b) => (a.r.goalMs ?? Infinity) - (b.r.goalMs ?? Infinity) || (nameOf.get(a.id) ?? "").localeCompare(nameOf.get(b.id) ?? ""))
       : [];
   const finishedRows = lastIndex >= 0 ? rowsAt(lastIndex).filter(({ r }) => r.status === "done").sort((a, b) => (a.r.finishMs ?? 0) - (b.r.finishMs ?? 0)) : [];
-  const notRunning = lastIndex >= 0 ? rowsAt(lastIndex).filter(({ r }) => r.status === "skipped" || r.status === "stopped") : [];
+  const notRunning = lastIndex >= 0 ? rowsAt(lastIndex).filter(({ r }) => r.status === "skipped" || r.status === "stopped" || r.status === "unfinished") : [];
+  // Runners still out when the coach started the rest: they can still be tapped in for that rep.
+  const stillOut = phase.kind === "rest" ? rowsAt(phase.afterRepIndex).filter(({ r }) => r.status === "running") : [];
   const upNext = phase.kind !== "running" && phase.kind !== "done" ? rowsAt(repIndex).filter(({ r }) => r.status === "pending") : [];
 
   const startRep = () => send({ type: "rep_start", groupId: group.id, repId: rep.id, at: tapTime() });
-  const finish = (athleteId: string) => send({ type: "finish", groupId: group.id, athleteId, repId: rep.id, at: tapTime() });
+  const finish = (athleteId: string, repId = rep.id) => send({ type: "finish", groupId: group.id, athleteId, repId, at: tapTime() });
+  const startRest = () => send({ type: "rest_start", groupId: group.id, repId: rep.id, at: tapTime() });
+  // Nudge the rep's start when the clock went a moment late or early: an edit to the start, from where it is now.
+  const startEventId = phase.kind === "running" || phase.kind === "rest" ? phase.startEventId : null;
+  const startMsNow = phase.kind === "running" ? phase.startMs : null;
+  const nudgeStart = (deltaMs: number) => startEventId && startMsNow !== null && send({ type: "edit", targetEventId: startEventId, timeMs: startMsNow + deltaMs });
+  const [adjusting, setAdjusting] = useState(false);
 
   // The big clock.
   let clockLabel = "";
@@ -150,6 +162,28 @@ export function WorkoutRecorder({
         ) : phase.kind === "before" ? (
           <p className="mt-1 text-sm text-ink-2">{loaded ? "Start the clock when the group goes." : "Loading…"}</p>
         ) : null}
+        {phase.kind === "running" && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button variant="secondary" onPointerDown={notePointerDown} onClick={startRest}>
+              Start rest now
+            </Button>
+            {startEventId && (
+              <Button variant="ghost" size="sm" onClick={() => setAdjusting((a) => !a)} aria-expanded={adjusting}>
+                Adjust start
+              </Button>
+            )}
+          </div>
+        )}
+        {phase.kind === "running" && adjusting && (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-[13px] text-ink-2">Started</span>
+            {[-5, -1, 1, 5].map((d) => (
+              <Button key={d} variant="secondary" size="sm" onClick={() => nudgeStart(-d * 1000)}>
+                {d < 0 ? `${-d}s later` : `${d}s earlier`}
+              </Button>
+            ))}
+          </div>
+        )}
         {phase.kind !== "running" && phase.kind !== "done" && (
           <Button size="lg" className="mt-3 h-14 w-full text-base" onPointerDown={notePointerDown} onClick={startRep}>
             <Play className="size-5" />
@@ -174,11 +208,11 @@ export function WorkoutRecorder({
                 <span className={`line-clamp-2 pr-6 text-[15px] leading-tight font-semibold ${r.status === "running" ? "text-ink" : "text-ink-2"}`}>{nameOf.get(id) ?? "?"}</span>
                 {r.status === "done" && r.elapsedMs !== null ? (
                   <span className="flex items-baseline gap-2">
-                    <Time className="text-base font-semibold text-ink">{formatElapsed(r.elapsedMs)}</Time>
-                    {r.deltaMs !== null && <Time className={`text-xs ${deltaTone(r.deltaMs)}`}>{deltaText(r.deltaMs)}</Time>}
+                    <Time className="text-base font-semibold text-ink">{ft(r.elapsedMs)}</Time>
+                    {r.deltaMs !== null && <Time className={`text-xs ${deltaTone(r.deltaMs)}`}>{deltaText(r.deltaMs, tenths)}</Time>}
                   </span>
                 ) : r.status === "skipped" ? (
-                  <span className="text-xs text-ink-3">skipping</span>
+                  <span className="text-xs text-ink-3">sitting out</span>
                 ) : (
                   r.goalMs !== null && <Time className="text-xs text-ink-3">goal {formatElapsed(r.goalMs, "seconds")}</Time>
                 )}
@@ -192,6 +226,26 @@ export function WorkoutRecorder({
       )}
 
       {/* This rep's (or the last rep's) finishers, in order. */}
+      {stillOut.length > 0 && phase.kind === "rest" && (
+        <div>
+          <div className="mb-1.5 text-[11px] font-semibold tracking-[0.08em] text-gold-text uppercase">Still out on rep {phase.afterRepIndex + 1}</div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {stillOut.map(({ id, r }) => (
+              <button
+                key={id}
+                type="button"
+                onPointerDown={notePointerDown}
+                onClick={() => finish(id, r.repId)}
+                className="flex h-16 flex-col items-start justify-between rounded-lg border border-gold/50 bg-surface px-3 py-2 text-left active:bg-brand-soft"
+              >
+                <span className="line-clamp-1 text-[15px] font-semibold text-ink">{nameOf.get(id) ?? "?"}</span>
+                {r.goalMs !== null && <Time className="text-xs text-ink-3">goal {formatElapsed(r.goalMs, "seconds")}</Time>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {phase.kind !== "running" && finishedRows.length > 0 && (
         <Card>
           <div className="border-b border-line px-4 py-2 text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">{`Rep ${lastIndex + 1}`}</div>
@@ -199,14 +253,14 @@ export function WorkoutRecorder({
             {finishedRows.map(({ id, r }) => (
               <button key={id} type="button" onClick={() => setSheetFor(id)} className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm hover:bg-surface-2">
                 <span className="min-w-0 flex-1 truncate text-ink">{nameOf.get(id) ?? "?"}</span>
-                <Time className="font-semibold text-ink">{r.elapsedMs !== null ? formatElapsed(r.elapsedMs) : "—"}</Time>
-                <Time className={`w-12 text-right text-[13px] ${r.deltaMs !== null ? deltaTone(r.deltaMs) : "text-ink-3"}`}>{r.deltaMs !== null ? deltaText(r.deltaMs) : ""}</Time>
+                <Time className="font-semibold text-ink">{r.elapsedMs !== null ? ft(r.elapsedMs) : "—"}</Time>
+                <Time className={`w-12 text-right text-[13px] ${r.deltaMs !== null ? deltaTone(r.deltaMs) : "text-ink-3"}`}>{r.deltaMs !== null ? deltaText(r.deltaMs, tenths) : ""}</Time>
               </button>
             ))}
             {notRunning.map(({ id, r }) => (
               <button key={id} type="button" onClick={() => setSheetFor(id)} className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-ink-3 hover:bg-surface-2">
                 <span className="min-w-0 flex-1 truncate">{nameOf.get(id) ?? "?"}</span>
-                <span>{r.status === "skipped" ? "skipped" : "out"}</span>
+                <span>{r.status === "skipped" ? "sat out" : r.status === "unfinished" ? "no time" : "done for today"}</span>
               </button>
             ))}
           </div>

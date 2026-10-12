@@ -53,7 +53,8 @@ export function flattenPlan(workout: Pick<Workout, "sets">): FlatRep[] {
   return out;
 }
 
-export type AthleteRepStatus = "pending" | "running" | "done" | "skipped" | "stopped";
+/** "unfinished": they started it but the group went on to the next rep with no finish for them. */
+export type AthleteRepStatus = "pending" | "running" | "done" | "skipped" | "stopped" | "unfinished";
 
 export type AthleteRep = {
   repId: string;
@@ -72,9 +73,23 @@ export type AthleteRep = {
 
 export type GroupPhase =
   | { kind: "before"; nextRepIndex: 0 }
-  | { kind: "running"; repIndex: number; startMs: number }
-  | { kind: "rest"; afterRepIndex: number; restStartedMs: number; nextStartMs: number | null; rest: Rest | null }
+  | { kind: "running"; repIndex: number; startMs: number; startEventId: string | null }
+  | { kind: "rest"; afterRepIndex: number; restStartedMs: number; nextStartMs: number | null; rest: Rest | null; startEventId: string | null; stillOut: number }
   | { kind: "done" };
+
+/** What a group actually did on each rep it started: when it went, when the rest began, and how long the rest really was. */
+export type GroupRepLog = {
+  repIndex: number;
+  startMs: number;
+  /** When the rest after it began: the coach's "start rest", else the last runner in. Null while the rep is still on. */
+  restStartMs: number | null;
+  /** The next rep's start, once it has one. */
+  nextStartMs: number | null;
+  /** Rest actually taken: next start − rest start. */
+  restMs: number | null;
+  /** What the plan said, in ms, for a fixed or on-the-clock rest (an on-the-clock rest is what's left of the interval). */
+  plannedRestMs: number | null;
+};
 
 export type WorkoutState = {
   reps: FlatRep[];
@@ -82,6 +97,8 @@ export type WorkoutState = {
   athletes: Map<string, AthleteRep[]>;
   /** Per group: where it is now. */
   groups: Map<string, GroupPhase>;
+  /** Per group: each rep it has started, with the rest that followed. */
+  groupLog: Map<string, GroupRepLog[]>;
   /** Which group an athlete is in at a rep. */
   groupAt: (athleteId: string, repIndex: number) => string;
 };
@@ -120,10 +137,22 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
 
   // Starts: the group's latest start for a rep, and any athlete's own.
   const groupStart = new Map<string, number>(); // `${groupId}:${ri}`
+  const groupStartEvent = new Map<string, string>();
   const ownStart = new Map<string, number>(); // `${athleteId}:${ri}`
   for (const e of ordered.filter((e) => e.type === "rep_start")) {
     if (e.athleteId) ownStart.set(`${e.athleteId}:${repOf(e)}`, at(e));
-    else if (e.groupId) groupStart.set(`${e.groupId}:${repOf(e)}`, at(e));
+    else if (e.groupId) {
+      groupStart.set(`${e.groupId}:${repOf(e)}`, at(e));
+      groupStartEvent.set(`${e.groupId}:${repOf(e)}`, e.clientEventId);
+    }
+  }
+  const restStart = new Map<string, number>(); // `${groupId}:${ri}`: the coach started the rest early
+  for (const e of ordered.filter((e) => e.type === "rest_start" && e.groupId)) restStart.set(`${e.groupId}:${repOf(e)}`, at(e));
+  // A group's rep counts as over once it has started a later one.
+  const lastStarted = new Map<string, number>();
+  for (const key of groupStart.keys()) {
+    const [g, ri] = [key.slice(0, key.lastIndexOf(":")), Number(key.slice(key.lastIndexOf(":") + 1))];
+    lastStarted.set(g, Math.max(lastStarted.get(g) ?? -1, ri));
   }
   const finishes = new Map<string, WorkoutEvent>(); // `${athleteId}:${ri}`, latest
   for (const e of ordered.filter((e) => e.type === "finish" && e.athleteId)) finishes.set(`${e.athleteId}:${repOf(e)}`, e);
@@ -158,7 +187,9 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
             : skipped.has(`${id}:${rep.index}`) || skipped.has(`group:${groupId}:${rep.index}`)
               ? "skipped"
               : startMs !== null
-                ? "running"
+                ? (lastStarted.get(groupId) ?? -1) > rep.index
+                  ? "unfinished"
+                  : "running"
                 : "pending";
       return {
         repId: rep.id,
@@ -186,23 +217,56 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
     }
     const members = athleteIds.filter((id) => groupAt(id, current.index) === g.id).map((id) => athletes.get(id)![current.index]);
     const startMs = groupStart.get(`${g.id}:${current.index}`) ?? Math.min(...members.map((m) => m.startMs ?? Infinity));
-    const out = members.some((m) => m.status === "running" || m.status === "pending");
-    if (out) {
-      groups.set(g.id, { kind: "running", repIndex: current.index, startMs });
+    const startEventId = groupStartEvent.get(`${g.id}:${current.index}`) ?? null;
+    const stillOut = members.filter((m) => m.status === "running" || m.status === "pending").length;
+    const earlyRest = restStart.get(`${g.id}:${current.index}`);
+    if (stillOut > 0 && earlyRest === undefined) {
+      groups.set(g.id, { kind: "running", repIndex: current.index, startMs, startEventId });
       continue;
     }
-    if (current.index === reps.length - 1) {
+    if (current.index === reps.length - 1 && stillOut === 0) {
       groups.set(g.id, { kind: "done" });
       continue;
     }
-    const finished = members.map((m) => m.finishMs).filter((v): v is number => v !== null);
-    const restStartedMs = finished.length ? Math.max(...finished) : startMs;
+    const restStartedMs = earlyRest ?? restBegan(members, startMs);
     const rest = current.restAfter;
     const nextStartMs = rest?.kind === "time" ? restStartedMs + rest.ms : rest?.kind === "interval" ? startMs + rest.everyMs : null;
-    groups.set(g.id, { kind: "rest", afterRepIndex: current.index, restStartedMs, nextStartMs, rest });
+    groups.set(g.id, { kind: "rest", afterRepIndex: current.index, restStartedMs, nextStartMs, rest, startEventId, stillOut });
   }
 
-  return { reps, athletes, groups, groupAt };
+  // The rests a group actually took, rep by rep.
+  const groupLog = new Map<string, GroupRepLog[]>();
+  for (const g of workout.groups) {
+    const log: GroupRepLog[] = [];
+    for (const r of reps) {
+      const startMs = groupStart.get(`${g.id}:${r.index}`);
+      if (startMs === undefined) continue;
+      const members = athleteIds.filter((id) => groupAt(id, r.index) === g.id).map((id) => athletes.get(id)![r.index]);
+      const allIn = members.every((m) => m.status !== "running" && m.status !== "pending");
+      const early = restStart.get(`${g.id}:${r.index}`);
+      const restStartMs = early ?? (allIn || (lastStarted.get(g.id) ?? -1) > r.index ? restBegan(members, startMs) : null);
+      const next = reps[r.index + 1] ? groupStart.get(`${g.id}:${r.index + 1}`) : undefined;
+      const rest = r.restAfter;
+      const plannedRestMs = rest?.kind === "time" ? rest.ms : rest?.kind === "interval" && restStartMs !== null ? Math.max(0, startMs + rest.everyMs - restStartMs) : null;
+      log.push({
+        repIndex: r.index,
+        startMs,
+        restStartMs,
+        nextStartMs: next ?? null,
+        restMs: next !== undefined && restStartMs !== null ? next - restStartMs : null,
+        plannedRestMs,
+      });
+    }
+    groupLog.set(g.id, log);
+  }
+
+  return { reps, athletes, groups, groupAt, groupLog };
+}
+
+/** The rest begins when the last runner comes in (the group's rep is over then), else at the start when nobody ran. */
+function restBegan(members: AthleteRep[], startMs: number): number {
+  const finished = members.map((m) => m.finishMs).filter((v): v is number => v !== null);
+  return finished.length ? Math.max(...finished) : startMs;
 }
 
 export type AthleteSummary = {
