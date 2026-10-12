@@ -333,7 +333,7 @@ function Identity({ name, candidates, others, value, onChange }: { name: string;
         ]}
       />
       {mode === "pick" && (
-        <Select value={value} onChange={(e) => onChange(e.target.value)} aria-label={`Who is ${name}`}>
+        <Select value={value} onChange={(e) => onChange(e.target.value)} aria-label={`Who is ${name}`} className="mt-3">
           <option value="">Pick the athlete…</option>
           {all.map((x) => (
             <option key={x.id} value={x.id}>
