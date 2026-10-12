@@ -519,6 +519,7 @@ export function WorkoutRecorder({
             {lastIndex > 0 && (
               <Segmented
                 size="sm"
+                joined
                 className="w-36"
                 value={allReps ? "all" : "last"}
                 onChange={(v) => setResultsPref(v === "all" ? "all" : null)}
