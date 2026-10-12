@@ -380,7 +380,7 @@ export function WorkoutRecorder({
             </div>
           </div>
         ) : phase.kind === "before" ? (
-          <p className="mt-1 text-sm text-ink-2">{loaded ? "Start the clock when the group goes." : "Loading…"}</p>
+          <p className="mt-1 text-sm text-ink-2">{!loaded ? "Loading…" : plan.finishedAt ? "This group didn't run before the workout ended." : "Start the clock when the group goes."}</p>
         ) : phase.kind === "done" && phase.endedEarlyAfter === null && !plan.finishedAt ? (
           <Button size="xl" className="mt-3 w-full" disabled={changingReps} onClick={() => changeReps("add")}>
             <Plus className="size-5" />
@@ -392,7 +392,7 @@ export function WorkoutRecorder({
           </Button>
         ) : null}
         {phase.kind === "running" && !plan.finishedAt && (
-          <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className={`mt-4 grid gap-2 ${repIndex < reps.length - 1 ? "grid-cols-2" : "grid-cols-1"}`}>
             <Button variant="tint" size="touch" disabled={!startEventId} onClick={() => setAdjustingKey(adjusting ? null : armKey)} aria-pressed={adjusting}>
               Fix the clock
             </Button>
@@ -420,16 +420,17 @@ export function WorkoutRecorder({
         )}
         {phase.kind !== "running" && phase.kind !== "done" && !plan.finishedAt && (
           <>
-            {startArmed && (
-              <p className="mt-3 rounded-md bg-gold-soft px-3 py-2 text-[13px] text-ink">
-                {listNames(shortNames(stillOut.map(({ id }) => nameOf.get(id) ?? "?")))} {stillOut.length === 1 ? "is" : "are"} still out on rep {repIndex}. Starting rep {repIndex + 1} leaves{" "}
-                {stillOut.length === 1 ? "them" : "them each"} with no time for rep {repIndex}. You can add one later by tapping their name.
-              </p>
-            )}
             <Button size="xl" variant={startArmed ? "gold" : "primary"} className="mt-3 w-full" onPointerDown={notePointerDown} onClick={startRep}>
               <Play className="size-5" />
               {startArmed ? `Tap again to start rep ${repIndex + 1}` : `Start rep ${repIndex + 1}`}
             </Button>
+            {/* Under the button, so arming it never moves it out from under the thumb. */}
+            {startArmed && (
+              <p className="mt-2 rounded-md bg-gold-soft px-3 py-2 text-[13px] text-ink">
+                {listNames(shortNames(stillOut.map(({ id }) => nameOf.get(id) ?? "?")))} {stillOut.length === 1 ? "is" : "are"} still out on rep {repIndex}. Starting rep {repIndex + 1} leaves{" "}
+                {stillOut.length === 1 ? "them" : "them each"} with no time for rep {repIndex}. You can add one later by tapping their name.
+              </p>
+            )}
           </>
         )}
         {/* Between reps: hold the countdown for a water break or a delay. */}
@@ -603,7 +604,7 @@ export function WorkoutRecorder({
       )}
 
       {/* Between reps: who's going next, for skips, moves and stops before the start. */}
-      {upNext.length > 0 && (
+      {upNext.length > 0 && !plan.finishedAt && (
         <Card>
           <div className="border-b border-line px-4 py-2 text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">Running rep {repIndex + 1}</div>
           <div className="divide-y divide-line">

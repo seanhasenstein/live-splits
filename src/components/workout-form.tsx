@@ -6,7 +6,7 @@ import { saveWorkoutAction } from "@/app/actions/workouts";
 import { Alert, Button, Card, CardBody, CardHeader, Checkbox, Field, Input, LinkButton, SectionLabel, Select } from "@/components/ui";
 import type { DistanceUnit, Rest, WorkoutEffort } from "@/lib/db/schema";
 import { toMeters } from "@/lib/distance";
-import { describePlan, EFFORT_LABEL, type PlanSetInput, type WorkoutPayload } from "@/lib/workout-plan";
+import { describePlan, describeTotal, EFFORT_LABEL, type PlanSetInput, type WorkoutPayload } from "@/lib/workout-plan";
 import { goalPaceFrom5K } from "@/lib/workout-replay";
 import { formatDuration, formatElapsed, parseDuration } from "@/lib/time";
 
@@ -176,7 +176,7 @@ export function WorkoutForm({
       </Card>
 
       <Card>
-        <CardHeader title="Reps" description={plan && totalMeters !== null ? `${describePlan(asSets(plan))} · ${(totalMeters / 1000).toFixed(totalMeters % 1000 ? 1 : 0)} km of reps` : "Sets of reps, each with the rest that follows."} />
+        <CardHeader title="Reps" description={plan && totalMeters !== null ? `${describePlan(asSets(plan))} · ${describeTotal(totalMeters)} total` : "Sets of reps, each with the rest that follows."} />
         <CardBody flush className="divide-y divide-line">
           {sets.map((s, i) => (
             <div key={s.key} className="space-y-3 px-4 py-4">

@@ -55,6 +55,12 @@ export function toSetInputs(sets: RepSet[]): PlanSetInput[] {
   return sets.map((s) => ({ id: s.id, count: s.reps.length, value: s.reps[0].distance.value, unit: s.reps[0].distance.unit, rest: s.reps[0].rest, restAfter: s.restAfter }));
 }
 
+/** Total distance of the reps, the way coaches count it: "4,800m", or km past 10K. */
+export function describeTotal(meters: number): string {
+  const m = Math.round(meters);
+  return m < 10_000 ? `${m.toLocaleString("en-US")}m` : `${(m / 1000).toFixed(1)} km`;
+}
+
 /** "12 × 400m" / "3 × (4 × 400m)": one line for lists. */
 export function describePlan(sets: RepSet[]): string {
   const one = (s: RepSet) => {

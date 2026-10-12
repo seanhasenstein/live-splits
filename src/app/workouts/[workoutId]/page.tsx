@@ -7,7 +7,7 @@ import { SessionMenu } from "@/components/session-menu";
 import { WorkoutBoard } from "@/components/workout-board";
 import { WorkoutFinishButton } from "@/components/workout-finish-button";
 import { getProgram, listRoster } from "@/lib/data";
-import { describePlan, describeRest, EFFORT_LABEL } from "@/lib/workout-plan";
+import { describePlan, describeRest, describeTotal, EFFORT_LABEL } from "@/lib/workout-plan";
 import { flattenPlan } from "@/lib/workout-replay";
 import { getWorkout, lastTimeRan } from "@/lib/workouts";
 import { formatLocalDateLong } from "@/lib/time";
@@ -25,9 +25,7 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
   const levelLabel = (id: string) => program?.settings.levels.find((l) => l.id === id)?.label ?? id;
   const people = roster.map((a) => ({ id: a._id, name: a.displayName, gender: a.gender, level: levelLabel(a.defaultLevelId) }));
   const reps = flattenPlan(workout);
-  // The volume coaches count in: "4,800m", or km past 10K.
-  const totalM = Math.round(reps.reduce((n, r) => n + r.meters, 0));
-  const total = totalM < 10_000 ? `${totalM.toLocaleString("en-US")}m` : `${(totalM / 1000).toFixed(1)} km`;
+  const total = describeTotal(reps.reduce((n, r) => n + r.meters, 0));
 
   return (
     <>
