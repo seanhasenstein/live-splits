@@ -71,6 +71,21 @@ Import maps each gender's results contest to that same race (places stay per
 contest), and the CSV's Race column reads "JV Girls" / "JV Boys" so the
 workbook can split them.
 
+## Records: PR, SB, course PR, meet PR
+
+A finish that beats what the runner came in with earns a badge on the
+results board and the athlete sheet: PR (best at this distance in this
+program, any course), SB (this season), Course PR (this course layout),
+Meet PR (this meet in earlier years). Only the strongest shows on the board;
+the sheet lists the rest and the previous best. Bests come from official
+results across every season the app knows, so they are only as complete as
+the history imported. While a finish rests on an app tap the badge is
+outlined and says "pending official results"; inside two seconds of the old
+mark it reads "PR?". A first race at a distance earns nothing: a record means
+beating a previous mark. A meet marked "doesn't count for records" (edit
+meet; for a short course) still shows its times but never earns or sets a
+best; the same flag exists per race and per result in the schema.
+
 ## Past seasons
 
 Meets → the history button → upload the team's split-sheet PDF (one PDF for

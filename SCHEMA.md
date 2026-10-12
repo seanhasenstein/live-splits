@@ -87,6 +87,13 @@ and the running race clock always show tenths), `classYearSystem`, `levels[]`, `
 `historyCompleteFromYear` (null until history is imported; lists use it to say
 "history complete from YYYY").
 
+`meets.recordsExclusion`: `{ reason }` when nothing from the meet counts for
+PRs / season bests / course bests (short course); null otherwise. Bests are
+computed in `src/lib/results/bests.ts` from official finished results of
+earlier (or same-day, other) meets at the same distance, honouring this flag,
+`races.exclusions.excludeFromPrSb`, `results.exclusions.excludeFromPrSb` and
+`programs.settings.recordsStartGrade`.
+
 `races.placesDerived`: the official sheet scored a bigger field (divisions run
 together); the import kept our division's teams and the app ranked them by
 time. Times are official, places are the app's; the board labels them

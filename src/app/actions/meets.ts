@@ -52,7 +52,12 @@ const MeetForm = z.object({
   /** An existing course at the venue, or "new" to create `newCourseName`; blank = the venue's current layout (created if none). */
   courseId: z.string().trim().max(64).default(""),
   newCourseName: z.string().trim().max(120).default(""),
+  /** "on" when nothing from this meet should count for PRs / season bests / course bests. */
+  recordsExcluded: z.string().optional(),
+  recordsExclusionReason: z.string().trim().max(200).default(""),
 });
+
+const recordsExclusionOf = (input: { recordsExcluded?: string; recordsExclusionReason: string }) => (input.recordsExcluded ? { reason: input.recordsExclusionReason || null } : null);
 
 export async function createMeetAction(_prev: MeetFormState, formData: FormData): Promise<MeetFormState> {
   const session = await getSession();
@@ -94,6 +99,7 @@ export async function createMeetAction(_prev: MeetFormState, formData: FormData)
     timeZone: input.timeZone,
     weather: null,
     resultsUrl: input.resultsUrl || null,
+    recordsExclusion: recordsExclusionOf(input),
     joinCodes: hashes,
     ...audit,
   });
@@ -149,7 +155,18 @@ export async function updateMeetAction(meetId: string, _prev: MeetFormState, for
   await collection(db, "meets").updateOne(
     { _id: meet._id },
     {
-      $set: { name: input.name, date: input.date, timeZone: input.timeZone, seasonId: season._id, venueId, courseId, resultsUrl: input.resultsUrl || null, updatedAt: new Date(), updatedBy: actor },
+      $set: {
+        name: input.name,
+        date: input.date,
+        timeZone: input.timeZone,
+        seasonId: season._id,
+        venueId,
+        courseId,
+        resultsUrl: input.resultsUrl || null,
+        recordsExclusion: recordsExclusionOf(input),
+        updatedAt: new Date(),
+        updatedBy: actor,
+      },
     },
   );
   redirect(`/meets/${meet._id}`);

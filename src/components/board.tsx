@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Pencil, Share } from "lucide-react";
-import { CheckpointCounts, DeltaText, RaceStatusBar, RunningClock } from "@/components/race-status";
+import { CheckpointCounts, DeltaText, RaceStatusBar, RecordPill, RunningClock } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
 import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, LiveDot, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
@@ -14,6 +14,8 @@ import type { AthleteRaceStatus, Precision } from "@/lib/db/schema";
 import { lastFinished } from "@/lib/order";
 import type { LineupHistory } from "@/lib/results/history";
 import { METERS_PER_MILE, paceMsPerMile, projectElapsed } from "@/lib/pace";
+import { RECORD_LABEL, recordBadge } from "@/lib/records";
+import type { LineupBests } from "@/lib/results/bests";
 import { formatClock, formatElapsed, parseTypedTime } from "@/lib/time";
 
 type RaceInfo = {
@@ -29,6 +31,10 @@ type RaceInfo = {
   levels: Record<string, string>;
   /** Earlier results this season, for "vs last meet" on the athlete sheet. */
   history: LineupHistory;
+  /** What each runner had to beat coming in: PR, season best, course best, meet best. */
+  bests: LineupBests;
+  /** The meet is marked as not counting for records (short course…): no badges. */
+  recordsExcluded: boolean;
 };
 
 type Props = {
@@ -112,7 +118,7 @@ export function Board({ meetId, meetName, session, initialRaceId, timeZone, race
 
 /** One board cell: official time if imported, else the app's mark. `elapsedMs` is from the gun (null without one). */
 type Cell = { mark: Mark | undefined; official: number | null; precision: Precision | null; elapsedMs: number | null; absoluteMs: number | null; missed: boolean; beforeGun?: boolean };
-type Row = { athleteId: string; marks: (Mark | undefined)[]; cells: Cell[]; reached: number; officialStatus: string | null; officialPlace: number | null; status: AthleteStatus | undefined };
+type Row = { athleteId: string; marks: (Mark | undefined)[]; cells: Cell[]; reached: number; officialStatus: string | null; officialPlace: number | null; status: AthleteStatus | undefined; record: ReturnType<typeof recordBadge> };
 
 function RaceBoard({
   meetId,
@@ -240,7 +246,12 @@ function RaceBoard({
         if (cell.official !== null || cell.absoluteMs !== null) reached = i;
       });
       // Official results outrank an app-side DNS/DNF: the timing company saw them finish.
-      return { athleteId, marks, cells, reached, officialStatus: off?.status ?? null, officialPlace: off?.place ?? null, status: off ? undefined : statuses.get(athleteId) };
+      // A finish that beats what they came in with. Official once imported (or live from the mats); provisional from a tap.
+      const finishCell = cells.find((_, i) => race.checkpoints[i].kind === "finish");
+      const finishMs = finishCell ? (finishCell.official ?? finishCell.elapsedMs) : null;
+      const finished = !!finishCell && !finishCell.missed && !finishCell.beforeGun && (off ? off.status === "finished" : !statuses.get(athleteId));
+      const record = race.recordsExcluded || !finished ? null : recordBadge(finishMs, race.bests[athleteId], !!finishCell?.official);
+      return { athleteId, marks, cells, reached, officialStatus: off?.status ?? null, officialPlace: off?.place ?? null, status: off ? undefined : statuses.get(athleteId), record };
     });
     // Compare like with like: official times are from the gun, app times are elapsed when
     // there's a gun (else wall-clock, which is still monotonic within one race).
@@ -454,6 +465,7 @@ function RaceBoard({
                       ) : (
                         <button type="button" onClick={() => setAthleteSheet(row.athleteId)} className="-mx-1.5 rounded px-1.5 py-1 text-left">
                           {athletes[row.athleteId]}
+                          {row.record && <RecordPill badge={row.record} className="ml-2 align-[2px]" />}
                         </button>
                       )}
                       {row.status ? (
@@ -749,7 +761,7 @@ function AthleteSheet({
       return v !== null ? [`${c.label} ${ft(v, row?.cells[i]?.precision)}`] : [];
     });
     const headline = finish !== null ? ft(finish, row?.cells[finishIndex]?.precision) : status ? status.short : raceClockMs !== null ? "in progress" : parts.length ? "" : "not started";
-    const text = [`${name} — ${race.name}, ${meetName}`, headline, row?.officialPlace != null ? `${row.officialPlace}${ordinal(row.officialPlace)}${race.placesDerived ? " in division" : " place"}` : "", ...parts]
+    const text = [`${name} — ${race.name}, ${meetName}`, headline, row?.record ? `${RECORD_LABEL[row.record.kind].short}${row.record.unofficial ? " (unofficial)" : ""}` : "", row?.officialPlace != null ? `${row.officialPlace}${ordinal(row.officialPlace)}${race.placesDerived ? " in division" : " place"}` : "", ...parts]
       .filter(Boolean)
       .join(" · ");
     try {
@@ -799,8 +811,19 @@ function AthleteSheet({
               <div className="text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
                 {finish !== null ? (finishOfficial ? "Finish · official" : "Finish · unofficial") : projected !== null ? "Projected finish" : "Finish"}
               </div>
-              <Time className="text-4xl font-semibold tracking-tight text-ink">{finish !== null ? ft(finish, row?.cells[finishIndex]?.precision) : projected !== null ? `~${formatElapsed(projected).replace(/\.\d$/, "")}` : "—"}</Time>
-              {avgPace !== null && <Time className="block text-[13px] text-ink-2">{formatElapsed(avgPace).replace(/\.\d$/, "")}/mi average</Time>}
+              <div className="flex items-center gap-2">
+                <Time className="text-4xl font-semibold tracking-tight text-ink">{finish !== null ? ft(finish, row?.cells[finishIndex]?.precision) : projected !== null ? `~${formatElapsed(projected).replace(/\.\d$/, "")}` : "—"}</Time>
+                {row?.record && <RecordPill badge={row.record} size="md" />}
+              </div>
+              {row?.record ? (
+                <span className="block text-[13px] text-ink-2">
+                  Previous best {ft(row.record.previousMs)}
+                  {row.record.all.length > 1 && ` · also ${row.record.all.slice(1).map((k) => RECORD_LABEL[k].short).join(", ")}`}
+                  {row.record.unofficial && " · pending official results"}
+                </span>
+              ) : (
+                avgPace !== null && <Time className="block text-[13px] text-ink-2">{formatElapsed(avgPace).replace(/\.\d$/, "")}/mi average</Time>
+              )}
             </>
           )}
         </div>

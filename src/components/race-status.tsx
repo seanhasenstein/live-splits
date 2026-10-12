@@ -3,6 +3,7 @@
 import { Award, Check, Flag } from "lucide-react";
 import { useEffect, useState } from "react";
 import { LiveDot, Stat, Time } from "@/components/ui";
+import { RECORD_LABEL, type RecordBadge } from "@/lib/records";
 import { formatElapsed } from "@/lib/time";
 
 /**
@@ -120,6 +121,22 @@ function OfficialPill({ kind, className }: { kind: "imported" | "division" | "li
     <span className={`ml-auto flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold tracking-[0.06em] uppercase ${className}`}>
       {kind === "live" ? <LiveDot className="bg-current" /> : <Award className="size-3.5" />}
       {kind === "live" ? "Official · live" : kind === "division" ? "Official times · division places" : "Official results"}
+    </span>
+  );
+}
+
+/**
+ * PR / SB / Course PR / Meet PR. Solid once the mats say so; outlined while
+ * it rests on app taps, with a "?" when the margin is inside the tap error.
+ */
+export function RecordPill({ badge, size = "sm", className = "" }: { badge: RecordBadge; size?: "sm" | "md"; className?: string }) {
+  const text = `${RECORD_LABEL[badge.kind].short}${badge.uncertain ? "?" : ""}`;
+  const title = `${RECORD_LABEL[badge.kind].long}${badge.unofficial ? " (unofficial, pending official results)" : ""}`;
+  const dims = size === "md" ? "h-7 px-2.5 text-[13px]" : "h-5 px-1.5 text-[11px]";
+  const look = badge.unofficial ? "border border-brand text-brand-text" : "bg-brand text-brand-ink";
+  return (
+    <span title={title} className={`inline-flex shrink-0 items-center rounded-md font-semibold tracking-[0.04em] uppercase ${dims} ${look} ${className}`}>
+      {text}
     </span>
   );
 }

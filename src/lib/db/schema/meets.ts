@@ -31,6 +31,11 @@ export const Meet = tenantDoc({
   date: LocalDate,
   timeZone: TimeZone,
   weather: Weather.nullable(),
+  /**
+   * Set when nothing from this meet should count for PRs, season bests or course bests
+   * (a short course, a rerouted race). Results are kept and shown; records ignore them.
+   */
+  recordsExclusion: z.object({ reason: z.string().min(1).nullable() }).nullable().default(null),
   /** The timing company's page for this meet (live timing / results), linked from the meet page. */
   resultsUrl: z.url().nullable().default(null),
   /**
