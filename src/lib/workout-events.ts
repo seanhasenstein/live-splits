@@ -21,22 +21,50 @@ export const WorkoutEventInput = z.object({
 });
 export type WorkoutEventInput = z.infer<typeof WorkoutEventInput>;
 
-/** Who may time a workout: for now, a school coach session. Manager access by code comes with the record screen's sharing. */
+/** Who may time a workout: a school coach, or a manager who joined with the team's workout code. */
 export async function canTimeWorkout(workout: Workout) {
   const session = await getSession();
   return canUseWorkouts(session) && session!.schoolId === workout.schoolId ? session! : null;
 }
 
-/** Store events; retries are safe (clientEventId is unique). Returns the ids now stored. */
-export async function recordWorkoutEvents(workout: Workout, inputs: WorkoutEventInput[], actor: ReturnType<typeof sessionActor>): Promise<string[]> {
+/** Once a coach ends a workout only fixes go in: a typed time, an edit, an undo, a note. Reopen it to run more. */
+const allowedWhenEnded = (e: WorkoutEventInput) => e.type === "edit" || e.type === "void" || e.type === "note" || (e.type === "finish" && e.timeMs !== null);
+
+/**
+ * Store events; retries are safe (clientEventId is unique). Returns the ids now stored, and the
+ * ids refused (they can never be stored, so the phone drops them rather than resending forever).
+ * Each event must fit this workout: its rep, group and runner (in the workout or on the
+ * season's roster, for a late arrival), and the event it corrects (in this workout).
+ */
+export async function recordWorkoutEvents(workout: Workout, inputs: WorkoutEventInput[], actor: ReturnType<typeof sessionActor>): Promise<{ accepted: string[]; rejected: string[] }> {
   const db = await getDb();
+  const events = collection(db, "workoutEvents");
   const reps = new Set(workout.sets.flatMap((s) => s.reps.map((r) => r.id)));
   const groups = new Set(workout.groups.map((g) => g.id));
+  const athletes = new Set(workout.athletes.map((a) => a.athleteId));
+  if (inputs.some((e) => e.athleteId !== null && !athletes.has(e.athleteId))) {
+    for (const r of await collection(db, "seasonRosters").find({ seasonId: workout.seasonId, deletedAt: null }, { projection: { athleteId: 1 } }).toArray()) athletes.add(r.athleteId);
+  }
+  const inBatch = new Set(inputs.map((e) => e.clientEventId));
+  const wanted = [...new Set(inputs.map((e) => e.targetEventId).filter((t): t is string => t !== null && !inBatch.has(t)))];
+  const targets = new Set([
+    ...inBatch,
+    ...(wanted.length ? (await events.find({ workoutId: workout._id, clientEventId: { $in: wanted } }, { projection: { clientEventId: 1 } }).toArray()).map((e) => e.clientEventId) : []),
+  ]);
   const accepted: string[] = [];
+  const rejected: string[] = [];
   for (const e of inputs) {
-    if (e.workoutId !== workout._id) continue;
-    if (e.repId !== null && !reps.has(e.repId)) continue;
-    if (e.groupId !== null && !groups.has(e.groupId)) continue;
+    const fits =
+      e.workoutId === workout._id &&
+      (e.repId === null || reps.has(e.repId)) &&
+      (e.groupId === null || groups.has(e.groupId)) &&
+      (e.athleteId === null || athletes.has(e.athleteId)) &&
+      (e.targetEventId === null || targets.has(e.targetEventId)) &&
+      (!workout.finishedAt || allowedWhenEnded(e));
+    if (!fits) {
+      rejected.push(e.clientEventId);
+      continue;
+    }
     const doc = COLLECTIONS.workoutEvents.schema.parse({
       _id: newId(),
       schoolId: workout.schoolId,
@@ -47,12 +75,17 @@ export async function recordWorkoutEvents(workout: Workout, inputs: WorkoutEvent
       createdBy: actor,
     });
     try {
-      await collection(db, "workoutEvents").insertOne(doc);
+      await events.insertOne(doc);
     } catch (err) {
-      // Already stored by an earlier attempt: that's a success.
       if (!(err && typeof err === "object" && "code" in err && err.code === 11000)) throw err;
+      // Already stored by an earlier attempt: a success, as long as it's this workout's.
+      const existing = await events.findOne({ clientEventId: e.clientEventId }, { projection: { workoutId: 1 } });
+      if (existing?.workoutId !== workout._id) {
+        rejected.push(e.clientEventId);
+        continue;
+      }
     }
     accepted.push(e.clientEventId);
   }
-  return accepted;
+  return { accepted, rejected };
 }

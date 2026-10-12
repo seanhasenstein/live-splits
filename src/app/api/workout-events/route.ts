@@ -13,6 +13,6 @@ export async function POST(request: Request) {
   if (!workout) return Response.json({ error: "Workout not found" }, { status: 404 });
   const session = await canTimeWorkout(workout);
   if (!session) return Response.json({ error: "Not allowed" }, { status: 403 });
-  const accepted = await recordWorkoutEvents(workout, parsed.data.events, sessionActor(session));
-  return Response.json({ accepted, serverTimeMs: Date.now() });
+  const { accepted, rejected } = await recordWorkoutEvents(workout, parsed.data.events, sessionActor(session));
+  return Response.json({ accepted, rejected, serverTimeMs: Date.now() });
 }

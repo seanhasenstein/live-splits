@@ -164,6 +164,7 @@ export async function changeRepsAction(workoutId: string, change: "add" | "drop"
   if (!workout) return { error: "Workout not found" };
   const session = await canTimeWorkout(workout);
   if (!session) return { error: "Not allowed" };
+  if (workout.finishedAt) return { error: "The workout has been ended. Reopen it to change the reps." };
   const db = await getDb();
   let sets = workout.sets;
   if (change === "add") sets = addRepAtEnd(sets);

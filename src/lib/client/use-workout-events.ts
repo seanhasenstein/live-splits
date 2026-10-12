@@ -115,20 +115,24 @@ export function useWorkoutEvents(workoutId: string, initial: Plan, timingGroupId
         return;
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const body = (await res.json()) as { accepted: string[] };
+      const body = (await res.json()) as { accepted: string[]; rejected?: string[] };
       const accepted = new Set(body.accepted);
+      // Refused for good (a rep since dropped, the workout ended): drop them, or the queue would resend them forever.
+      const rejected = new Set(body.rejected ?? []);
+      if (rejected.size) console.error("workout events refused", [...rejected]);
       // Keep showing them until the next poll brings them back from the server.
       setServerEvents((prev) => {
         const next = new Map(prev);
         for (const e of batch) if (accepted.has(e.clientEventId) && !next.has(e.clientEventId)) next.set(e.clientEventId, asEvent(e));
         return next;
       });
-      const rest = loadQueue(workoutId).filter((e) => !accepted.has(e.clientEventId));
+      const rest = loadQueue(workoutId).filter((e) => !accepted.has(e.clientEventId) && !rejected.has(e.clientEventId));
       saveQueue(workoutId, rest);
       setQueue(rest);
       failures.current = 0;
       setOnline(true);
-      if (rest.length) setTimeout(() => void flushRef.current(), 0);
+      // More waiting (a batch was capped at 100, or taps came in meanwhile): send on, but only after progress.
+      if (rest.length && (accepted.size || rejected.size)) setTimeout(() => void flushRef.current(), 0);
     } catch {
       setOnline(false);
       retry.current = setTimeout(() => void flushRef.current(), RETRY_MS[Math.min(failures.current++, RETRY_MS.length - 1)]);
