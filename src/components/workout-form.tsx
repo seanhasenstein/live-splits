@@ -233,31 +233,39 @@ export function WorkoutForm({
             </Button>
           }
         />
-        <CardBody className="flex flex-wrap gap-2">
-          {groups.map((g) => (
-            <div key={g.id} className="flex items-center gap-1 rounded-md border border-line bg-surface pr-1 pl-2">
-              <input
-                value={g.name}
-                onChange={(e) => setGroups((list) => list.map((x) => (x.id === g.id ? { ...x, name: e.target.value } : x)))}
-                className="h-8 w-28 bg-transparent text-sm text-ink outline-none"
-                aria-label="Group name"
-                maxLength={40}
-              />
-              {groups.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setGroups((list) => list.filter((x) => x.id !== g.id));
-                    setAthletes((list) => list.map((a) => (a.groupId === g.id ? { ...a, groupId: groups.find((x) => x.id !== g.id)!.id } : a)));
-                  }}
-                  className="rounded p-1 text-ink-3 hover:bg-surface-2 hover:text-ink"
-                  aria-label={`Remove ${g.name}`}
-                >
-                  <X className="size-3.5" />
-                </button>
-              )}
-            </div>
-          ))}
+        <CardBody className="space-y-2">
+          {groups.length > 1 && <p className="text-[13px] text-ink-2">Name them so whoever&rsquo;s timing knows which is theirs: &ldquo;Varsity boys&rdquo;, &ldquo;Coach Mike&rsquo;s group&rdquo;. The name is on their timing screen.</p>}
+          {groups.map((g) => {
+            const count = athletes.filter((a) => a.in && a.groupId === g.id).length;
+            return (
+              <div key={g.id} className="flex items-center gap-2">
+                <Input
+                  value={g.name}
+                  onChange={(e) => setGroups((list) => list.map((x) => (x.id === g.id ? { ...x, name: e.target.value } : x)))}
+                  className="min-w-0 flex-1"
+                  aria-label="Group name"
+                  placeholder="Group name"
+                  maxLength={40}
+                />
+                <span className="w-20 shrink-0 text-right text-[13px] text-ink-3">
+                  {count} runner{count === 1 ? "" : "s"}
+                </span>
+                {groups.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGroups((list) => list.filter((x) => x.id !== g.id));
+                      setAthletes((list) => list.map((a) => (a.groupId === g.id ? { ...a, groupId: groups.find((x) => x.id !== g.id)!.id } : a)));
+                    }}
+                    className="rounded p-1.5 text-ink-3 hover:bg-surface-2 hover:text-ink"
+                    aria-label={`Remove ${g.name}`}
+                  >
+                    <X className="size-4" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </CardBody>
       </Card>
 

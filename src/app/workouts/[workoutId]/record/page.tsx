@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { WorkoutRecorder } from "@/components/workout-recorder";
-import { AppHeader, Page } from "@/components/ui";
+import { Table2 } from "lucide-react";
+import { AppHeader, LinkButton, Page } from "@/components/ui";
 import { getSession, isSchoolCoach } from "@/lib/auth/session";
 import { listRoster } from "@/lib/data";
 import { getWorkout } from "@/lib/workouts";
@@ -18,11 +19,18 @@ export default async function RecordWorkoutPage({ params, searchParams }: PagePr
   const roster = await listRoster(workout.seasonId);
   return (
     <>
-      <AppHeader back={{ href: `/workouts/${workout._id}`, label: workout.name }} />
+      <AppHeader
+        back={{ href: `/workouts/${workout._id}`, label: workout.name }}
+        right={
+          <LinkButton href={`/workouts/${workout._id}`} variant="secondary" size="sm">
+            <Table2 className="size-4" />
+            Results
+          </LinkButton>
+        }
+      />
       <Page>
         <WorkoutRecorder
           workoutId={workout._id}
-          workoutName={workout.name}
           initialPlan={{ sets: workout.sets, groups: workout.groups, athletes: workout.athletes, finishedAt: workout.finishedAt?.toISOString() ?? null }}
           people={roster.map((a) => ({ id: a._id, name: a.displayName }))}
           initialGroupId={typeof group === "string" ? group : null}

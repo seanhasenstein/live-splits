@@ -69,6 +69,8 @@ export type AthleteRep = {
   deltaMs: number | null;
   /** The finish event, for edits and undo. */
   finishEventId: string | null;
+  /** Their own start (a late start), when they have one: undo it to go back to the group's clock. */
+  ownStartEventId: string | null;
 };
 
 export type GroupPhase =
@@ -139,8 +141,12 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
   const groupStart = new Map<string, number>(); // `${groupId}:${ri}`
   const groupStartEvent = new Map<string, string>();
   const ownStart = new Map<string, number>(); // `${athleteId}:${ri}`
+  const ownStartEvent = new Map<string, string>();
   for (const e of ordered.filter((e) => e.type === "rep_start")) {
-    if (e.athleteId) ownStart.set(`${e.athleteId}:${repOf(e)}`, at(e));
+    if (e.athleteId) {
+      ownStart.set(`${e.athleteId}:${repOf(e)}`, at(e));
+      ownStartEvent.set(`${e.athleteId}:${repOf(e)}`, e.clientEventId);
+    }
     else if (e.groupId) {
       groupStart.set(`${e.groupId}:${repOf(e)}`, at(e));
       groupStartEvent.set(`${e.groupId}:${repOf(e)}`, e.clientEventId);
@@ -201,6 +207,7 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
         goalMs,
         deltaMs: elapsedMs !== null && goalMs !== null ? elapsedMs - goalMs : null,
         finishEventId: fin?.clientEventId ?? null,
+        ownStartEventId: ownStartEvent.get(`${id}:${rep.index}`) ?? null,
       };
     });
     athletes.set(id, list);

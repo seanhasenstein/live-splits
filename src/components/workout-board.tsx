@@ -67,13 +67,15 @@ export function WorkoutBoard({ workoutId, initialPlan, people }: { workoutId: st
 
   return (
     <div className="space-y-3">
-      {/* Where each group is right now: the same clocks the timing phones show. */}
-      <div className="grid gap-2 sm:grid-cols-2">
-        {plan.groups.map((g) => (
-          <GroupStatus key={g.id} name={plan.groups.length > 1 ? g.name : "Group"} phase={state.groups.get(g.id)!} log={state.groupLog.get(g.id) ?? []} reps={reps} now={now} />
-        ))}
-      </div>
       {options.length > 1 && <Segmented value={filter} onChange={setFilter} options={options} />}
+      {/* Where each group is right now: the same clocks the timing phones show. Picking a group shows just its clocks. */}
+      <div className="grid gap-2 sm:grid-cols-2">
+        {plan.groups
+          .filter((g) => !filter.startsWith("g:") || filter === `g:${g.id}`)
+          .map((g) => (
+            <GroupStatus key={g.id} name={plan.groups.length > 1 ? g.name : "Group"} phase={state.groups.get(g.id)!} log={state.groupLog.get(g.id) ?? []} reps={reps} now={now} />
+          ))}
+      </div>
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -154,6 +156,9 @@ export function WorkoutBoard({ workoutId, initialPlan, people }: { workoutId: st
 function GroupStatus({ name, phase, log, reps, now }: { name: string; phase: GroupPhase; log: GroupRepLog[]; reps: ReturnType<typeof replayWorkout>["reps"]; now: number }) {
   const label = (i: number) => (reps.some((r) => r.setIndex > 0) ? `Set ${reps[i].setIndex + 1} · rep ${reps[i].number}` : `Rep ${reps[i].number} of ${reps[i].setSize}`);
   const rests = log.filter((l) => l.restMs !== null);
+  // The rep clock runs while the rep does, and on through the rest while anyone is still out.
+  const repStartMs = phase.kind === "running" ? phase.startMs : phase.kind === "rest" && phase.stillOut ? (log.find((l) => l.repIndex === phase.afterRepIndex)?.startMs ?? null) : null;
+  const repNo = phase.kind === "running" ? phase.repIndex + 1 : phase.kind === "rest" ? phase.afterRepIndex + 1 : 0;
   return (
     <Card className="px-4 py-3">
       <div className="flex items-center justify-between gap-3">
@@ -166,17 +171,24 @@ function GroupStatus({ name, phase, log, reps, now }: { name: string; phase: Gro
             {phase.kind === "before" ? "Not started" : phase.kind === "done" ? "All reps done" : phase.kind === "running" ? `${label(phase.repIndex)} · running` : `Resting after ${label(phase.afterRepIndex).toLowerCase()}${phase.rest ? ` · ${describeRest(phase.rest)}` : ""}`}
           </div>
         </div>
-        {phase.kind === "running" && <Time className="text-2xl font-semibold tracking-tight text-ink">{formatElapsed(Math.max(0, now - phase.startMs))}</Time>}
-        {phase.kind === "rest" && (
-          <div className="text-right">
-            <Time className={`block text-2xl font-semibold tracking-tight ${phase.nextStartMs !== null && now > phase.nextStartMs ? "text-danger" : "text-ink"}`}>
-              {formatElapsed(Math.max(0, now - phase.restStartedMs)).replace(/\.\d$/, "")}
-            </Time>
-            {phase.nextStartMs !== null && (
-              <span className="text-[11px] text-ink-3">{now < phase.nextStartMs ? `next in ${formatElapsed(phase.nextStartMs - now).replace(/\.\d$/, "")}` : `${formatElapsed(now - phase.nextStartMs).replace(/\.\d$/, "")} over`}</span>
-            )}
-          </div>
-        )}
+        <div className="flex shrink-0 gap-4 text-right">
+          {/* Every clock says what it's timing, so a number on its own is never a guess. */}
+          {repStartMs !== null && <Clock label={`Rep ${repNo}`} value={formatElapsed(Math.max(0, now - repStartMs))} />}
+          {phase.kind === "rest" && (
+            <Clock
+              label="Rest"
+              value={formatElapsed(Math.max(0, now - phase.restStartedMs)).replace(/\.\d$/, "")}
+              tone={phase.nextStartMs !== null && now > phase.nextStartMs ? "text-danger" : "text-ink"}
+              note={
+                phase.nextStartMs === null
+                  ? null
+                  : now < phase.nextStartMs
+                    ? `next in ${formatElapsed(phase.nextStartMs - now).replace(/\.\d$/, "")}`
+                    : `${formatElapsed(now - phase.nextStartMs).replace(/\.\d$/, "")} over`
+              }
+            />
+          )}
+        </div>
       </div>
       {rests.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-x-2 gap-y-0.5 border-t border-line pt-2 text-[12px] text-ink-2">
@@ -193,5 +205,15 @@ function GroupStatus({ name, phase, log, reps, now }: { name: string; phase: Gro
         </div>
       )}
     </Card>
+  );
+}
+
+function Clock({ label, value, tone = "text-ink", note = null }: { label: string; value: string; tone?: string; note?: string | null }) {
+  return (
+    <div>
+      <div className="text-[10px] font-semibold tracking-[0.08em] text-ink-3 uppercase">{label}</div>
+      <Time className={`block text-2xl leading-tight font-semibold tracking-tight ${tone}`}>{value}</Time>
+      {note && <span className="text-[11px] text-ink-3">{note}</span>}
+    </div>
   );
 }
