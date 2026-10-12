@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Pencil } from "lucide-react";
+import { Pencil, Timer } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { AppHeader, Card, CardBody, CardHeader, LinkButton, Page, PageTitle, SectionLabel, Time } from "@/components/ui";
 import { getSession, isSchoolCoach } from "@/lib/auth/session";
@@ -38,6 +38,14 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
             </LinkButton>
           }
         />
+        <div className="mb-4 grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(workout.groups.length, 3)}, minmax(0, 1fr))` }}>
+          {workout.groups.map((g) => (
+            <LinkButton key={g.id} href={`/workouts/${workout._id}/record?group=${g.id}`} size="lg">
+              <Timer className="size-4" />
+              {workout.groups.length > 1 ? `Time ${g.name}` : "Time it"}
+            </LinkButton>
+          ))}
+        </div>
         <div className="space-y-4">
           <Card>
             <CardHeader title="Reps" description={`${describePlan(workout.sets)} · ${totalKm.toFixed(totalKm % 1 ? 1 : 0)} km of reps${workout.approximateDistances ? " · distances approximate" : ""}`} />
