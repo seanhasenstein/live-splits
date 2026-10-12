@@ -1,5 +1,6 @@
 "use client";
 
+import { Check } from "lucide-react";
 import { useActionState, useState, useTransition } from "react";
 import { commitHistoryAction, type HistoryLoadState, loadHistoryAction } from "@/app/actions/history";
 import { Alert, Badge, Button, Card, CardBody, CardHeader, Field, Input, LinkButton, SectionLabel, Select, Stat } from "@/components/ui";
@@ -7,6 +8,14 @@ import { useTimeFormat } from "@/lib/client/time-format";
 import type { HistoryCommitResult, HistoryReview } from "@/lib/results/history-import";
 import type { HistoryMeet } from "@/lib/results/splits-history";
 import { formatLocalDate } from "@/lib/time";
+
+/** A class in a given season and when it graduates: a senior in 2025 is the class of 2026. */
+const CLASSES = [
+  { label: "Senior", yearsIn: 4, yearsLeft: 1 },
+  { label: "Junior", yearsIn: 3, yearsLeft: 2 },
+  { label: "Sophomore", yearsIn: 2, yearsLeft: 3 },
+  { label: "Freshman", yearsIn: 1, yearsLeft: 4 },
+];
 
 export function HistoryImportWizard() {
   const [state, load, loading] = useActionState(loadHistoryAction, {} as HistoryLoadState);
@@ -34,7 +43,6 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
   const { ft } = useTimeFormat();
   const [include, setInclude] = useState<Record<number, boolean>>(() => Object.fromEntries(review.meets.map((m) => [m.index, m.existingMeetId === null])));
   const [venues, setVenues] = useState<Record<number, string>>(() => Object.fromEntries(review.meets.map((m) => [m.index, m.venueName])));
-  const [open, setOpen] = useState<Record<number, boolean>>({});
   const [gradYears, setGradYears] = useState<Record<string, string>>(() => Object.fromEntries(review.athletes.filter((a) => !a.athleteId).map((a) => [a.name, a.graduationYearGuess?.toString() ?? ""])));
   // For names the app didn't recognise: a new athlete ("") or an existing one's id. A lone same-surname candidate is only suggested, not assumed.
   const [identity, setIdentity] = useState<Record<string, string>>(() => Object.fromEntries(review.athletes.filter((a) => !a.athleteId).map((a) => [a.name, ""])));
@@ -114,39 +122,38 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
             const existing = m.existingMeetId !== null;
             const checked = !!include[m.index];
             return (
-              <Card key={m.index} className={existing ? "opacity-70" : ""}>
-                <div className="flex items-start gap-3 px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    disabled={existing}
-                    onChange={(e) => setInclude({ ...include, [m.index]: e.target.checked })}
-                    aria-label={`Import ${m.name}`}
-                    className="mt-1 size-4 shrink-0 accent-brand"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <h3 className="text-[15px] font-semibold text-ink">{m.name}</h3>
-                      {existing && <Badge tone="neutral">already in the app</Badge>}
-                    </div>
-                    <p className="text-[13px] text-ink-2">
+              <Card key={m.index} className={`overflow-hidden transition-colors ${existing ? "opacity-60" : checked ? "border-brand" : ""}`}>
+                {/* The whole header is the switch: tap to take a meet in or out. */}
+                <button
+                  type="button"
+                  disabled={existing}
+                  onClick={() => setInclude({ ...include, [m.index]: !checked })}
+                  aria-pressed={checked}
+                  className={`flex w-full items-start gap-3 px-4 py-3 text-left ${checked ? "bg-brand-soft" : "bg-surface"} ${existing ? "cursor-default" : "hover:bg-surface-2"}`}
+                >
+                  <span className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border ${checked ? "border-brand bg-brand text-brand-ink" : "border-line bg-surface"}`} aria-hidden>
+                    {checked && <Check className="size-3" strokeWidth={3} />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="text-[15px] font-semibold text-ink">{m.name}</span>
+                      {existing ? <Badge tone="neutral">already in the app</Badge> : !checked && <Badge tone="neutral">skipped</Badge>}
+                    </span>
+                    <span className="block text-[13px] text-ink-2">
                       {formatLocalDate(m.date)}, {m.date.slice(0, 4)} · {m.races.join(" · ")} · {m.rows} result{m.rows === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                  <Button size="sm" variant="ghost" onClick={() => setOpen({ ...open, [m.index]: !open[m.index] })} aria-expanded={!!open[m.index]}>
-                    {open[m.index] ? "Hide results" : "Show results"}
-                  </Button>
-                </div>
+                    </span>
+                  </span>
+                </button>
                 {checked && (
                   <CardBody className="py-3">
                     <Field label="Venue" hint="Gives the meet its course, for course bests. Leave blank if you're not sure; it can be set on the meet later.">
-                      <Input value={venues[m.index] ?? ""} onChange={(e) => setVenues({ ...venues, [m.index]: e.target.value })} placeholder="Northbrook Golf & Grill" list="history-venues" maxLength={120} className="sm:max-w-sm" />
+                      <Input value={venues[m.index] ?? ""} onChange={(e) => setVenues({ ...venues, [m.index]: e.target.value })} placeholder="Northbrook Golf & Grill" list="history-venues" maxLength={120} />
                     </Field>
                   </CardBody>
                 )}
-                {open[m.index] && (
+                {!existing && (
                   <CardBody className="overflow-x-auto p-0">
-                    <table className="w-full text-sm">
+                    <table className={`w-full text-sm ${checked ? "" : "opacity-50"}`}>
                       <thead>
                         <tr className="border-b border-line text-left text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
                           <th className="px-4 py-2 font-semibold whitespace-nowrap">Athlete</th>
@@ -206,46 +213,64 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
             description={
               unknown.length === 0
                 ? undefined
-                : "Someone who ran in an earlier season but isn't on this year's roster is added as an athlete, so their results and PRs count. If a name is a different spelling of an athlete the app already has, pick them instead. A graduation year lets the app work out grades; four seasons in the file means a senior in the last one."
+                : "Someone who ran in an earlier season but isn't on this year's roster is added as an athlete, so their results and PRs count. If a name is a different spelling of an athlete the app already has, pick them instead. Their class in their last season gives the app a graduation year, for grades."
             }
           />
-          {unknown.length > 0 && (
-            <CardBody className="divide-y divide-line p-0">
-              {unknown.map((a) => {
-                const inChosen = namesInChosen.has(a.name);
-                const others = review.allAthletes.filter((x) => (x.gender === a.gender || x.gender === "X") && !a.candidates.some((c) => c.id === x.id));
-                return (
-                  <div key={a.name} className={`space-y-2 px-4 py-3 ${inChosen ? "" : "opacity-50"}`}>
-                    <div>
-                      <div className="text-sm font-medium text-ink">{a.name}</div>
-                      <div className="text-[13px] text-ink-2">
-                        {a.gender === "F" ? "Girls" : "Boys"} · ran in {a.seasons.join(", ")}
-                        {!inChosen && " · not in a ticked meet"}
+          {(["F", "M"] as const).map((g) => {
+            const group = unknown.filter((a) => a.gender === g);
+            if (group.length === 0) return null;
+            return (
+              <CardBody key={g} className="p-0">
+                <div className="bg-surface-2 px-4 py-1.5 text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">{g === "F" ? "Girls" : "Boys"}</div>
+                <div className="divide-y divide-line">
+                  {group.map((a) => {
+                    const inChosen = namesInChosen.has(a.name);
+                    const others = review.allAthletes.filter((x) => (x.gender === a.gender || x.gender === "X") && !a.candidates.some((c) => c.id === x.id));
+                    const last = a.seasons[a.seasons.length - 1];
+                    // Which class they could have been in their last season: with n seasons in the file they
+                    // were at least n years in, so a 2-season runner wasn't a freshman in the second one.
+                    const classes = CLASSES.filter((c) => c.yearsIn >= a.seasons.length);
+                    return (
+                      <div key={a.name} className={`space-y-2 px-4 py-3 ${inChosen ? "" : "opacity-50"}`}>
+                        <div>
+                          <div className="text-sm font-medium text-ink">{a.name}</div>
+                          <div className="text-[13px] text-ink-2">
+                            Ran in {a.seasons.join(", ")}
+                            {!inChosen && " · not in a ticked meet"}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Select value={identity[a.name] ?? ""} onChange={(e) => setIdentity({ ...identity, [a.name]: e.target.value })} className="min-w-0 flex-1" aria-label={`Who is ${a.name}`}>
+                            <option value="">Add as a new athlete</option>
+                            {a.candidates.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name} — same last name
+                              </option>
+                            ))}
+                            {others.map((x) => (
+                              <option key={x.id} value={x.id}>
+                                {x.name}
+                              </option>
+                            ))}
+                          </Select>
+                          {!identity[a.name] && (
+                            <Select value={gradYears[a.name] ?? ""} onChange={(e) => setGradYears({ ...gradYears, [a.name]: e.target.value })} className="w-52 shrink-0" aria-label={`Class of ${a.name} in ${last}`}>
+                              <option value="">Class in {last}?</option>
+                              {classes.map((c) => (
+                                <option key={c.label} value={String(last + c.yearsLeft)}>
+                                  {c.label} → class of {last + c.yearsLeft}
+                                </option>
+                              ))}
+                            </Select>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex gap-2">
-                    <Select value={identity[a.name] ?? ""} onChange={(e) => setIdentity({ ...identity, [a.name]: e.target.value })} className="min-w-0 flex-1" aria-label={`Who is ${a.name}`}>
-                      <option value="">Add as a new athlete</option>
-                      {a.candidates.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} — same last name
-                        </option>
-                      ))}
-                      {others.map((x) => (
-                        <option key={x.id} value={x.id}>
-                          {x.name}
-                        </option>
-                      ))}
-                    </Select>
-                    {!identity[a.name] && (
-                      <Input value={gradYears[a.name] ?? ""} onChange={(e) => setGradYears({ ...gradYears, [a.name]: e.target.value })} placeholder="Grad year" inputMode="numeric" maxLength={4} className="w-28 shrink-0" aria-label={`Graduation year for ${a.name}`} />
-                    )}
-                    </div>
-                  </div>
-                );
-              })}
-            </CardBody>
-          )}
+                    );
+                  })}
+                </div>
+              </CardBody>
+            );
+          })}
         </Card>
       </section>
 
