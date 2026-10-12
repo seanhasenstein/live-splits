@@ -3,7 +3,7 @@
 import { Check } from "lucide-react";
 import { useActionState, useState, useTransition } from "react";
 import { commitHistoryAction, type HistoryLoadState, loadHistoryAction } from "@/app/actions/history";
-import { Alert, Badge, Button, Card, CardBody, CardHeader, Field, Input, LinkButton, SectionLabel, Select, Stat } from "@/components/ui";
+import { Alert, Badge, Button, Card, CardBody, CardHeader, Field, Input, LinkButton, SectionLabel, Segmented, Select, Stat } from "@/components/ui";
 import { useTimeFormat } from "@/lib/client/time-format";
 import type { HistoryCommitResult, HistoryReview } from "@/lib/results/history-import";
 import type { HistoryMeet } from "@/lib/results/splits-history";
@@ -264,7 +264,7 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
                           {!identity[a.name] && (
                             <div>
                               <div className="mb-1.5 text-[13px] text-ink-2">Class in {last}</div>
-                              <div className="grid grid-cols-4 gap-2">
+                              <div className="grid grid-cols-2 gap-2">
                                 {classes.map((c) => {
                                   const year = String(last + c.yearsLeft);
                                   const active = gradYears[a.name] === year;
@@ -274,7 +274,7 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
                                       type="button"
                                       aria-pressed={active}
                                       onClick={() => setGradYears({ ...gradYears, [a.name]: active ? "" : year })}
-                                      className={`h-9 rounded-md border text-[13px] font-medium transition-colors ${active ? "border-brand bg-brand-soft text-ink" : "border-line bg-surface text-ink-2 hover:text-ink"}`}
+                                      className={`h-10 rounded-md border px-3 text-sm font-medium transition-colors ${active ? "border-brand bg-brand-soft text-ink" : "border-line bg-surface text-ink-2 hover:text-ink"}`}
                                     >
                                       {c.label} <span className={active ? "text-ink-2" : "text-ink-3"}>’{year.slice(2)}</span>
                                     </button>
@@ -308,66 +308,39 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
 }
 
 /**
- * Who an unknown name is. The usual answer is "nobody yet": they're added. A
- * same-surname athlete is put as a question; anyone else is behind a link.
+ * Who an unknown name is: a new athlete (the usual answer), the same-surname
+ * athlete the app found, or someone picked from the list.
  */
 function Identity({ name, candidates, others, value, onChange }: { name: string; candidates: { id: string; name: string }[]; others: { id: string; name: string }[]; value: string; onChange: (id: string) => void }) {
-  const [picking, setPicking] = useState(false);
-  const chosen = value ? [...candidates, ...others].find((x) => x.id === value) : null;
-  if (chosen) {
-    return (
-      <p className="text-[13px] text-ink-2">
-        Same person as <span className="font-medium text-ink">{chosen.name}</span>; &ldquo;{name}&rdquo; is kept as a spelling.{" "}
-        <button type="button" onClick={() => onChange("")} className="text-ink underline decoration-line underline-offset-2">
-          Undo
-        </button>
-      </p>
-    );
-  }
-  if (picking) {
-    return (
-      <Select
-        autoFocus
-        value=""
-        onChange={(e) => {
-          if (e.target.value) onChange(e.target.value);
-          setPicking(false);
-        }}
-        onBlur={() => setPicking(false)}
-        aria-label={`Who is ${name}`}
-      >
-        <option value="">Pick who this is…</option>
-        {[...candidates, ...others].map((x) => (
-          <option key={x.id} value={x.id}>
-            {x.name}
-          </option>
-        ))}
-      </Select>
-    );
-  }
   const suggested = candidates[0];
+  const [mode, setMode] = useState<"new" | "suggested" | "pick">(() => (value ? (suggested && value === suggested.id ? "suggested" : "pick") : "new"));
+  const all = [...candidates, ...others];
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-2">
-      {suggested ? (
-        <>
-          <span>
-            Same person as <span className="font-medium text-ink">{suggested.name}</span>?
-          </span>
-          <Button size="sm" variant="secondary" onClick={() => onChange(suggested.id)}>
-            Yes
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setPicking(true)}>
-            Someone else
-          </Button>
-        </>
-      ) : (
-        <>
-          <span>Added as a new athlete.</span>
-          <button type="button" onClick={() => setPicking(true)} className="text-ink underline decoration-line underline-offset-2">
-            Already in the app under another spelling?
-          </button>
-        </>
+    <div className="space-y-2">
+      <div className="text-[13px] text-ink-2">Who is this?</div>
+      <Segmented
+        value={mode}
+        onChange={(m) => {
+          setMode(m);
+          onChange(m === "suggested" && suggested ? suggested.id : "");
+        }}
+        options={[
+          { value: "new", label: "New athlete" },
+          ...(suggested ? [{ value: "suggested" as const, label: suggested.name }] : []),
+          { value: "pick", label: suggested ? "Someone else" : "Already in the app" },
+        ]}
+      />
+      {mode === "pick" && (
+        <Select value={value} onChange={(e) => onChange(e.target.value)} aria-label={`Who is ${name}`}>
+          <option value="">Pick the athlete…</option>
+          {all.map((x) => (
+            <option key={x.id} value={x.id}>
+              {x.name}
+            </option>
+          ))}
+        </Select>
       )}
+      {value && <p className="text-[13px] text-ink-2">&ldquo;{name}&rdquo; is kept as a spelling of {all.find((x) => x.id === value)?.name}.</p>}
     </div>
   );
 }
