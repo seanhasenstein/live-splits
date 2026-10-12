@@ -895,7 +895,7 @@ function AthleteSheet({
         )}
       </div>
       {/* Secondary stats: a size down from the headline pair, with room above. */}
-      {(teamRank || finishes.length > 0 || (raceClockMs !== null && finish === null && !status && lastSeen)) && (
+      {(teamRank || (raceClockMs !== null && finish === null && !status && lastSeen)) && (
         <div className="mt-5 mb-4 flex items-end justify-between gap-x-6 gap-y-3 border-t border-line pt-3">
           <div className="flex flex-wrap gap-x-6 gap-y-3">
             {teamRank && (
@@ -903,15 +903,8 @@ function AthleteSheet({
             )}
           </div>
           {/* Under the race clock, like the clock itself. */}
-          {raceClockMs !== null && finish === null && !status && lastSeen ? (
+          {raceClockMs !== null && finish === null && !status && lastSeen && (
             <SmallStat value={`${formatElapsed(Math.max(0, raceClockMs - lastSeen.at)).replace(/\.\d$/, "")} ago`} label={`passed ${lastSeen.label}`} align="right" />
-          ) : (
-            finishes.length > 0 && (
-              <Button size="sm" variant="secondary" onClick={() => setHistoryOpen((o) => !o)} aria-expanded={historyOpen} className="shrink-0">
-                <HistoryIcon className="size-3.5" />
-                History
-              </Button>
-            )
           )}
         </div>
       )}
@@ -920,7 +913,7 @@ function AthleteSheet({
         <div className="flex items-center gap-x-3 px-3 py-1.5 text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
           <span className="min-w-0 flex-1">Checkpoint</span>
           <span className="w-16 shrink-0 text-right">Time</span>
-          <span className="w-24 shrink-0 text-right">Split · pace</span>
+          <span className="w-20 shrink-0 text-right">Split</span>
 
         </div>
         {race.checkpoints.map((c, i) => {
@@ -952,19 +945,16 @@ function AthleteSheet({
                   </span>
                 );
               })()}
-              <span className="w-24 shrink-0 text-right whitespace-nowrap">
+              <span className="w-20 shrink-0 text-right whitespace-nowrap">
                 {split !== null && segMeters > 0 ? (
                   <>
                     <Time className="block text-ink-2">{ft(split)}</Time>
-                    <Time className="block text-[11px] text-ink-3">
-                      {formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}/mi
-                      {prevPace !== null && (
-                        <>
-                          {" "}
-                          <DeltaText ms={paceMsPerMile(split, segMeters) - prevPace} />
-                        </>
-                      )}
-                    </Time>
+                    <Time className="block text-[11px] text-ink-3">{formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}/mi</Time>
+                    {prevPace !== null && (
+                      <Time className="block text-[11px]">
+                        <DeltaText ms={paceMsPerMile(split, segMeters) - prevPace} suffix="/mi" />
+                      </Time>
+                    )}
                   </>
                 ) : (
                   <span className="text-ink-3">—</span>
@@ -975,8 +965,24 @@ function AthleteSheet({
           );
         })}
       </div>
+      {finishes.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setHistoryOpen((o) => !o)}
+          aria-expanded={historyOpen}
+          className={`mt-3 flex w-full items-center gap-2 rounded-lg border border-line px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-surface-2 ${historyOpen ? "bg-surface-2" : ""}`}
+        >
+          <HistoryIcon className="size-4 text-ink-2" />
+          <span className="flex-1">History</span>
+          <span className="text-[13px] font-normal text-ink-2">
+            {finishes.length} earlier {race.distanceLabel}
+            {finishes.length === 1 ? "" : "s"}
+          </span>
+          <ChevronRight className={`size-4 text-ink-3 transition-transform ${historyOpen ? "rotate-90" : ""}`} />
+        </button>
+      )}
       {historyOpen && finishes.length > 0 && (
-        <div className="mt-4 space-y-5">
+        <div className="mt-3 space-y-3">
           {(() => {
             // The season's arc, once there's enough of it to draw. A career chart belongs on the athlete page.
             const seasonPoints = [...season.map((f) => ({ ms: f.ms, label: shortDate(f.date), today: false })), ...(finish !== null ? [{ ms: finish, label: "today", today: true }] : [])];
@@ -1379,12 +1385,12 @@ function ProgressChart({ title, points, prMs, ft }: { title: string; points: { m
   const y = (ms: number) => padTop + ((ms - lo) / span) * (H - padTop - padBottom);
   const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.ms).toFixed(1)}`).join(" ");
   return (
-    <div>
-      <div className="mb-1 flex items-baseline justify-between">
+    <div className="rounded-lg border border-line">
+      <div className="flex items-baseline justify-between border-b border-line px-3 py-2">
         <SectionLabel>{title}</SectionLabel>
         <span className="text-[11px] text-ink-3">lower is faster</span>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full" role="img" aria-label={`${title}: ${points.map((p) => `${p.label} ${ft(p.ms)}`).join(", ")}`}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full px-2 pt-1" role="img" aria-label={`${title}: ${points.map((p) => `${p.label} ${ft(p.ms)}`).join(", ")}`}>
         {prMs !== null && (
           <>
             <line x1={padX} x2={W - padX} y1={y(prMs)} y2={y(prMs)} className="stroke-brand/50" strokeDasharray="3 3" />
@@ -1494,12 +1500,12 @@ function FinishList({
     );
   }
   return (
-    <div>
-      <div className="mb-1 flex items-baseline justify-between gap-3">
+    <div className="rounded-lg border border-line">
+      <div className="flex items-baseline justify-between gap-3 border-b border-line px-3 py-2">
         <SectionLabel>{title}</SectionLabel>
         {note && <span className="text-[11px] text-ink-3">{note}</span>}
       </div>
-      <div className="-mx-2 flex flex-col">{items}</div>
+      <div className="flex flex-col p-1">{items}</div>
     </div>
   );
 }
