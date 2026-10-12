@@ -204,6 +204,29 @@ describe("rests the coach controls", () => {
     expect(s.athletes.get("will")![1].status).toBe("pending");
   });
 
+  it("a rep added after a group finished puts it back at rest before the new rep; a group ended at the old last stays done", () => {
+    const one = { ...workout, sets: [{ id: "s1", reps: [workout.sets[0].reps[0]], restAfter: null }] };
+    const evs = [
+      ev("rep_start", 0, { groupId: "g1", repId: "a1" }),
+      ev("finish", 76_000, { athleteId: "eddy", repId: "a1" }),
+      ev("finish", 80_000, { athleteId: "titus", repId: "a1" }),
+      ev("rep_start", 0, { groupId: "g2", repId: "a1" }),
+      ev("finish", 90_000, { athleteId: "will", repId: "a1" }),
+      ev("group_end", 100_000, { groupId: "g2", repId: "a1" }),
+    ];
+    expect(replayWorkout(one, evs).groups.get("g1")).toMatchObject({ kind: "done" });
+    const more = { ...one, sets: [{ id: "s1", reps: [workout.sets[0].reps[0], { ...workout.sets[0].reps[0], id: "a1b" }], restAfter: null }] };
+    const s = replayWorkout(more, evs);
+    expect(s.groups.get("g1")).toMatchObject({ kind: "rest", afterRepIndex: 0, nextStartMs: T0 + 140_000 });
+    expect(s.groups.get("g2")).toMatchObject({ kind: "done", endedEarlyAfter: 0 });
+  });
+
+  it("events for a rep dropped from the plan are ignored", () => {
+    const s = replayWorkout(workout, [ev("rep_start", 0, { groupId: "g1", repId: "gone" }), ev("finish", 70_000, { athleteId: "eddy", repId: "gone" })]);
+    expect(s.groups.get("g1")).toMatchObject({ kind: "before" });
+    expect(s.athletes.get("eddy")!.every((r) => r.status === "pending")).toBe(true);
+  });
+
   it("logs the rest each group actually took against the plan", () => {
     const s = replayWorkout(workout, [
       ev("rep_start", 0, { groupId: "g1", repId: "a1" }),

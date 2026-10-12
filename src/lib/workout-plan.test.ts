@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RepSet } from "@/lib/db/schema";
-import { addRepAtEnd, dropLastRep } from "./workout-plan";
+import { addRepAtEnd, describePlan, describeRest, dropLastRep, expandSets, toSetInputs } from "./workout-plan";
 
 const m = (meters: number) => ({ value: meters, unit: "m" as const, meters });
 const sets: RepSet[] = [
@@ -22,5 +22,30 @@ describe("changing reps mid-workout", () => {
     expect(fewer[0].reps).toHaveLength(2);
     expect(fewer[0].restAfter).toBeNull();
     expect(dropLastRep([{ id: "x", reps: [sets[1].reps[0]], restAfter: null }])).toBeNull();
+  });
+});
+
+describe("plan round trips and labels", () => {
+  it("expanding the form's sets and reading them back keeps set ids, so rep ids (and the log) survive an edit", () => {
+    let n = 0;
+    const once = expandSets([{ count: 3, value: 400, unit: "m", rest: { kind: "time", ms: 60_000 }, restAfter: { kind: "time", ms: 120_000 } }, { count: 2, value: 200, unit: "m", rest: { kind: "interval", everyMs: 90_000 }, restAfter: null }], () => `s${++n}`);
+    expect(once.map((s) => s.reps.map((r) => r.id))).toEqual([["s1-r1", "s1-r2", "s1-r3"], ["s2-r1", "s2-r2"]]);
+    expect(once[1].restAfter).toBeNull();
+    const again = expandSets(toSetInputs(once), () => "new");
+    expect(again.map((s) => s.reps.map((r) => r.id))).toEqual(once.map((s) => s.reps.map((r) => r.id)));
+  });
+
+  it("describes plans and rests the way coaches say them", () => {
+    expect(describePlan(sets)).toBe("2 × 400m, 200m");
+    expect(describeRest({ kind: "time", ms: 45_000 })).toBe("45 s rest");
+    expect(describeRest({ kind: "time", ms: 150_000 })).toBe("2:30 rest");
+    expect(describeRest({ kind: "interval", everyMs: 180_000 })).toBe("on the 3 min");
+    expect(describeRest({ kind: "jog", meters: 200 })).toBe("200m jog");
+    expect(describeRest({ kind: "open" })).toBe("rest until go");
+  });
+
+  it("add, drop, add again reuses the free id without colliding", () => {
+    const dropped = dropLastRep(addRepAtEnd(sets))!;
+    expect(addRepAtEnd(dropped)[1].reps.map((r) => r.id)).toEqual(["s2-r1", "s2-r2"]);
   });
 });
