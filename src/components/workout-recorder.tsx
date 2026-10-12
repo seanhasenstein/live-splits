@@ -3,6 +3,7 @@
 import { Check, MoreHorizontal, Play, Plus, SlidersHorizontal, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { changeRepsAction } from "@/app/actions/workouts";
+import { RepCell } from "@/components/workout-rep-cell";
 import { groupTint, repCellTone } from "@/components/workout-tint";
 import { Alert, Button, Card, Input, SectionLabel, Segmented, Sheet, Time } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
@@ -492,14 +493,22 @@ export function WorkoutRecorder({
               rows={[...finishedRows, ...notRunning].map(({ id }) => ({ id, name: nameOf.get(id) ?? "?", list: state.athletes.get(id)!.slice(0, lastIndex + 1) }))}
               reps={reps}
               ft={ft}
+              tenths={tenths}
               onOpen={setSheetFor}
             />
           ) : (
           <div className="divide-y divide-line">
+            <div className="flex items-center gap-3 px-4 pt-1.5 pb-1 text-[11px] font-semibold text-ink-3">
+              <span className="flex-1" />
+              <span className="w-10 text-right">Goal</span>
+              <span className="w-12 text-right">Time</span>
+              <span className="w-12 text-right">+/−</span>
+            </div>
             {finishedRows.map(({ id, r }) => (
               <button key={id} type="button" onClick={() => setSheetFor(id)} className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm hover:bg-surface-2">
                 <span className="min-w-0 flex-1 truncate text-ink">{nameOf.get(id) ?? "?"}</span>
-                <Time className="font-semibold text-ink">{r.elapsedMs !== null ? ft(r.elapsedMs) : "—"}</Time>
+                <Time className="w-10 text-right text-[13px] text-ink-3">{r.goalMs !== null ? ft(r.goalMs, "seconds") : ""}</Time>
+                <Time className="w-12 text-right font-semibold text-ink">{r.elapsedMs !== null ? ft(r.elapsedMs) : "—"}</Time>
                 <Time className={`w-12 text-right text-[13px] ${r.deltaMs !== null ? deltaTone(r.deltaMs) : "text-ink-3"}`}>{r.deltaMs !== null ? deltaText(r.deltaMs, tenths) : ""}</Time>
               </button>
             ))}
@@ -675,7 +684,19 @@ export function WorkoutRecorder({
  * Every rep so far for the group, one row per runner: times coloured against
  * goal like the team grid, with the average. Tap a name for their actions.
  */
-function GroupRepsGrid({ rows, reps, ft, onOpen }: { rows: { id: string; name: string; list: AthleteRep[] }[]; reps: FlatRep[]; ft: (ms: number) => string; onOpen: (id: string) => void }) {
+function GroupRepsGrid({
+  rows,
+  reps,
+  ft,
+  tenths,
+  onOpen,
+}: {
+  rows: { id: string; name: string; list: AthleteRep[] }[];
+  reps: FlatRep[];
+  ft: (ms: number, precision?: "seconds" | "tenths") => string;
+  tenths: boolean;
+  onOpen: (id: string) => void;
+}) {
   const n = rows[0]?.list.length ?? 0;
   return (
     <div className="overflow-x-auto">
@@ -683,6 +704,7 @@ function GroupRepsGrid({ rows, reps, ft, onOpen }: { rows: { id: string; name: s
         <thead>
           <tr className="border-b border-line text-[11px] font-semibold text-ink-3">
             <th className="sticky left-0 bg-surface px-4 py-1.5 text-left font-semibold" />
+            <th className="px-2 py-1.5 text-right font-semibold">Goal</th>
             {reps.slice(0, n).map((r, i) => (
               <th key={r.id} className="px-1 py-1.5 text-right font-semibold">
                 {i + 1}
@@ -694,6 +716,7 @@ function GroupRepsGrid({ rows, reps, ft, onOpen }: { rows: { id: string; name: s
         <tbody>
           {rows.map(({ id, name, list }) => {
             const avg = summarize(reps, list).avgPaceMsPerKm;
+            const goal = list.find((r) => r.goalMs !== null)?.goalMs ?? null;
             return (
               <tr key={id} className="border-b border-line last:border-0">
                 <td className="sticky left-0 bg-surface p-0">
@@ -701,10 +724,13 @@ function GroupRepsGrid({ rows, reps, ft, onOpen }: { rows: { id: string; name: s
                     {name.split(" ")[0]}
                   </button>
                 </td>
+                <td className="px-2 py-1 text-right">
+                  <Time className="text-[13px] text-ink-3">{goal !== null ? ft(goal, "seconds") : "—"}</Time>
+                </td>
                 {list.map((r) => (
                   <td key={r.repId} className="px-0.5 py-1 text-right">
                     {r.status === "done" && r.elapsedMs !== null ? (
-                      <Time className={`inline-block rounded px-1 py-0.5 text-[13px] ${repCellTone(r.deltaMs)}`}>{ft(r.elapsedMs)}</Time>
+                      <RepCell time={ft(r.elapsedMs)} delta={r.deltaMs !== null ? deltaText(r.deltaMs, tenths) : null} tone={repCellTone(r.deltaMs)} />
                     ) : (
                       <span className="px-1 text-xs text-ink-3">{r.status === "skipped" ? "skip" : r.status === "unfinished" ? "—" : r.status === "stopped" ? "out" : "·"}</span>
                     )}

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card, Segmented, Time } from "@/components/ui";
 import { WorkoutAthleteSheet } from "@/components/workout-athlete-sheet";
+import { RepCell } from "@/components/workout-rep-cell";
 import { groupTint, ON_GOAL_MS, repCellTone } from "@/components/workout-tint";
 import { useClock } from "@/lib/client/clock";
 import { useTimeFormat } from "@/lib/client/time-format";
@@ -132,7 +133,7 @@ export function WorkoutBoard({
                   {list.map((r, i) => (
                     <td key={r.repId} className={`px-1 py-1 text-right ${reps[i].number === 1 && i > 0 ? "border-l border-line" : ""}`}>
                       {r.status === "done" && r.elapsedMs !== null ? (
-                        <Time className={`inline-block rounded px-1.5 py-0.5 ${cellTone(r.deltaMs)}`}>{ft(r.elapsedMs)}</Time>
+                        <RepCell time={ft(r.elapsedMs)} delta={r.deltaMs !== null ? signed(r.deltaMs, digits) : null} tone={cellTone(r.deltaMs)} />
                       ) : r.status === "skipped" ? (
                         <span className="px-1.5 text-xs whitespace-nowrap text-ink-3">skipped</span>
                       ) : r.status === "stopped" ? (
@@ -219,7 +220,7 @@ export function WorkoutBoard({
       )}
       <p className="text-xs leading-relaxed text-ink-3">
         {anyTimed
-          ? `Green is faster than goal, red slower; within a second is on goal. "Skipped": didn't run that rep. "No time": started it but the group went on before they finished. "Done": done for today. "—": the group ended before that rep. Avg, spread and fade are per ${reps[0].label}, so reps of other distances compare fairly. Spread: slowest minus fastest. Fade: the second half against the first. "Rest after" is the rest each group took, from its last runner in to the next start, with how far off the plan it was; amber is more than 10 s long. Tap a name for that runner's reps.`
+          ? `Green is faster than goal, red slower; within a second is on goal. The small number under each time is how far off goal it was. "Skipped": didn't run that rep. "No time": started it but the group went on before they finished. "Done": done for today. "—": the group ended before that rep. Avg, spread and fade are per ${reps[0].label}, so reps of other distances compare fairly. Spread: slowest minus fastest. Fade: the second half against the first. "Rest after" is the rest each group took, from its last runner in to the next start, with how far off the plan it was; amber is more than 10 s long. Tap a name for that runner's reps.`
           : "Times appear here as the reps are timed."}
       </p>
     </div>
