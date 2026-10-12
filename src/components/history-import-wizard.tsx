@@ -10,11 +10,12 @@ import type { HistoryMeet } from "@/lib/results/splits-history";
 import { formatLocalDate } from "@/lib/time";
 
 /** A class in a given season and when it graduates: a senior in 2025 is the class of 2026. */
+// Class years as the result sheets print them: FR / SO / JR / SR, no period.
 const CLASSES = [
-  { short: "Fr", label: "Freshman", yearsIn: 1, yearsLeft: 4 },
-  { short: "So", label: "Sophomore", yearsIn: 2, yearsLeft: 3 },
-  { short: "Jr", label: "Junior", yearsIn: 3, yearsLeft: 2 },
-  { short: "Sr", label: "Senior", yearsIn: 4, yearsLeft: 1 },
+  { short: "FR", label: "Freshman", yearsIn: 1, yearsLeft: 4 },
+  { short: "SO", label: "Sophomore", yearsIn: 2, yearsLeft: 3 },
+  { short: "JR", label: "Junior", yearsIn: 3, yearsLeft: 2 },
+  { short: "SR", label: "Senior", yearsIn: 4, yearsLeft: 1 },
 ];
 
 export function HistoryImportWizard() {
@@ -264,7 +265,7 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
                           {!identity[a.name] && (
                             <div>
                               <div className="mb-1.5 text-[13px] text-ink-2">Class in {last}</div>
-                              <div className="grid grid-cols-2 gap-2">
+                              <div className="grid grid-cols-4 gap-2">
                                 {classes.map((c) => {
                                   const year = String(last + c.yearsLeft);
                                   const active = gradYears[a.name] === year;
@@ -273,10 +274,11 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
                                       key={c.short}
                                       type="button"
                                       aria-pressed={active}
+                                      aria-label={`${c.label} in ${last}, class of ${year}`}
                                       onClick={() => setGradYears({ ...gradYears, [a.name]: active ? "" : year })}
                                       className={`h-10 rounded-md border px-3 text-sm font-medium transition-colors ${active ? "border-brand bg-brand-soft text-ink" : "border-line bg-surface text-ink-2 hover:text-ink"}`}
                                     >
-                                      {c.label} <span className={active ? "text-ink-2" : "text-ink-3"}>’{year.slice(2)}</span>
+                                      {c.short} <span className={active ? "text-ink-2" : "text-ink-3"}>’{year.slice(2)}</span>
                                     </button>
                                   );
                                 })}
