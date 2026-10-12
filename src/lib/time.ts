@@ -42,6 +42,13 @@ export function formatClock(epochMs: number, timeZone: string, withTenths = true
 }
 
 /** "Friday, Oct 2" for a local date string. */
+/** "Sept 10, 2026" for a local date string. */
+export function formatDateWithYear(date: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  const month = ["Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"][m - 1];
+  return `${month} ${d}, ${y}`;
+}
+
 export function formatLocalDate(date: string): string {
   const [y, m, d] = date.split("-").map(Number);
   return new Intl.DateTimeFormat("en-US", {

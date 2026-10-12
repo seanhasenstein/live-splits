@@ -14,7 +14,7 @@ import type { AthleteRaceStatus, Precision } from "@/lib/db/schema";
 import { METERS_PER_MILE, paceMsPerMile, projectElapsed } from "@/lib/pace";
 import { RECORD_LABEL, recordBadge } from "@/lib/records";
 import type { LineupBests, PriorFinish } from "@/lib/results/bests";
-import { formatClock, formatElapsed, formatLocalDate, parseTypedTime } from "@/lib/time";
+import { formatClock, formatDateWithYear, formatElapsed, formatLocalDate, parseTypedTime } from "@/lib/time";
 
 type RaceInfo = {
   id: string;
@@ -812,9 +812,9 @@ function AthleteSheet({
   // A near miss: top three ever, or top three this season, said in words rather than a pill.
   const nearMiss =
     finish !== null && !row?.record && bests && rank !== null && rank <= 3 && bests.pr
-      ? `${rank}${ordinal(rank)} fastest ever · ${Math.max(1, Math.round((finish - bests.pr.ms) / 1000))}s behind the PR of ${ft(bests.pr.ms)} (${bests.pr.meetName}, ${year(bests.pr.date)})`
+      ? `${rank}${ordinal(rank)} fastest ever, ${Math.max(1, Math.round((finish - bests.pr.ms) / 1000))}s behind the personal best of ${ft(bests.pr.ms)} at ${bests.pr.meetName} on ${formatDateWithYear(bests.pr.date)}`
       : finish !== null && !row?.record && bests && seasonRank !== null && seasonRank <= 3 && bests.sb
-        ? `${seasonRank}${ordinal(seasonRank)} fastest this season · SB ${ft(bests.sb.ms)} at ${bests.sb.meetName}`
+        ? `${seasonRank}${ordinal(seasonRank)} fastest this season, behind the season best of ${ft(bests.sb.ms)} at ${bests.sb.meetName} on ${formatDateWithYear(bests.sb.date)}`
         : null;
   const raceLink = (f: { meetId: string; raceId: string }) => `/meets/${f.meetId}/results?race=${f.raceId}&athlete=${row?.athleteId ?? ""}`;
 
@@ -883,10 +883,10 @@ function AthleteSheet({
             <span className="block text-[13px] text-ink-2">
               {(() => {
                 const prev = bests[row.record.kind]!;
-                const where = row.record.kind === "course" ? `here, ${year(prev.date)}` : row.record.kind === "sb" ? `at ${prev.meetName}` : `${prev.meetName}, ${year(prev.date)}`;
-                return `${row.record.kind === "pr" ? "Previous best" : `${RECORD_LABEL[row.record.kind].short} · previous`} ${ft(prev.ms)} · ${where}`;
+                const what = { pr: "personal best", sb: "season best", course: "best on this course", meet: "best at this meet" }[row.record.kind];
+                const by = row.record.unofficial && row.record.uncertain ? `, beaten by ${Math.max(1, Math.round((row.record.previousMs - finish!) / 1000))}s` : "";
+                return `Previous ${what} was ${ft(prev.ms)} at ${prev.meetName} on ${formatDateWithYear(prev.date)}${by}`;
               })()}
-              {row.record.unofficial && row.record.uncertain && ` · by ${Math.max(1, Math.round((row.record.previousMs - finish!) / 1000))}s`}
             </span>
           ) : nearMiss ? (
             <span className="block text-[13px] text-ink-2">{nearMiss}</span>
@@ -933,7 +933,7 @@ function AthleteSheet({
           const prevPace = prevSplit !== null && i > 0 ? paceMsPerMile(prevSplit, race.checkpoints[i - 1].meters - (i > 1 ? race.checkpoints[i - 2].meters : 0)) : null;
           const cell = row?.cells[i];
           return (
-            <div key={c.id} className="flex items-center gap-x-3 px-3 py-2 text-sm">
+            <div key={c.id} className="flex items-start gap-x-3 px-3 py-2 text-sm">
               <span className="min-w-0 flex-1 font-medium text-ink">
                 {c.label}
                 {officialCount > 0 && officialCount < timedCount && cell?.official !== null && cell?.official !== undefined && <span className="ml-1.5 text-[10px] font-semibold tracking-wide text-brand-text uppercase">official</span>}
@@ -1043,14 +1043,20 @@ function AthleteSheet({
           <ChevronRight className="size-4 shrink-0" />
         </Button>
       </div>
-      <p className="mt-4 text-xs leading-relaxed text-ink-3">
-        {officialCount === 0 && timedCount > 0 && "Times are from the app, not the timing company. "}
-        {officialCount > 0 && officialCount < timedCount && "Times not marked official are from the app. "}
-        {row?.cells.some((c) => c.mark?.estimate && c.official === null) && "An estimate is a time entered by hand, not tapped as they passed. "}
-        {row?.record?.unofficial && "Records are provisional until official results are imported. "}
-        {race.placesDerived && "Places are ranked by the app within our division. "}
-        {finishes.length === 0 && `No earlier ${race.distanceLabel} results in the app to compare with.`}
-      </p>
+      <div className="mt-4 space-y-1 text-xs leading-relaxed text-ink-3">
+        {[
+          officialCount === 0 && timedCount > 0 && "Times are from the app, not the timing company.",
+          officialCount > 0 && officialCount < timedCount && "Times not marked official are from the app.",
+          row?.cells.some((c) => c.mark?.estimate && c.official === null) && "An estimate is a time entered by hand, not tapped as they passed.",
+          row?.record?.unofficial && "Records are provisional until official results are imported.",
+          race.placesDerived && "Places are ranked by the app within our division.",
+          finishes.length === 0 && `No earlier ${race.distanceLabel} results in the app to compare with.`,
+        ]
+          .filter((line): line is string => typeof line === "string")
+          .map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+      </div>
     </Sheet>
   );
 }
@@ -1507,10 +1513,10 @@ function FinishList({
     items.splice(
       at,
       0,
-      <div key="today" className="flex items-center gap-x-2 border-l-2 border-brand bg-brand-soft py-1.5 pr-2 pl-1.5 text-sm">
+      <div key="today" className="flex items-center gap-x-2 bg-brand-soft px-2 py-1.5 text-sm">
         <span className="min-w-0 flex-1 truncate font-semibold text-ink">{meetName}</span>
         {today.tags.map((text) => (
-          <span key={text} className="rounded bg-surface px-1 text-[10px] font-semibold tracking-wide text-ink uppercase">
+          <span key={text} className="rounded bg-brand px-1 text-[10px] font-semibold tracking-wide text-brand-ink uppercase">
             {text}
           </span>
         ))}
