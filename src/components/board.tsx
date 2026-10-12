@@ -812,7 +812,7 @@ function AthleteSheet({
   // A near miss: top three ever, or top three this season, said in words rather than a pill.
   const nearMiss =
     finish !== null && !row?.record && bests && rank !== null && rank <= 3 && bests.pr
-      ? `${rank}${ordinal(rank)} fastest ever · ${Math.max(1, Math.round((finish - bests.pr.ms) / 1000))} s off their PR (${ft(bests.pr.ms)}, ${bests.pr.meetName} ${year(bests.pr.date)})`
+      ? `${rank}${ordinal(rank)} fastest ever · ${Math.max(1, Math.round((finish - bests.pr.ms) / 1000))}s behind the PR of ${ft(bests.pr.ms)} (${bests.pr.meetName}, ${year(bests.pr.date)})`
       : finish !== null && !row?.record && bests && seasonRank !== null && seasonRank <= 3 && bests.sb
         ? `${seasonRank}${ordinal(seasonRank)} fastest this season · SB ${ft(bests.sb.ms)} at ${bests.sb.meetName}`
         : null;
@@ -850,24 +850,6 @@ function AthleteSheet({
                 <Time className="text-4xl font-semibold tracking-tight text-ink">{finish !== null ? ft(finish, row?.cells[finishIndex]?.precision) : projected !== null ? `~${formatElapsed(projected).replace(/\.\d$/, "")}` : "—"}</Time>
                 {row?.record && <RecordPill badge={row.record} size="md" />}
               </div>
-              {row?.record && bests ? (
-                <span className="block text-[13px] text-ink-2">
-                  {(() => {
-                    const prev = bests[row.record.kind]!;
-                    const where = row.record.kind === "course" ? `here, ${year(prev.date)}` : row.record.kind === "sb" ? `at ${prev.meetName}` : `${prev.meetName}, ${year(prev.date)}`;
-                    return `${row.record.kind === "pr" ? "Previous best" : `${RECORD_LABEL[row.record.kind].short} · previous`} ${ft(prev.ms)} · ${where}`;
-                  })()}
-                  {row.record.unofficial && row.record.uncertain && ` · by ${Math.max(1, Math.round((row.record.previousMs - finish!) / 1000))} s`}
-                </span>
-              ) : nearMiss ? (
-                <span className="block text-[13px] text-ink-2">{nearMiss}</span>
-              ) : onPace && bests ? (
-                <span className="block text-[13px] text-brand-text">
-                  On pace for a {RECORD_LABEL[onPace.kind].short} · {RECORD_LABEL[onPace.kind].short} {ft(bests[onPace.kind]!.ms)}
-                </span>
-              ) : (
-                avgPace !== null && <Time className="block text-[13px] text-ink-2">{formatElapsed(avgPace).replace(/\.\d$/, "")}/mi average</Time>
-              )}
             </>
           )}
         </div>
@@ -894,6 +876,29 @@ function AthleteSheet({
           )
         )}
       </div>
+      {/* One line under the pair: the record, a near miss, the pace they're on, or the average pace. Full width, so it rarely wraps. */}
+      {!(status && finish === null) && (
+        <div className="mb-3">
+          {row?.record && bests ? (
+            <span className="block text-[13px] text-ink-2">
+              {(() => {
+                const prev = bests[row.record.kind]!;
+                const where = row.record.kind === "course" ? `here, ${year(prev.date)}` : row.record.kind === "sb" ? `at ${prev.meetName}` : `${prev.meetName}, ${year(prev.date)}`;
+                return `${row.record.kind === "pr" ? "Previous best" : `${RECORD_LABEL[row.record.kind].short} · previous`} ${ft(prev.ms)} · ${where}`;
+              })()}
+              {row.record.unofficial && row.record.uncertain && ` · by ${Math.max(1, Math.round((row.record.previousMs - finish!) / 1000))}s`}
+            </span>
+          ) : nearMiss ? (
+            <span className="block text-[13px] text-ink-2">{nearMiss}</span>
+          ) : onPace && bests ? (
+            <span className="block text-[13px] text-brand-text">
+              On pace for a {RECORD_LABEL[onPace.kind].short} · {RECORD_LABEL[onPace.kind].short} {ft(bests[onPace.kind]!.ms)}
+            </span>
+          ) : (
+            avgPace !== null && <Time className="block text-[13px] text-ink-2">{formatElapsed(avgPace).replace(/\.\d$/, "")}/mi average</Time>
+          )}
+        </div>
+      )}
       {/* Secondary stats: a size down from the headline pair, with room above. */}
       {(teamRank || (raceClockMs !== null && finish === null && !status && lastSeen)) && (
         <div className="mt-5 mb-4 flex items-end justify-between gap-x-6 gap-y-3 border-t border-line pt-3">
@@ -931,7 +936,7 @@ function AthleteSheet({
             <div key={c.id} className="flex items-center gap-x-3 px-3 py-2 text-sm">
               <span className="min-w-0 flex-1 font-medium text-ink">
                 {c.label}
-                {cell?.official !== null && cell?.official !== undefined && <span className="ml-1.5 text-[10px] font-semibold tracking-wide text-brand-text uppercase">official</span>}
+                {officialCount > 0 && officialCount < timedCount && cell?.official !== null && cell?.official !== undefined && <span className="ml-1.5 text-[10px] font-semibold tracking-wide text-brand-text uppercase">official</span>}
                 {cell?.mark?.estimate && cell.official === null && <span className="ml-1.5 text-xs text-ink-3">estimate</span>}
               </span>
               {(() => {
@@ -1389,8 +1394,8 @@ function ProgressChart({ title, points, prMs, ft }: { title: string; points: { m
   const y = (ms: number) => padTop + ((ms - lo) / span) * (H - padTop - padBottom);
   const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.ms).toFixed(1)}`).join(" ");
   return (
-    <div className="pb-1">
-      <div className="flex items-baseline justify-between px-3 pt-2.5 pb-1">
+    <div className="py-3">
+      <div className="flex items-baseline justify-between px-3 pb-1.5">
         <SectionLabel>{title}</SectionLabel>
         <span className="text-[11px] text-ink-3">lower is faster</span>
       </div>
@@ -1496,16 +1501,16 @@ function FinishList({
     items.splice(
       at,
       0,
-      <div key="today" className="flex items-center gap-x-2 rounded-md bg-brand-soft px-2 py-1.5 text-sm">
-        <span className="min-w-0 flex-1 truncate font-medium text-ink">{meetName}</span>
+      <div key="today" className="flex items-center gap-x-2 border-l-2 border-brand py-1.5 pr-2 pl-1.5 text-sm">
+        <span className="min-w-0 flex-1 truncate font-semibold text-ink">{meetName}</span>
         {today.tags.map(tag)}
         <Time className="shrink-0 font-semibold text-ink">{ft(today.ms)}</Time>
       </div>,
     );
   }
   return (
-    <div className="pb-1">
-      <div className="flex items-baseline justify-between gap-3 px-3 pt-2.5 pb-1">
+    <div className="py-3">
+      <div className="flex items-baseline justify-between gap-3 px-3 pb-1.5">
         <SectionLabel>{title}</SectionLabel>
         {note && <span className="text-[11px] text-ink-3">{note}</span>}
       </div>
