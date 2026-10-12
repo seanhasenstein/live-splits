@@ -800,10 +800,13 @@ function AthleteSheet({
     if (v !== null) todaySplits[String(Math.round(c.meters))] = v;
   });
   const checkpointLabels = race.checkpoints.map((c) => ({ meters: String(Math.round(c.meters)), label: c.label }));
-  // Lines a row can wear in the lists: the fastest ever, the fastest this season, the same course as today.
-  const prRaceId = finishes[0]?.raceId ?? null;
-  const sbRaceId = [...season].sort((a, b) => a.ms - b.ms)[0]?.raceId ?? null;
+  // Tags a row can wear in the lists, today's run included: the fastest ever, the fastest this season, the same course as today.
+  const todayIsPR = finish !== null && (finishes.length === 0 || finish <= finishes[0].ms);
+  const todayIsSB = finish !== null && (season.length === 0 || finish <= Math.min(...season.map((f) => f.ms)));
+  const prRaceId = todayIsPR ? null : (finishes[0]?.raceId ?? null);
+  const sbRaceId = todayIsSB ? null : ([...season].sort((a, b) => a.ms - b.ms)[0]?.raceId ?? null);
   const tagsFor = (f: PriorFinish) => [...(f.raceId === prRaceId ? ["PR"] : []), ...(f.raceId === sbRaceId ? ["SB"] : []), ...(f.sameCourse ? ["this course"] : [])];
+  const todayTags = [...(todayIsPR && finishes.length > 0 ? ["PR"] : []), ...(todayIsSB && season.length > 0 ? ["SB"] : []), "today"];
   // On pace for a record while they're still out: the projection against what they came in with.
   const onPace = finish === null && projected !== null && bests ? recordBadge(projected, bests, true) : null;
   // A near miss: top three ever, or top three this season, said in words rather than a pill.
@@ -917,7 +920,7 @@ function AthleteSheet({
         <div className="flex items-center gap-x-3 px-3 py-1.5 text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
           <span className="min-w-0 flex-1">Checkpoint</span>
           <span className="w-16 shrink-0 text-right">Time</span>
-          <span className="w-32 shrink-0 text-right">Split · pace</span>
+          <span className="w-24 shrink-0 text-right">Split · pace</span>
 
         </div>
         {race.checkpoints.map((c, i) => {
@@ -925,6 +928,11 @@ function AthleteSheet({
           const before = i > 0 ? t(i - 1) : here !== null ? 0 : null;
           const split = here !== null && before !== null ? here - before : null;
           const segMeters = c.meters - (i > 0 ? race.checkpoints[i - 1].meters : 0);
+          // Pace change from the segment before: + slower, − faster, as on the board.
+          const prevHere = i > 0 ? t(i - 1) : null;
+          const prevBefore = i > 1 ? t(i - 2) : i === 1 ? 0 : null;
+          const prevSplit = prevHere !== null && prevBefore !== null ? prevHere - prevBefore : null;
+          const prevPace = prevSplit !== null && i > 0 ? paceMsPerMile(prevSplit, race.checkpoints[i - 1].meters - (i > 1 ? race.checkpoints[i - 2].meters : 0)) : null;
           const cell = row?.cells[i];
           return (
             <div key={c.id} className="flex items-center gap-x-3 px-3 py-2 text-sm">
@@ -944,9 +952,24 @@ function AthleteSheet({
                   </span>
                 );
               })()}
-              <Time className="w-32 shrink-0 text-right whitespace-nowrap text-ink-2">
-                {split !== null && segMeters > 0 ? `${ft(split)} · ${formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}/mi` : "—"}
-              </Time>
+              <span className="w-24 shrink-0 text-right whitespace-nowrap">
+                {split !== null && segMeters > 0 ? (
+                  <>
+                    <Time className="block text-ink-2">{ft(split)}</Time>
+                    <Time className="block text-[11px] text-ink-3">
+                      {formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}/mi
+                      {prevPace !== null && (
+                        <>
+                          {" "}
+                          <DeltaText ms={paceMsPerMile(split, segMeters) - prevPace} />
+                        </>
+                      )}
+                    </Time>
+                  </>
+                ) : (
+                  <span className="text-ink-3">—</span>
+                )}
+              </span>
 
             </div>
           );
@@ -961,9 +984,9 @@ function AthleteSheet({
           })()}
           <FinishList
             title={`Fastest ${race.distanceLabel}s ever`}
-            note={rank !== null ? `today ranks ${rank}${ordinal(rank)} of ${finishes.length + 1}` : undefined}
+            note={rank !== null ? `Today ranks ${rank}${ordinal(rank)} of ${finishes.length + 1} races` : undefined}
             rows={fastest}
-            today={finish !== null && rank !== null && rank <= 5 ? { ms: finish, rank } : null}
+            today={finish !== null && rank !== null && rank <= 5 ? { ms: finish, rank, tags: todayTags } : null}
             meetName={meetName}
             todaySplits={todaySplits}
             checkpoints={checkpointLabels}
@@ -975,8 +998,9 @@ function AthleteSheet({
           {season.length > 0 && (
             <FinishList
               title={`${seasonYear} season`}
+              note={seasonRank !== null ? `Today ranks ${seasonRank}${ordinal(seasonRank)} of ${season.length + 1} this season` : undefined}
               rows={season}
-              today={finish !== null ? { ms: finish, rank: null } : null}
+              today={finish !== null ? { ms: finish, rank: null, tags: todayTags } : null}
               meetName={meetName}
               todaySplits={todaySplits}
               checkpoints={checkpointLabels}
@@ -1356,7 +1380,7 @@ function ProgressChart({ title, points, prMs, ft }: { title: string; points: { m
   const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.ms).toFixed(1)}`).join(" ");
   return (
     <div>
-      <div className="mb-1 flex items-baseline justify-between px-2">
+      <div className="mb-1 flex items-baseline justify-between">
         <SectionLabel>{title}</SectionLabel>
         <span className="text-[11px] text-ink-3">lower is faster</span>
       </div>
@@ -1405,7 +1429,7 @@ function FinishList({
   note?: string;
   rows: PriorFinish[];
   /** Today's finish; rank null means "append in date order" (a season list). */
-  today: { ms: number; rank: number | null } | null;
+  today: { ms: number; rank: number | null; tags: string[] } | null;
   meetName: string;
   todaySplits: Record<string, number>;
   checkpoints: { meters: string; label: string }[];
@@ -1464,14 +1488,14 @@ function FinishList({
       0,
       <div key="today" className="flex items-center gap-x-2 rounded-md bg-brand-soft px-2 py-1.5 text-sm">
         <span className="min-w-0 flex-1 truncate font-medium text-ink">{meetName}</span>
-        {tag("today")}
+        {today.tags.map(tag)}
         <Time className="shrink-0 font-semibold text-ink">{ft(today.ms)}</Time>
       </div>,
     );
   }
   return (
     <div>
-      <div className="mb-1 flex items-baseline justify-between gap-3 px-2">
+      <div className="mb-1 flex items-baseline justify-between gap-3">
         <SectionLabel>{title}</SectionLabel>
         {note && <span className="text-[11px] text-ink-3">{note}</span>}
       </div>
