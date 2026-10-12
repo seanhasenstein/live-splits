@@ -40,6 +40,35 @@ export function WorkoutAthleteSheet({
   onAddTime: (repId: string, groupId: string, timeMs: number, finishEventId: string | null) => void;
   onClose: () => void;
 }) {
+  const { ft } = useTimeFormat();
+  const base = reps[0];
+  const goalMs = list.find((r) => r.goalMs !== null)?.goalMs ?? null;
+  const goalPerBase = goalMs !== null ? (goalMs * base.meters) / reps[list.findIndex((r) => r.goalMs !== null)].meters : null;
+  return (
+    <Sheet title={name} subtitle={[groupName, goalPerBase !== null ? `goal ${ft(goalPerBase, "seconds")} per ${base.label}` : "no goal"].filter(Boolean).join(" · ")} onClose={onClose}>
+      <AthleteBreakdown reps={reps} list={list} last={last} onGrass={onGrass} onAddTime={onAddTime} />
+    </Sheet>
+  );
+}
+
+/**
+ * The body of a runner's sheet, shared by the workout page and the record
+ * screen: four numbers, last time, the chart, and every rep (tap one to fix
+ * or add its time).
+ */
+export function AthleteBreakdown({
+  reps,
+  list,
+  last,
+  onGrass,
+  onAddTime,
+}: {
+  reps: FlatRep[];
+  list: AthleteRep[];
+  last: LastTime | null;
+  onGrass: boolean;
+  onAddTime: (repId: string, groupId: string, timeMs: number, finishEventId: string | null) => void;
+}) {
   const { ft, team } = useTimeFormat();
   const tenths = team === "tenths";
   const s = summarize(reps, list);
@@ -63,7 +92,7 @@ export function WorkoutAthleteSheet({
   const points = list.map((r, i) => (r.status === "done" && r.elapsedMs !== null ? { i, ms: (r.elapsedMs * base.meters) / reps[i].meters, delta: r.deltaMs } : null)).filter((p) => p !== null);
 
   return (
-    <Sheet title={name} subtitle={[groupName, goalPerBase !== null ? `goal ${ft(goalPerBase, "seconds")} per ${base.label}` : "no goal"].filter(Boolean).join(" · ")} onClose={onClose}>
+    <>
       <div className="grid grid-cols-4 gap-2 border-b border-line pb-3">
         <Stat value={per(s.avgPaceMsPerKm) !== null ? ft(per(s.avgPaceMsPerKm)!) : "—"} label={`Avg / ${base.label}`} />
         <Stat value={s.avgDeltaMs !== null ? signed(s.avgDeltaMs) : "—"} label="vs goal" className={tone(s.avgDeltaMs)} />
@@ -122,7 +151,7 @@ export function WorkoutAthleteSheet({
               </button>
               {editing === i && canType && (
                 <div className="space-y-2 pb-3">
-                  <Input autoFocus value={typed} onChange={(e) => setTyped(e.target.value)} inputMode="decimal" className="h-11 font-mono text-lg" aria-label={`Rep ${i + 1} time`} />
+                  <Input autoFocus onFocus={(e) => e.target.select()} value={typed} onChange={(e) => setTyped(e.target.value)} inputMode="decimal" className="h-11 font-mono text-lg" aria-label={`Rep ${i + 1} time`} />
                   <p className="text-[13px] text-ink-2">{typed.trim() ? (typedMs !== null ? `= ${formatElapsed(typedMs)}` : "Not a time yet") : "Digits are enough: 116 is 1:16, 116.4 is 1:16.4."}</p>
                   <Button
                     className="w-full"
@@ -148,7 +177,7 @@ export function WorkoutAthleteSheet({
       <p className="mt-3 text-xs leading-relaxed text-ink-3">
         Rest is theirs: from when they came in to when they started the next rep. Tap a time to fix it, or a &ldquo;no time&rdquo; to add one from a watch.
       </p>
-    </Sheet>
+    </>
   );
 }
 

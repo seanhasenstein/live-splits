@@ -3,9 +3,10 @@
 import { Check, MoreHorizontal, Play, Plus, SlidersHorizontal, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { changeRepsAction } from "@/app/actions/workouts";
+import { AthleteBreakdown } from "@/components/workout-athlete-sheet";
 import { RepCell, SHOW_DELTAS_KEY } from "@/components/workout-rep-cell";
 import { groupTint, repCellTone } from "@/components/workout-tint";
-import { Alert, Button, Card, Input, SectionLabel, Segmented, Sheet, Switch, Time } from "@/components/ui";
+import { Alert, Button, Card, SectionLabel, Segmented, Sheet, Switch, Time } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useLocalValue } from "@/lib/client/use-local-value";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
@@ -14,7 +15,7 @@ import { useWorkoutEvents } from "@/lib/client/use-workout-events";
 import type { Workout } from "@/lib/db/schema";
 import { describeRest } from "@/lib/workout-plan";
 import { type AthleteRep, type FlatRep, replayWorkout, summarize } from "@/lib/workout-replay";
-import { formatElapsed, parseTypedTime } from "@/lib/time";
+import { formatElapsed } from "@/lib/time";
 
 type Plan = Pick<Workout, "sets" | "groups" | "athletes"> & { finishedAt: string | null };
 
@@ -657,6 +658,10 @@ export function WorkoutRecorder({
           }}
           reps={reps}
           soFar={sheetRep.slice(0, Math.max(phase.kind === "running" ? repIndex : lastIndex + 1, 0))}
+          list={sheetRep}
+          onAddTime={(repId, gid, timeMs, finishEventId) =>
+            finishEventId ? send({ type: "edit", targetEventId: finishEventId, timeMs }) : send({ type: "finish", athleteId: sheetFor, groupId: gid, repId, timeMs })
+          }
           ft={ft}
         />
       )}
@@ -837,6 +842,8 @@ function AthleteActions({
   act,
   reps,
   soFar,
+  list,
+  onAddTime,
   ft,
 }: {
   name: string;
@@ -851,64 +858,27 @@ function AthleteActions({
   otherGroups: { id: string; name: string }[];
   onClose: () => void;
   act: (type: "void" | "edit" | "skip" | "stop" | "rejoin" | "move" | "rep_start" | "finish", extra: { repId?: string; targetEventId?: string; timeMs?: number; groupId?: string }) => void;
-  reps: { id: string }[];
-  /** Their reps before the one on screen, for a glance at how it's going. */
+  reps: FlatRep[];
+  /** Their reps before the one on screen (for make-ups of skipped ones). */
   soFar: AthleteRep[];
+  /** Every rep of theirs, for the breakdown under the actions. */
+  list: AthleteRep[];
+  /** A typed time for any rep: fix one, or add one that has none. The sheet stays open for the next. */
+  onAddTime: (repId: string, groupId: string, timeMs: number, finishEventId: string | null) => void;
   ft: (ms: number) => string;
 }) {
-  const [fixing, setFixing] = useState(false);
-  const [typed, setTyped] = useState(rep.elapsedMs !== null ? formatElapsed(rep.elapsedMs) : "");
-  const typedMs = parseTypedTime(typed);
   const btn = "w-full rounded-md border border-line px-3 py-3 text-left text-sm text-ink hover:bg-surface-2";
   const upId = next ? reps[next.index].id : null;
   const first = name.split(" ")[0];
   return (
-    <Sheet title={name} subtitle={rep.status === "done" && rep.elapsedMs !== null ? `Rep ${repNumber}: ${formatElapsed(rep.elapsedMs)}` : `Rep ${repNumber}`} onClose={onClose}>
-      {soFar.some((r) => r.status === "done") && (
-        <div className="mb-3 flex flex-wrap gap-1">
-          {soFar.map((r, i) => (
-            <span key={r.repId} className="inline-flex flex-col items-center rounded-md border border-line px-1.5 py-0.5">
-              <span className="text-[10px] text-ink-3">{i + 1}</span>
-              {r.status === "done" && r.elapsedMs !== null ? (
-                <Time className={`rounded px-1 text-[13px] ${repCellTone(r.deltaMs)}`}>{ft(r.elapsedMs)}</Time>
-              ) : (
-                <span className="px-1 text-[12px] text-ink-3">{r.status === "skipped" ? "skip" : "—"}</span>
-              )}
-            </span>
-          ))}
-        </div>
-      )}
+    <Sheet title={name} subtitle={rep.status === "done" && rep.elapsedMs !== null ? `Rep ${repNumber}: ${ft(rep.elapsedMs)}` : `Rep ${repNumber}`} onClose={onClose}>
+      {/* What to do now first (that's why it's open mid-workout); their whole workout below, where any rep can be fixed. */}
       <div className="space-y-2">
-        {rep.status === "done" && rep.finishEventId && !fixing && (
-          <>
-            <button type="button" className={btn} onClick={() => setFixing(true)}>
-              Fix this time
-            </button>
-            <button type="button" className={btn} onClick={() => act("void", { targetEventId: rep.finishEventId! })}>
-              Undo the finish (still running)
-            </button>
-          </>
-        )}
-        {rep.status === "unfinished" && rep.startMs !== null && !fixing && (
-          <button type="button" className={btn} onClick={() => setFixing(true)}>
-            Add their time
-            <span className="mt-0.5 block text-[13px] text-ink-2">The group went on before they were tapped in. Type it from a watch.</span>
+        {rep.status === "done" && rep.finishEventId && (
+          <button type="button" className={btn} onClick={() => act("void", { targetEventId: rep.finishEventId! })}>
+            Undo the finish (still running)
+            <span className="mt-0.5 block text-[13px] text-ink-2">Tapped the wrong runner? This puts them back on the course.</span>
           </button>
-        )}
-        {fixing && rep.startMs !== null && (
-          <div className="space-y-2">
-            <Input autoFocus value={typed} onChange={(e) => setTyped(e.target.value)} inputMode="decimal" className="h-12 font-mono text-xl" aria-label="Rep time" />
-            <p className="text-[13px] text-ink-2">{typed.trim() ? (typedMs !== null ? `= ${formatElapsed(typedMs)}` : "Not a time yet") : "Digits are enough: 116 is 1:16, 116.4 is 1:16.4."}</p>
-            <Button
-              className="w-full"
-              disabled={typedMs === null}
-              onClick={() =>
-                rep.finishEventId ? act("edit", { targetEventId: rep.finishEventId, timeMs: rep.startMs! + typedMs! }) : act("finish", { repId: rep.repId, timeMs: rep.startMs! + typedMs! })
-              }
-            >
-              Save {typedMs !== null ? formatElapsed(typedMs) : ""}
-            </Button>
-          </div>
         )}
         {running && rep.status === "running" && !rep.ownStartEventId && (
           <button type="button" className={btn} onClick={() => act("rep_start", { repId: rep.repId })}>
@@ -965,6 +935,8 @@ function AthleteActions({
             </button>
           ))}
       </div>
+      <SectionLabel className="mt-5 mb-2">Their workout</SectionLabel>
+      <AthleteBreakdown reps={reps} list={list} last={null} onGrass={false} onAddTime={onAddTime} />
     </Sheet>
   );
 }
