@@ -4,8 +4,12 @@ Practice sessions timed rep by rep: plan it, time it on phones, review it.
 Built on the same ideas as races (an append-only event log replayed into
 every screen), kept in their own collections so race code is untouched.
 
-Status: data model and replay done (`src/lib/db/schema/workouts.ts`,
-`src/lib/workout-replay.ts`, tested). Screens below are the plan.
+Status: plan, record and team grid built (`/workouts`, `/workouts/new`,
+`/workouts/[id]`, `/workouts/[id]/record?group=`); the athlete sheet, ending a
+workout, templates and manager access are next. Model and replay in
+`src/lib/db/schema/workouts.ts` and `src/lib/workout-replay.ts` (tested); the
+phone queues events locally and syncs through `/api/workout-events` and
+`/api/workouts/[id]/events`.
 
 ## Shape of a workout
 
@@ -47,7 +51,7 @@ Replay gives each athlete's status and time on every rep (with goal and
 next rep is due), or done. Plan changes mid-workout (add or drop a rep) edit
 the plan; rep ids stay stable so the log still lines up.
 
-## Screens (to build)
+## Screens
 
 **Plan** (before): name, date, place, grass or track; sets and reps with a
 quick form ("12 × 400m, 60 s rest") and a list to adjust; effort; groups and

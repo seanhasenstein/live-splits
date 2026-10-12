@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { Pencil, Timer } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
-import { AppHeader, Card, CardBody, CardHeader, LinkButton, Page, PageTitle, SectionLabel, Time } from "@/components/ui";
+import { AppHeader, Card, CardBody, CardHeader, LinkButton, Page, PageTitle } from "@/components/ui";
 import { getSession, isSchoolCoach } from "@/lib/auth/session";
-import { listAthletes } from "@/lib/data";
+import { WorkoutBoard } from "@/components/workout-board";
+import { getProgram, listRoster } from "@/lib/data";
 import { describePlan, describeRest, EFFORT_LABEL } from "@/lib/workout-plan";
 import { flattenPlan } from "@/lib/workout-replay";
 import { getWorkout } from "@/lib/workouts";
-import { formatDuration, formatLocalDate } from "@/lib/time";
+import { formatLocalDate } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Workout" };
 
@@ -17,17 +18,16 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
   if (!isSchoolCoach(session)) redirect("/meets");
   const workout = await getWorkout(workoutId);
   if (!workout || workout.schoolId !== session!.schoolId) notFound();
-  const athletes = await listAthletes(workout.schoolId, workout.athletes.map((a) => a.athleteId));
-  const nameOf = new Map(athletes.map((a) => [a._id, a.displayName]));
+  const [roster, program] = await Promise.all([listRoster(workout.seasonId), getProgram(workout.schoolId, "xc")]);
+  const levelLabel = (id: string) => program?.settings.levels.find((l) => l.id === id)?.label ?? id;
+  const people = roster.map((a) => ({ id: a._id, name: a.displayName, gender: a.gender, level: levelLabel(a.defaultLevelId) }));
   const reps = flattenPlan(workout);
-  const main = reps[0];
-  const goalFor = (pace: number | null) => (pace === null ? "—" : formatDuration(Math.round((pace * main.meters) / 1000)));
   const totalKm = reps.reduce((n, r) => n + r.meters, 0) / 1000;
 
   return (
     <>
       <AppHeader back={{ href: "/workouts", label: "Workouts" }} />
-      <Page>
+      <Page wide>
         <PageTitle
           title={workout.name}
           description={`${formatLocalDate(workout.date)}${workout.place ? ` · ${workout.place}` : ""} · ${EFFORT_LABEL[workout.effort]}`}
@@ -67,28 +67,11 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
             </CardBody>
           </Card>
 
-          {workout.groups.map((g) => {
-            const members = workout.athletes.filter((a) => a.groupId === g.id).sort((a, b) => (a.goalPaceMsPerKm ?? Infinity) - (b.goalPaceMsPerKm ?? Infinity));
-            return (
-              <Card key={g.id}>
-                <CardHeader title={workout.groups.length > 1 ? g.name : "Runners"} action={<span className="text-[13px] text-ink-2">{members.length} runners</span>} />
-                <CardBody flush>
-                  <div className="flex justify-between border-b border-line px-4 py-1.5">
-                    <SectionLabel>Athlete</SectionLabel>
-                    <SectionLabel>Goal per {main.label}</SectionLabel>
-                  </div>
-                  <div className="divide-y divide-line">
-                    {members.map((a) => (
-                      <div key={a.athleteId} className="flex items-center justify-between px-4 py-2 text-sm">
-                        <span className="text-ink">{nameOf.get(a.athleteId) ?? "?"}</span>
-                        <Time className="font-medium text-ink">{goalFor(a.goalPaceMsPerKm)}</Time>
-                      </div>
-                    ))}
-                  </div>
-                </CardBody>
-              </Card>
-            );
-          })}
+          <WorkoutBoard
+            workoutId={workout._id}
+            initialPlan={{ sets: workout.sets, groups: workout.groups, athletes: workout.athletes, finishedAt: workout.finishedAt?.toISOString() ?? null }}
+            people={people}
+          />
 
           {workout.notes && (
             <Card>
