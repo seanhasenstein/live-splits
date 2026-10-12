@@ -139,7 +139,9 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
 
   // Group membership by rep: the planned group, then moves in rep order (ties: the later move wins).
   const planned = new Map(workout.athletes.map((a) => [a.athleteId, a.groupId]));
-  const moves = ordered.filter((e) => e.type === "move" && e.athleteId && e.groupId).sort((a, b) => repOf(a) - repOf(b) || a.serverTimeMs - b.serverTimeMs);
+  // A move puts them in a group from its rep on; the most recent move covering a rep decides it, so moving
+  // someone back (sent at their old group's rep, which can be earlier than the move out) still takes.
+  const moves = ordered.filter((e) => e.type === "move" && e.athleteId && e.groupId);
   const groupAt = (athleteId: string, ri: number): string => {
     let g = planned.get(athleteId) ?? workout.groups[0].id;
     for (const m of moves) if (m.athleteId === athleteId && repOf(m) <= ri) g = m.groupId!;
@@ -177,6 +179,12 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
   const lastStarted = new Map<string, number>();
   for (const key of groupStart.keys()) {
     const [g, ri] = [key.slice(0, key.lastIndexOf(":")), Number(key.slice(key.lastIndexOf(":") + 1))];
+    lastStarted.set(g, Math.max(lastStarted.get(g) ?? -1, ri));
+  }
+  // A group run on individual starts only has started a rep once any of its runners has.
+  for (const key of ownStart.keys()) {
+    const [id, ri] = [key.slice(0, key.lastIndexOf(":")), Number(key.slice(key.lastIndexOf(":") + 1))];
+    const g = groupAt(id, ri);
     lastStarted.set(g, Math.max(lastStarted.get(g) ?? -1, ri));
   }
   const finishes = new Map<string, WorkoutEvent>(); // `${athleteId}:${ri}`, latest
@@ -254,10 +262,12 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
     const members = athleteIds.filter((id) => groupAt(id, current.index) === g.id).map((id) => athletes.get(id)![current.index]);
     const startMs = groupStart.get(`${g.id}:${current.index}`) ?? Math.min(...members.map((m) => m.startMs ?? Infinity));
     const startEventId = groupStartEvent.get(`${g.id}:${current.index}`) ?? null;
-    const stillOut = members.filter((m) => m.status === "running" || m.status === "pending").length;
+    // A make-up of this rep runs on its own: the group's rest goes on around it.
+    const stillOut = members.filter((m) => (m.status === "running" && !m.makeUp) || m.status === "pending").length;
     const earlyRest = restStart.get(`${g.id}:${current.index}`);
+    const lastRep = current.index === reps.length - 1 || endsHere;
     // The last rep (planned, or the coach ended the group here) has no rest after it: it runs until everyone's in.
-    if (stillOut > 0 && (earlyRest === undefined || endsHere)) {
+    if (stillOut > 0 && (earlyRest === undefined || lastRep)) {
       groups.set(g.id, { kind: "running", repIndex: current.index, startMs, startEventId });
       continue;
     }
@@ -280,7 +290,7 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
       const startMs = groupStart.get(`${g.id}:${r.index}`);
       if (startMs === undefined) continue;
       const members = athleteIds.filter((id) => groupAt(id, r.index) === g.id).map((id) => athletes.get(id)![r.index]);
-      const allIn = members.every((m) => m.status !== "running" && m.status !== "pending");
+      const allIn = members.every((m) => (m.status !== "running" || m.makeUp) && m.status !== "pending");
       const early = restStart.get(`${g.id}:${r.index}`);
       const restStartMs = early ?? (allIn || (lastStarted.get(g.id) ?? -1) > r.index ? restBegan(members, startMs) : null);
       const next = reps[r.index + 1] ? groupStart.get(`${g.id}:${r.index + 1}`) : undefined;

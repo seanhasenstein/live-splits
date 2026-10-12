@@ -8,7 +8,35 @@ import { getDb, newId } from "@/lib/db/client";
 import { collection, COLLECTIONS } from "@/lib/db/collections";
 import { canTimeWorkout } from "@/lib/workout-events";
 import { addRepAtEnd, dropLastRep, expandSets, WorkoutPayload } from "@/lib/workout-plan";
+import type { Workout } from "@/lib/db/schema";
 import { getWorkout } from "@/lib/workouts";
+
+/**
+ * What an edit would break once times are in: a rep, group or runner with times taken out, or a
+ * runner with times put in a different group (their past reps would re-time against the new
+ * group's starts; a move from the record screen is the way). Null when the edit is safe.
+ */
+async function editConflict(existing: Workout, sets: Workout["sets"], input: WorkoutPayload): Promise<string | null> {
+  const events = await collection(await getDb(), "workoutEvents").find({ workoutId: existing._id }, { projection: { clientEventId: 1, type: 1, repId: 1, groupId: 1, athleteId: 1, targetEventId: 1 } }).toArray();
+  const voided = new Set(events.filter((e) => e.type === "void").map((e) => e.targetEventId));
+  const live = events.filter((e) => e.type !== "void" && e.type !== "edit" && !voided.has(e.clientEventId));
+  if (live.length === 0) return null;
+  const repIds = new Set(sets.flatMap((s) => s.reps.map((r) => r.id)));
+  const oldReps = existing.sets.flatMap((s) => s.reps.map((r) => r.id));
+  const lostRep = live.find((e) => e.repId && oldReps.includes(e.repId) && !repIds.has(e.repId));
+  if (lostRep) return `Rep ${oldReps.indexOf(lostRep.repId!) + 1} already has times, so it can't be taken out. To stop a group early, end it from the record screen.`;
+  const groupIds = new Set(input.groups.map((g) => g.id));
+  if (live.some((e) => e.groupId && !groupIds.has(e.groupId))) return "A group with times can't be removed.";
+  const newGroup = new Map(input.athletes.map((a) => [a.athleteId, a.groupId]));
+  const timed = new Set(live.map((e) => e.athleteId).filter((id): id is string => id !== null));
+  for (const a of existing.athletes) {
+    if (!timed.has(a.athleteId)) continue;
+    if (!newGroup.has(a.athleteId)) return "A runner with times can't be taken out of the workout. Mark them done for today instead.";
+    if (newGroup.get(a.athleteId) !== a.groupId) return "A runner with times can't change group here (their earlier reps would be re-timed). Move them from the record screen.";
+  }
+  // Group starts time everyone in the group, so a group that has run can't lose or swap its runners either way.
+  return null;
+}
 
 /** Create (workoutId null) or update a workout's plan, groups and goals. Coaches only. */
 export async function saveWorkoutAction(workoutId: string | null, payloadJson: string): Promise<{ error?: string }> {
@@ -77,6 +105,11 @@ export async function saveWorkoutAction(workoutId: string | null, payloadJson: s
   if (workoutId) {
     const existing = await getWorkout(workoutId);
     if (!existing || existing.schoolId !== schoolId) return { error: "Workout not found" };
+    if (input.expectedUpdatedAt !== undefined && existing.updatedAt.getTime() !== input.expectedUpdatedAt) {
+      return { error: "The workout changed while you were editing (a rep added at the track?). Reload the page and make your changes again." };
+    }
+    const conflict = await editConflict(existing, fields.sets, input);
+    if (conflict) return { error: conflict };
     const next = COLLECTIONS.workouts.schema.parse({ ...existing, ...fields, updatedAt: now, updatedBy: actor });
     await collection(db, "workouts").replaceOne({ _id: existing._id }, next);
     redirect(`/workouts/${existing._id}`);
@@ -166,17 +199,25 @@ export async function changeRepsAction(workoutId: string, change: "add" | "drop"
   if (!session) return { error: "Not allowed" };
   if (workout.finishedAt) return { error: "The workout has been ended. Reopen it to change the reps." };
   const db = await getDb();
-  let sets = workout.sets;
-  if (change === "add") sets = addRepAtEnd(sets);
-  else {
-    const lastId = sets.at(-1)!.reps.at(-1)!.id;
-    const events = await collection(db, "workoutEvents").find({ workoutId: workout._id }, { projection: { clientEventId: 1, type: 1, repId: 1, targetEventId: 1 } }).toArray();
-    const voided = new Set(events.filter((e) => e.type === "void").map((e) => e.targetEventId));
-    if (events.some((e) => e.repId === lastId && !voided.has(e.clientEventId))) return { error: "A group has already started that rep" };
-    const fewer = dropLastRep(sets);
-    if (!fewer) return { error: "It's the only rep" };
-    sets = fewer;
+  // Read, change, write only if nobody changed it meanwhile (two phones tapping "add" add two); retry on a clash.
+  for (let attempt = 0, current = workout; attempt < 3; attempt++) {
+    let sets = current.sets;
+    if (change === "add") sets = addRepAtEnd(sets);
+    else {
+      const lastId = sets.at(-1)!.reps.at(-1)!.id;
+      const events = await collection(db, "workoutEvents").find({ workoutId: workout._id, repId: lastId }, { projection: { clientEventId: 1, type: 1 } }).toArray();
+      const voids = await collection(db, "workoutEvents").find({ workoutId: workout._id, type: "void" }, { projection: { targetEventId: 1 } }).toArray();
+      const voided = new Set(voids.map((e) => e.targetEventId));
+      if (events.some((e) => (e.type === "rep_start" || e.type === "finish") && !voided.has(e.clientEventId))) return { error: "A group has already started that rep" };
+      const fewer = dropLastRep(sets);
+      if (!fewer) return { error: "It's the only rep" };
+      sets = fewer;
+    }
+    const r = await collection(db, "workouts").updateOne({ _id: workout._id, updatedAt: current.updatedAt }, { $set: { sets, updatedAt: new Date(), updatedBy: sessionActor(session) } });
+    if (r.matchedCount === 1) return {};
+    const fresh = await getWorkout(workoutId);
+    if (!fresh) return { error: "Workout not found" };
+    current = fresh;
   }
-  await collection(db, "workouts").updateOne({ _id: workout._id }, { $set: { sets, updatedAt: new Date(), updatedBy: sessionActor(session) } });
-  return {};
+  return { error: "The plan was changing on another phone. Try again." };
 }

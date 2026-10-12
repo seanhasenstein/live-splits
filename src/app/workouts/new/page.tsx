@@ -6,7 +6,7 @@ import { deleteTemplateAction } from "@/app/actions/workouts";
 import { WorkoutForm } from "@/components/workout-form";
 import { Alert, AppHeader, Card, CardBody, CardHeader, Page, PageTitle } from "@/components/ui";
 import { getSession, isSchoolCoach } from "@/lib/auth/session";
-import { getSchool } from "@/lib/data";
+import { getProgram, getSchool } from "@/lib/data";
 import { workoutFormData } from "@/lib/workout-form-data";
 import { describePlan, EFFORT_LABEL, toSetInputs } from "@/lib/workout-plan";
 import { listTemplates } from "@/lib/workouts";
@@ -19,7 +19,8 @@ export default async function NewWorkoutPage({ searchParams }: PageProps<"/worko
   const { template: templateParam } = await searchParams;
   const school = await getSchool(session!.schoolId);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: school?.settings.timeZone ?? "America/Chicago" }).format(new Date());
-  const [data, templates] = await Promise.all([workoutFormData(session!.schoolId, today), listTemplates(session!.schoolId)]);
+  const program = await getProgram(session!.schoolId, "xc");
+  const [data, templates] = await Promise.all([workoutFormData(session!.schoolId, today), program ? listTemplates(session!.schoolId, program._id) : []]);
   const template = templates.find((t) => t._id === templateParam) ?? null;
   return (
     <>

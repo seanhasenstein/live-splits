@@ -34,7 +34,9 @@ export const WorkoutPayload = z.object({
   templateId: z.string().min(1).nullable().optional(),
   /** Also save (or update) a template with these reps, under the workout's name. */
   saveAsTemplate: z.boolean().optional(),
-});
+  /** When editing: the workout's updatedAt the form started from, so a change made meanwhile (a rep added at the track) isn't overwritten. */
+  expectedUpdatedAt: z.int().optional(),
+}).refine((p) => new Set(p.sets.map((s) => s.id).filter(Boolean)).size === p.sets.filter((s) => s.id).length, "Two sets share an id");
 export type WorkoutPayload = z.infer<typeof WorkoutPayload>;
 
 export function expandSets(sets: PlanSetInput[], newId: () => string): RepSet[] {

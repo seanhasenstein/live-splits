@@ -133,6 +133,7 @@ export function WorkoutForm({
       athletes: included.map((a) => ({ athleteId: a.athleteId, groupId: groups.some((g) => g.id === a.groupId) ? a.groupId : groups[0].id, goalPaceMsPerKm: a.goal })),
       notes: notes.trim() || null,
       templateId: initial.templateId ?? null,
+      expectedUpdatedAt: initial.expectedUpdatedAt,
       saveAsTemplate,
     };
     setError(null);

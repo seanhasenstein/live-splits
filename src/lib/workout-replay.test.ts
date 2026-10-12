@@ -242,6 +242,42 @@ describe("rests the coach controls", () => {
   });
 });
 
+describe("edge cases from review", () => {
+  const last = ev("rep_start", 0, { groupId: "g1", repId: "b2" });
+  it("starting the rest early on the last rep is ignored: it runs until everyone's in, then it's done", () => {
+    const evs = [last, ev("finish", 30_000, { athleteId: "eddy", repId: "b2" }), ev("rest_start", 31_000, { groupId: "g1", repId: "b2" })];
+    expect(replayWorkout(workout, evs).groups.get("g1")).toMatchObject({ kind: "running", repIndex: 4 });
+    expect(replayWorkout(workout, [...evs, ev("finish", 40_000, { athleteId: "titus", repId: "b2" })]).groups.get("g1")).toMatchObject({ kind: "done" });
+  });
+
+  it("a make-up during the group's rest doesn't cancel the rest", () => {
+    const evs = [
+      ev("rep_start", 0, { groupId: "g1", repId: "a1" }),
+      ev("skip", 1_000, { athleteId: "titus", repId: "a1" }),
+      ev("finish", 76_000, { athleteId: "eddy", repId: "a1" }),
+      ev("rep_start", 80_000, { groupId: "g1", athleteId: "titus", repId: "a1" }),
+    ];
+    expect(replayWorkout(workout, evs).groups.get("g1")).toMatchObject({ kind: "rest", afterRepIndex: 0, nextStartMs: T0 + 136_000 });
+  });
+
+  it("moving someone back counts, even when it's sent at an earlier rep than the move out", () => {
+    const evs = [ev("move", 0, { athleteId: "eddy", groupId: "g2", repId: "a3" }), ev("move", 10_000, { athleteId: "eddy", groupId: "g1", repId: "a2" })];
+    const s = replayWorkout(workout, evs);
+    expect(s.groupAt("eddy", 2)).toBe("g1");
+    expect(s.groupAt("eddy", 4)).toBe("g1");
+  });
+
+  it("a group run on individual starts still leaves a runner who never came in with no time once the next rep starts", () => {
+    const evs = [
+      ev("rep_start", 0, { groupId: "g1", athleteId: "eddy", repId: "a1" }),
+      ev("rep_start", 0, { groupId: "g1", athleteId: "titus", repId: "a1" }),
+      ev("finish", 75_000, { athleteId: "eddy", repId: "a1" }),
+      ev("rep_start", 140_000, { groupId: "g1", athleteId: "eddy", repId: "a2" }),
+    ];
+    expect(replayWorkout(workout, evs).athletes.get("titus")![0].status).toBe("unfinished");
+  });
+});
+
 describe("summarize", () => {
   it("average pace, average vs goal, spread and fade across reps of any distance", () => {
     const reps = flattenPlan(workout);

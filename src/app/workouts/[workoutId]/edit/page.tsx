@@ -34,6 +34,7 @@ export default async function EditWorkoutPage({ params }: PageProps<"/workouts/[
             groups: workout.groups,
             athletes: workout.athletes,
             notes: workout.notes,
+            expectedUpdatedAt: workout.updatedAt.getTime(),
           }}
           roster={data.roster}
           fiveK={data.fiveK}

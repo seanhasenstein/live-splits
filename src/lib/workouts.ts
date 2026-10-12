@@ -1,5 +1,5 @@
 import "server-only";
-import type { Workout, WorkoutTemplate } from "@/lib/db/schema";
+import type { Workout, WorkoutEvent, WorkoutTemplate } from "@/lib/db/schema";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
 import { describePlan } from "@/lib/workout-plan";
@@ -9,8 +9,8 @@ export async function listWorkouts(schoolId: string): Promise<Workout[]> {
   return collection(await getDb(), "workouts").find({ schoolId, deletedAt: null }).sort({ date: -1, createdAt: -1 }).toArray();
 }
 
-export async function listTemplates(schoolId: string): Promise<WorkoutTemplate[]> {
-  return collection(await getDb(), "workoutTemplates").find({ schoolId, deletedAt: null }).sort({ name: 1 }).toArray();
+export async function listTemplates(schoolId: string, programId: string): Promise<WorkoutTemplate[]> {
+  return collection(await getDb(), "workoutTemplates").find({ schoolId, programId, deletedAt: null }).sort({ name: 1 }).toArray();
 }
 
 export async function getWorkout(id: string): Promise<Workout | null> {
@@ -73,15 +73,23 @@ export async function lastTimeRan(workout: Workout): Promise<Record<string, Last
       .find({ schoolId: workout.schoolId, programId: workout.programId, deletedAt: null, date: { $lte: workout.date }, _id: { $ne: workout._id } })
       .sort({ date: -1, createdAt: -1 })
       .limit(60)
+      .project<Pick<Workout, "_id" | "date" | "createdAt" | "sets" | "groups" | "athletes" | "approximateDistances">>({ _id: 1, date: 1, createdAt: 1, sets: 1, groups: 1, athletes: 1, approximateDistances: 1 })
       .toArray()
-  ).filter((w) => describePlan(w.sets) === signature && (w.date < workout.date || w.createdAt < workout.createdAt));
+  )
+    .filter((w) => describePlan(w.sets) === signature && (w.date < workout.date || w.createdAt < workout.createdAt))
+    .slice(0, 8);
   const out: Record<string, LastTime> = {};
   const want = new Set(workout.athletes.map((a) => a.athleteId));
-  // Newest first; stop once everyone has one (or after a handful of workouts).
-  for (const w of earlier.slice(0, 8)) {
+  if (earlier.length === 0) return out;
+  // One query for every candidate's log, grouped here.
+  const byWorkout = new Map<string, WorkoutEvent[]>();
+  for (const e of await collection(db, "workoutEvents").find({ workoutId: { $in: earlier.map((w) => w._id) } }).toArray()) {
+    byWorkout.set(e.workoutId, [...(byWorkout.get(e.workoutId) ?? []), e]);
+  }
+  // Newest first; stop once everyone has one.
+  for (const w of earlier) {
     if (want.size === 0) break;
-    const events = await collection(db, "workoutEvents").find({ workoutId: w._id }).toArray();
-    const state = replayWorkout(w, events);
+    const state = replayWorkout(w, byWorkout.get(w._id) ?? []);
     for (const [id, list] of state.athletes) {
       if (!want.has(id) || !list.some((r) => r.status === "done")) continue;
       const s = summarize(state.reps, list);
