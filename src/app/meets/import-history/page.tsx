@@ -13,7 +13,7 @@ export default async function ImportHistoryPage() {
     <>
       <AppHeader back={{ href: "/meets", label: "Meets" }} />
       <Page>
-        <PageTitle title="Import past seasons" description="The team's split sheets, one PDF for years of meets. Each meet becomes a past meet with its races and results; athletes not in the app are added as alumni." />
+        <PageTitle title="Import past seasons" description="The team's split sheets, one PDF for years of meets. Each meet becomes a past meet with its races and results. You'll see everything before it's written." />
         <HistoryImportWizard />
       </Page>
     </>

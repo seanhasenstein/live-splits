@@ -41,7 +41,14 @@ export type HistoryMeetReview = {
   venueName: string;
 };
 
-export type HistoryReview = { meets: HistoryMeetReview[]; athletes: HistoryAthleteReview[]; venues: string[]; allAthletes: { id: string; name: string; gender: "M" | "F" | "X" }[] };
+export type HistoryReview = {
+  meets: HistoryMeetReview[];
+  athletes: HistoryAthleteReview[];
+  venues: string[];
+  allAthletes: { id: string; name: string; gender: "M" | "F" | "X" }[];
+  /** Years the program already has a season for; others get one. */
+  seasons: number[];
+};
 
 const seasonYear = (date: string) => Number(date.slice(0, 4));
 
@@ -50,6 +57,7 @@ export async function reviewHistory(db: Db, school: School, meets: HistoryMeet[]
   const venues = await collection(db, "venues").find({ schoolId: school._id, deletedAt: null }).toArray();
   const venueName = new Map(venues.map((v) => [v._id, v.name]));
   const athletes = await collection(db, "athletes").find({ schoolId: school._id, deletedAt: null }).toArray();
+  const seasonDocs = await collection(db, "seasons").find({ schoolId: school._id, deletedAt: null }).toArray();
 
   const seasonsByName = new Map<string, { gender: "M" | "F"; seasons: Set<number> }>();
   for (const m of meets) {
@@ -91,6 +99,7 @@ export async function reviewHistory(db: Db, school: School, meets: HistoryMeet[]
     athletes: athleteReviews,
     venues: venues.map((v) => v.name).sort(),
     allAthletes: athletes.map((a) => ({ id: a._id, name: a.displayName, gender: a.gender })).sort((a, b) => a.name.localeCompare(b.name)),
+    seasons: [...new Set(seasonDocs.map((s) => seasonYear(s.endDate)))].sort(),
   };
 }
 

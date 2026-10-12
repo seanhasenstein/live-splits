@@ -2,7 +2,8 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { commitHistoryAction, type HistoryLoadState, loadHistoryAction } from "@/app/actions/history";
-import { Alert, Badge, Button, Card, CardBody, CardHeader, Checkbox, Field, Input, LinkButton, SectionLabel, Select } from "@/components/ui";
+import { Alert, Badge, Button, Card, CardBody, CardHeader, Field, Input, LinkButton, SectionLabel, Select, Stat } from "@/components/ui";
+import { useTimeFormat } from "@/lib/client/time-format";
 import type { HistoryCommitResult, HistoryReview } from "@/lib/results/history-import";
 import type { HistoryMeet } from "@/lib/results/splits-history";
 import { formatLocalDate } from "@/lib/time";
@@ -30,20 +31,23 @@ export function HistoryImportWizard() {
 }
 
 function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview }) {
+  const { ft } = useTimeFormat();
   const [include, setInclude] = useState<Record<number, boolean>>(() => Object.fromEntries(review.meets.map((m) => [m.index, m.existingMeetId === null])));
   const [venues, setVenues] = useState<Record<number, string>>(() => Object.fromEntries(review.meets.map((m) => [m.index, m.venueName])));
+  const [open, setOpen] = useState<Record<number, boolean>>({});
   const [gradYears, setGradYears] = useState<Record<string, string>>(() => Object.fromEntries(review.athletes.filter((a) => !a.athleteId).map((a) => [a.name, a.graduationYearGuess?.toString() ?? ""])));
-  // For names the app didn't recognise: a new athlete ("" ) or an existing one's id. A lone same-surname candidate is only suggested, not assumed.
+  // For names the app didn't recognise: a new athlete ("") or an existing one's id. A lone same-surname candidate is only suggested, not assumed.
   const [identity, setIdentity] = useState<Record<string, string>>(() => Object.fromEntries(review.athletes.filter((a) => !a.athleteId).map((a) => [a.name, ""])));
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<HistoryCommitResult | null>(null);
   const [pending, start] = useTransition();
 
   const chosen = review.meets.filter((m) => include[m.index]);
-  const newAthletes = review.athletes.filter((a) => !a.athleteId);
-  // Only names that appear in a chosen meet matter.
   const namesInChosen = new Set(chosen.flatMap((m) => meets[m.index].rows.map((r) => r.name)));
-  const years = [...new Set(chosen.map((m) => m.date.slice(0, 4)))].sort();
+  const unknown = review.athletes.filter((a) => !a.athleteId);
+  const years = [...new Set(chosen.map((m) => Number(m.date.slice(0, 4))))].sort();
+  const newSeasons = years.filter((y) => !review.seasons.includes(y));
+  const resultsCount = chosen.reduce((n, m) => n + m.rows, 0);
 
   const commit = () => {
     if (chosen.length === 0) return setError("Tick at least one meet.");
@@ -74,9 +78,9 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
   if (done) {
     return (
       <Card>
-        <CardHeader title="Past seasons imported" description={`${done.meets} meets, ${done.races} races, ${done.results} results · ${done.athletesCreated} athletes added as alumni · ${done.seasonsCreated} seasons created`} />
+        <CardHeader title="Past seasons imported" description={`${done.meets} meets · ${done.races} races · ${done.results} results · ${done.athletesCreated} athletes added · ${done.seasonsCreated} seasons created`} />
         <CardBody>
-          <p className="text-[13px] text-ink-2">Results, season bests and course comparisons now reach back to the earliest season in the file. Alumni with a blank graduation year can be completed later.</p>
+          <p className="text-[13px] text-ink-2">Results, season bests and course comparisons now reach back to the earliest season in the file. An athlete added without a graduation year can be completed later.</p>
           <LinkButton href="/meets" className="mt-4">
             Back to meets
           </LinkButton>
@@ -86,90 +90,164 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* What the import will do, in one glance. */}
       <Card>
-        <CardHeader title={`${review.meets.length} meets in the file`} description={`${chosen.length} to import across ${years.join(", ") || "—"}. Untick a meet to leave it out. The venue gives each meet its course, for course bests.`} />
-        <CardBody className="space-y-2">
-          {review.meets.map((m) => (
-            <div key={m.index} className="flex flex-col gap-2 rounded-md border border-line p-3 sm:flex-row sm:items-center sm:gap-3">
-              <div className="min-w-0 flex-1">
-                <Checkbox
-                  label={
-                    <span>
-                      <span className="font-medium text-ink">{m.name}</span>
-                      <span className="text-ink-2"> · {formatLocalDate(m.date)} · {m.rows} results · {m.races.join(", ")}</span>
-                    </span>
-                  }
-                  checked={!!include[m.index]}
-                  disabled={m.existingMeetId !== null}
-                  onChange={(e) => setInclude({ ...include, [m.index]: e.target.checked })}
-                />
-                {m.existingMeetId && (
-                  <div className="mt-1 ml-6">
-                    <Badge tone="neutral">already in the app</Badge>
+        <CardHeader title="What will be imported" />
+        <CardBody className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+          <Stat value={chosen.length} label={`of ${review.meets.length} meets`} />
+          <Stat value={resultsCount} label="results" />
+          <Stat value={review.athletes.length - unknown.length} label="athletes matched" />
+          <Stat value={unknown.filter((a) => namesInChosen.has(a.name)).length} label="names to settle" tone={unknown.some((a) => namesInChosen.has(a.name)) ? "gold" : "ink"} />
+          <p className="col-span-full text-[13px] text-ink-2">
+            Seasons: {years.length === 0 ? "—" : years.map((y) => (newSeasons.includes(y) ? `${y} (will be created)` : String(y))).join(", ")}.
+            {newSeasons.length > 0 && " A season is one calendar year's cross country, August to November; it holds the roster for that year."}
+          </p>
+        </CardBody>
+      </Card>
+
+      <section>
+        <SectionLabel className="mb-2">Meets</SectionLabel>
+        <div className="space-y-3">
+          {review.meets.map((m) => {
+            const meet = meets[m.index];
+            const existing = m.existingMeetId !== null;
+            const checked = !!include[m.index];
+            return (
+              <Card key={m.index} className={existing ? "opacity-70" : ""}>
+                <div className="flex items-start gap-3 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={existing}
+                    onChange={(e) => setInclude({ ...include, [m.index]: e.target.checked })}
+                    aria-label={`Import ${m.name}`}
+                    className="mt-1 size-4 shrink-0 accent-brand"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <h3 className="text-[15px] font-semibold text-ink">{m.name}</h3>
+                      {existing && <Badge tone="neutral">already in the app</Badge>}
+                    </div>
+                    <p className="text-[13px] text-ink-2">
+                      {formatLocalDate(m.date)}, {m.date.slice(0, 4)} · {m.races.join(" · ")} · {m.rows} result{m.rows === 1 ? "" : "s"}
+                    </p>
                   </div>
+                  <Button size="sm" variant="ghost" onClick={() => setOpen({ ...open, [m.index]: !open[m.index] })} aria-expanded={!!open[m.index]}>
+                    {open[m.index] ? "Hide results" : "Show results"}
+                  </Button>
+                </div>
+                {checked && (
+                  <CardBody className="py-3">
+                    <Field label="Venue" hint="Gives the meet its course, for course bests. Leave blank if you're not sure; it can be set on the meet later.">
+                      <Input value={venues[m.index] ?? ""} onChange={(e) => setVenues({ ...venues, [m.index]: e.target.value })} placeholder="Northbrook Golf & Grill" list="history-venues" maxLength={120} className="sm:max-w-sm" />
+                    </Field>
+                  </CardBody>
                 )}
-              </div>
-              {m.existingMeetId === null && (
-                <Input
-                  value={venues[m.index] ?? ""}
-                  onChange={(e) => setVenues({ ...venues, [m.index]: e.target.value })}
-                  placeholder="Venue (optional)"
-                  list="history-venues"
-                  maxLength={120}
-                  className="sm:w-64"
-                  aria-label={`Venue for ${m.name}`}
-                />
-              )}
-            </div>
-          ))}
+                {open[m.index] && (
+                  <CardBody className="overflow-x-auto p-0">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-line text-left text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
+                          <th className="px-4 py-2 font-semibold whitespace-nowrap">Athlete</th>
+                          <th className="px-2 py-2 font-semibold whitespace-nowrap">Race</th>
+                          {meet.checkpoints.map((c) => (
+                            <th key={c.label} className="px-2 py-2 text-right font-semibold whitespace-nowrap">
+                              {c.label}
+                            </th>
+                          ))}
+                          <th className="px-2 py-2 text-right font-semibold">Finish</th>
+                          <th className="px-4 py-2 text-right font-semibold">Place</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {meet.rows.map((r, i) => {
+                          const a = review.athletes.find((x) => x.name === r.name);
+                          const settled = a?.athleteId || identity[r.name];
+                          return (
+                            <tr key={i} className="border-b border-line last:border-0">
+                              <td className="px-4 py-1.5 text-ink whitespace-nowrap">
+                                {r.name}
+                                {!settled && <span className="ml-1.5 text-[11px] text-gold-text">new</span>}
+                              </td>
+                              <td className="px-2 py-1.5 text-ink-2 whitespace-nowrap">
+                                {r.gender === "F" ? "Girls" : "Boys"} {r.level === "jv" ? "JV" : "V"}
+                              </td>
+                              {meet.checkpoints.map((c) => (
+                                <td key={c.label} className="tnum px-2 py-1.5 text-right text-ink-2">
+                                  {r.splits[c.label] !== undefined ? ft(r.splits[c.label], "seconds") : "—"}
+                                </td>
+                              ))}
+                              <td className="tnum px-2 py-1.5 text-right font-medium text-ink">{r.finishMs !== null ? ft(r.finishMs, "seconds") : r.status.toUpperCase()}</td>
+                              <td className="tnum px-4 py-1.5 text-right text-ink-2">{r.place ?? "—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </CardBody>
+                )}
+              </Card>
+            );
+          })}
           <datalist id="history-venues">
             {review.venues.map((v) => (
               <option key={v} value={v} />
             ))}
           </datalist>
-        </CardBody>
-      </Card>
+        </div>
+      </section>
 
-      <Card>
-        <CardHeader
-          title="Athletes"
-          description={`${review.athletes.length - newAthletes.length} names match athletes in the app. ${newAthletes.length} will be added as alumni; a graduation year lets the app work out their grade (four seasons in the file means a senior in the last one).`}
-        />
-        {newAthletes.length > 0 && (
-          <CardBody className="space-y-2">
-            <SectionLabel>New athletes</SectionLabel>
-            {newAthletes.map((a) => {
-              const same = review.allAthletes.filter((x) => x.gender === a.gender || x.gender === "X");
-              return (
-                <div key={a.name} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                  <span className="min-w-0 flex-1 text-sm text-ink">
-                    {a.name} <span className="text-ink-3">· {a.gender === "F" ? "girls" : "boys"} · {a.seasons.join(", ")}</span>
-                  </span>
-                  <Select value={identity[a.name] ?? ""} onChange={(e) => setIdentity({ ...identity, [a.name]: e.target.value })} className="sm:w-56" aria-label={`Who is ${a.name}`}>
-                    <option value="">New athlete (alumni)</option>
-                    {a.candidates.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} — same last name
-                      </option>
-                    ))}
-                    {same
-                      .filter((x) => !a.candidates.some((c) => c.id === x.id))
-                      .map((x) => (
+      <section>
+        <SectionLabel className="mb-2">Names the app doesn&rsquo;t know</SectionLabel>
+        <Card>
+          <CardHeader
+            title={unknown.length === 0 ? "Every name matched an athlete in the app" : `${unknown.length} name${unknown.length === 1 ? "" : "s"} to settle`}
+            description={
+              unknown.length === 0
+                ? undefined
+                : "Someone who ran in an earlier season but isn't on this year's roster is added as an athlete, so their results and PRs count. If a name is a different spelling of an athlete the app already has, pick them instead. A graduation year lets the app work out grades; four seasons in the file means a senior in the last one."
+            }
+          />
+          {unknown.length > 0 && (
+            <CardBody className="divide-y divide-line p-0">
+              {unknown.map((a) => {
+                const inChosen = namesInChosen.has(a.name);
+                const others = review.allAthletes.filter((x) => (x.gender === a.gender || x.gender === "X") && !a.candidates.some((c) => c.id === x.id));
+                return (
+                  <div key={a.name} className={`space-y-2 px-4 py-3 ${inChosen ? "" : "opacity-50"}`}>
+                    <div>
+                      <div className="text-sm font-medium text-ink">{a.name}</div>
+                      <div className="text-[13px] text-ink-2">
+                        {a.gender === "F" ? "Girls" : "Boys"} · ran in {a.seasons.join(", ")}
+                        {!inChosen && " · not in a ticked meet"}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                    <Select value={identity[a.name] ?? ""} onChange={(e) => setIdentity({ ...identity, [a.name]: e.target.value })} className="min-w-0 flex-1" aria-label={`Who is ${a.name}`}>
+                      <option value="">Add as a new athlete</option>
+                      {a.candidates.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} — same last name
+                        </option>
+                      ))}
+                      {others.map((x) => (
                         <option key={x.id} value={x.id}>
                           {x.name}
                         </option>
                       ))}
-                  </Select>
-                  {!identity[a.name] && (
-                    <Input value={gradYears[a.name] ?? ""} onChange={(e) => setGradYears({ ...gradYears, [a.name]: e.target.value })} placeholder="Grad year" inputMode="numeric" maxLength={4} className="w-28" aria-label={`Graduation year for ${a.name}`} />
-                  )}
-                </div>
-              );
-            })}
-          </CardBody>
-        )}
-      </Card>
+                    </Select>
+                    {!identity[a.name] && (
+                      <Input value={gradYears[a.name] ?? ""} onChange={(e) => setGradYears({ ...gradYears, [a.name]: e.target.value })} placeholder="Grad year" inputMode="numeric" maxLength={4} className="w-28 shrink-0" aria-label={`Graduation year for ${a.name}`} />
+                    )}
+                    </div>
+                  </div>
+                );
+              })}
+            </CardBody>
+          )}
+        </Card>
+      </section>
 
       {error && <Alert tone="danger">{error}</Alert>}
       <div className="flex justify-end gap-2">
