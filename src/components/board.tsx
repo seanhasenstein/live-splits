@@ -917,7 +917,7 @@ function AthleteSheet({
         {/* Flex with fixed right-hand columns: Safari's grid skips re-layout when a cell's content changes under an open sheet. */}
         <div className="flex items-center gap-x-3 px-3 py-1.5 text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
           <span className="min-w-0 flex-1">Checkpoint</span>
-          <span className="w-16 shrink-0 text-right">Time</span>
+          <span className="w-20 shrink-0 text-right">Time</span>
           <span className="w-20 shrink-0 text-right">Split</span>
 
         </div>
@@ -941,10 +941,16 @@ function AthleteSheet({
               </span>
               {(() => {
                 const p = here === null && !cell?.missed ? projectAt(i) : null;
-                if (p === null) return <Time className="w-16 shrink-0 text-right font-semibold text-ink">{cell?.missed ? "missed" : here !== null ? ft(here, cell?.precision) : "—"}</Time>;
+                if (p === null)
+                  return (
+                    <span className="w-20 shrink-0 text-right whitespace-nowrap">
+                      <Time className="block font-semibold text-ink">{cell?.missed ? "missed" : here !== null ? ft(here, cell?.precision) : "—"}</Time>
+                      {split !== null && segMeters > 0 && <Time className="block text-[11px] text-ink-3">{formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}/mi</Time>}
+                    </span>
+                  );
                 const late = overdue(p);
                 return (
-                  <span className={`w-16 shrink-0 text-right ${late ? "text-gold-text/75" : "text-ink-3"}`}>
+                  <span className={`w-20 shrink-0 text-right ${late ? "text-gold-text/75" : "text-ink-3"}`}>
                     <Time className="block">~{formatElapsed(p).replace(/\.\d$/, "")}</Time>
                     <span className="block text-[10px] tracking-wide uppercase">{late ? "overdue" : "projected"}</span>
                   </span>
@@ -954,7 +960,6 @@ function AthleteSheet({
                 {split !== null && segMeters > 0 ? (
                   <>
                     <Time className="block text-ink-2">{ft(split)}</Time>
-                    <Time className="block text-[11px] text-ink-3">{formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}/mi</Time>
                     {prevPace !== null && (
                       <Time className="block text-[11px]">
                         <DeltaText ms={paceMsPerMile(split, segMeters) - prevPace} suffix="/mi" />
@@ -1041,6 +1046,7 @@ function AthleteSheet({
       <p className="mt-4 text-xs leading-relaxed text-ink-3">
         {officialCount === 0 && timedCount > 0 && "Times are from the app, not the timing company. "}
         {officialCount > 0 && officialCount < timedCount && "Times not marked official are from the app. "}
+        {row?.cells.some((c) => c.mark?.estimate && c.official === null) && "An estimate is a time entered by hand, not tapped as they passed. "}
         {row?.record?.unofficial && "Records are provisional until official results are imported. "}
         {race.placesDerived && "Places are ranked by the app within our division. "}
         {finishes.length === 0 && `No earlier ${race.distanceLabel} results in the app to compare with.`}
@@ -1394,8 +1400,8 @@ function ProgressChart({ title, points, prMs, ft }: { title: string; points: { m
   const y = (ms: number) => padTop + ((ms - lo) / span) * (H - padTop - padBottom);
   const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.ms).toFixed(1)}`).join(" ");
   return (
-    <div className="py-3">
-      <div className="flex items-baseline justify-between px-3 pb-1.5">
+    <div className="pb-2">
+      <div className="flex items-baseline justify-between border-b border-line px-3 py-2.5">
         <SectionLabel>{title}</SectionLabel>
         <span className="text-[11px] text-ink-3">lower is faster</span>
       </div>
@@ -1501,20 +1507,24 @@ function FinishList({
     items.splice(
       at,
       0,
-      <div key="today" className="flex items-center gap-x-2 border-l-2 border-brand py-1.5 pr-2 pl-1.5 text-sm">
+      <div key="today" className="flex items-center gap-x-2 border-l-2 border-brand bg-brand-soft py-1.5 pr-2 pl-1.5 text-sm">
         <span className="min-w-0 flex-1 truncate font-semibold text-ink">{meetName}</span>
-        {today.tags.map(tag)}
+        {today.tags.map((text) => (
+          <span key={text} className="rounded bg-surface px-1 text-[10px] font-semibold tracking-wide text-ink uppercase">
+            {text}
+          </span>
+        ))}
         <Time className="shrink-0 font-semibold text-ink">{ft(today.ms)}</Time>
       </div>,
     );
   }
   return (
-    <div className="py-3">
-      <div className="flex items-baseline justify-between gap-3 px-3 pb-1.5">
+    <div className="pb-2">
+      <div className="flex items-baseline justify-between gap-3 border-b border-line px-3 py-2.5">
         <SectionLabel>{title}</SectionLabel>
         {note && <span className="text-[11px] text-ink-3">{note}</span>}
       </div>
-      <div className="flex flex-col px-1">{items}</div>
+      <div className="flex flex-col divide-y divide-line px-1 pt-1">{items}</div>
     </div>
   );
 }

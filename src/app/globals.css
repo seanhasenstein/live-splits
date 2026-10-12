@@ -6,6 +6,7 @@
  * See design/DESIGN.md.
  */
 :root {
+  color-scheme: light; /* native scrollbars, form controls */
   --bg: #f7f7f5; /* page */
   --surface: #ffffff; /* cards, sheets, inputs */
   --surface-2: #f1f1ee; /* hover, selected rows, secondary buttons */
@@ -32,6 +33,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #121311;
     --surface: #1b1c19;
     --surface-2: #24251f;
@@ -57,6 +59,7 @@
   }
 }
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #121311;
   --surface: #1b1c19;
   --surface-2: #24251f;
