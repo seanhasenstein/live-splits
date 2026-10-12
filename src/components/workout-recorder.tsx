@@ -3,6 +3,7 @@
 import { Check, ListPlus, MoreHorizontal, Play, Plus, SlidersHorizontal, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { changeRepsAction } from "@/app/actions/workouts";
+import { groupTint } from "@/components/workout-tint";
 import { Alert, Button, Card, Input, SectionLabel, Segmented, Sheet, Time } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useLocalValue } from "@/lib/client/use-local-value";
@@ -192,19 +193,9 @@ export function WorkoutRecorder({
     setRestArmed(false);
     send({ type: "rest_start", groupId: group.id, repId: rep.id, at: tapTime() });
   };
-  // Ending the group after this rep (or the one just run) also takes two taps.
-  const [endArmed, setEndArmed] = useState(false);
-  useEffect(() => {
-    if (!endArmed) return;
-    const t = setTimeout(() => setEndArmed(false), 3000);
-    return () => clearTimeout(t);
-  }, [endArmed]);
+  // Ending this group early, from the Reps sheet: after the rep running now, or the one just run.
   const lastRunIndex = phase.kind === "running" ? phase.repIndex : phase.kind === "rest" ? phase.afterRepIndex : -1;
-  const endGroup = () => {
-    if (!endArmed) return setEndArmed(true);
-    setEndArmed(false);
-    send({ type: "group_end", groupId: group.id, repId: reps[lastRunIndex].id });
-  };
+  const endGroup = () => send({ type: "group_end", groupId: group.id, repId: reps[lastRunIndex].id });
   // A rest on hold has no countdown: a water break, a weather delay. The next rep starts when the coach says.
   const canHold = phase.kind === "rest" && (phase.holdEventId !== null || phase.rest?.kind === "time" || phase.rest?.kind === "interval");
   const toggleHold = () => {
@@ -302,13 +293,33 @@ export function WorkoutRecorder({
 
       {plan.finishedAt && <Alert tone="gold">This workout has been ended. Times can still be fixed; reopen it from Overview to run more reps.</Alert>}
       {/* Where the group is, and the one clock that matters right now. */}
-      <Card className="px-4 py-4">
-        <div className="text-[13px] font-medium text-ink-2">
-          {phase.kind === "done" ? (phase.endedEarlyAfter !== null ? `Ended after rep ${phase.endedEarlyAfter + 1} of ${reps.length}` : "All reps done") : `${repLabel(repIndex)} · ${rep.label}`}
-          {phase.kind !== "done" && rep.restAfter && phase.kind === "running" && <span className="text-ink-3"> · then {describeRest(rep.restAfter)}</span>}
+      <div className={`rounded-lg border px-4 py-4 shadow-card ${groupTint(phase, now)}`}>
+        {/* The rep, big: what a coach glances at between taps. */}
+        <div className="text-xl leading-tight font-semibold text-ink">
+          {phase.kind === "done" ? (
+            phase.endedEarlyAfter !== null ? (
+              <>
+                Done after rep {phase.endedEarlyAfter + 1} <span className="font-normal text-ink-2">of {reps.length}</span>
+              </>
+            ) : (
+              <>Done: all {reps.length} reps</>
+            )
+          ) : phase.kind === "rest" ? (
+            <>
+              Between reps {phase.afterRepIndex + 1} <span className="font-normal text-ink-2">and</span> {phase.afterRepIndex + 2}
+            </>
+          ) : (
+            repLabel(repIndex)
+          )}
         </div>
+        {phase.kind !== "done" && (
+          <div className="mt-0.5 text-[13px] text-ink-2">
+            {phase.kind === "rest" ? `Rep ${repIndex + 1} is ${rep.label}` : rep.label}
+            {phase.kind === "running" && rep.restAfter && <span className="text-ink-3"> · then {describeRest(rep.restAfter)}</span>}
+          </div>
+        )}
         {phase.kind === "running" || phase.kind === "rest" ? (
-          <div className="mt-1 flex items-end justify-between gap-4">
+          <div className="mt-3 flex items-end justify-between gap-4">
             {outRepStartMs !== null && (
               <div className="min-w-0">
                 <div className="text-[11px] font-semibold tracking-[0.08em] text-gold-text uppercase">Rep {phase.kind === "rest" ? phase.afterRepIndex + 1 : ""} clock</div>
@@ -370,25 +381,13 @@ export function WorkoutRecorder({
             </Button>
           </>
         )}
-        {/* Between reps: hold the countdown, or stop the group here. Mid-rep: make this rep the last. */}
-        {(phase.kind === "running" || phase.kind === "rest") && !plan.finishedAt && lastRunIndex < reps.length - 1 && (
-          <div className={`mt-2 grid gap-2 ${canHold ? "grid-cols-2" : "grid-cols-1"}`}>
-            {canHold && phase.kind === "rest" && (
-              <Button variant={phase.holdEventId ? "ink" : "ghost"} className="h-10" onClick={toggleHold}>
-                {phase.holdEventId ? "Back to the countdown" : "Hold the rest"}
-              </Button>
-            )}
-            <Button variant={endArmed ? "gold" : "ghost"} className="h-10" onClick={endGroup}>
-              {endArmed ? "Tap again to end" : phase.kind === "running" ? "Make this the last rep" : `End after rep ${lastRunIndex + 1}`}
-            </Button>
-          </div>
+        {/* Between reps: hold the countdown for a water break or a delay. */}
+        {canHold && phase.kind === "rest" && !plan.finishedAt && (
+          <Button variant={phase.holdEventId ? "ink" : "secondary"} className="mt-2 h-11 w-full" onClick={toggleHold}>
+            {phase.holdEventId ? "Back to the countdown" : "Hold the rest"}
+          </Button>
         )}
-        {endArmed && (
-          <p className="mt-2 text-[13px] text-ink-2">
-            {group.name}&rsquo;s workout ends after rep {lastRunIndex + 1}; reps {lastRunIndex + 2}–{reps.length} aren&rsquo;t run. Other groups carry on. You can undo it.
-          </p>
-        )}
-      </Card>
+      </div>
 
       {/* Tap as they finish. A finished tile shows the time and stays put; tap it again for fixes. */}
       {tiles.length > 0 && (
@@ -514,7 +513,7 @@ export function WorkoutRecorder({
       {repsError && !repsOpen && <Alert tone="danger">{repsError}</Alert>}
 
       {repsOpen && (
-        <Sheet title="Change reps" subtitle={`${reps.length} reps now. Changes the plan for every group.`} onClose={() => setRepsOpen(false)}>
+        <Sheet title="Reps" subtitle={`${reps.length} reps in the plan.`} onClose={() => setRepsOpen(false)}>
           <div className="space-y-2">
             <button type="button" disabled={changingReps} onClick={() => changeReps("add")} className="w-full rounded-md border border-line px-3 py-3 text-left text-sm text-ink hover:bg-surface-2 disabled:opacity-50">
               Add rep {reps.length + 1}: {lastRep.label}
@@ -532,9 +531,24 @@ export function WorkoutRecorder({
             >
               Drop rep {reps.length}
               <span className="mt-0.5 block text-[13px] text-ink-2">
-                {lastRepStarted ? "A group has started it. To stop one group early, use End after rep." : reps.length === 1 ? "It's the only rep." : "Nobody has started it yet."}
+                {lastRepStarted ? "A group has started it. To stop one group early, end it below." : reps.length === 1 ? "It's the only rep." : "Nobody has started it yet."}
               </span>
             </button>
+            {lastRunIndex >= 0 && lastRunIndex < reps.length - 1 && (
+              <button
+                type="button"
+                onClick={() => {
+                  endGroup();
+                  setRepsOpen(false);
+                }}
+                className="w-full rounded-md border border-line px-3 py-3 text-left text-sm text-ink hover:bg-surface-2"
+              >
+                End {group.name} after rep {lastRunIndex + 1}
+                <span className="mt-0.5 block text-[13px] text-ink-2">
+                  {phase.kind === "running" ? "The rep running now is their last" : "No more reps for them"}; reps {lastRunIndex + 2}–{reps.length} aren&rsquo;t run. Other groups carry on. You can undo it.
+                </span>
+              </button>
+            )}
             {repsError && <Alert tone="danger">{repsError}</Alert>}
           </div>
         </Sheet>

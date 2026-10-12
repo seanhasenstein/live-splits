@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card, Segmented, Time } from "@/components/ui";
 import { WorkoutAthleteSheet } from "@/components/workout-athlete-sheet";
+import { groupTint } from "@/components/workout-tint";
 import { useClock } from "@/lib/client/clock";
 import { useTimeFormat } from "@/lib/client/time-format";
 import { useWorkoutEvents } from "@/lib/client/use-workout-events";
@@ -243,18 +244,7 @@ function GroupStatus({ name, phase, log, reps, now, timers }: { name: string; ph
   const pastDue = leftMs !== null && leftMs <= 0;
   // A quiet tint says where the group is: green running, amber resting, red once the next rep is past due,
   // dashed before it starts, grey when done. The words are in the clock labels, not badges.
-  const card =
-    phase.kind === "running"
-      ? "border-brand/20 bg-brand-soft/30"
-      : phase.kind === "rest"
-        ? phase.holdEventId
-          ? "border-line bg-surface"
-          : pastDue
-            ? "border-danger/25 bg-danger-soft/40"
-            : "border-gold/25 bg-gold-soft/30"
-        : phase.kind === "done"
-          ? "border-line bg-surface-2"
-          : "border-dashed border-line-strong bg-surface";
+  const card = groupTint(phase, now);
   const headline =
     phase.kind === "running" ? (
       <>
