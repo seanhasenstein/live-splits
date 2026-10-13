@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ListChecks, MoreHorizontal, Play, Plus, SlidersHorizontal, UserPlus } from "lucide-react";
+import { Check, ChevronRight, ListChecks, MoreHorizontal, Play, Plus, SlidersHorizontal, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { changeRepsAction } from "@/app/actions/workouts";
 import { AthleteBreakdown, setRepTime } from "@/components/workout-athlete-sheet";
@@ -279,6 +279,14 @@ export function WorkoutRecorder({
   const quickUndo =
     lastTap && now - lastTap.at < QUICK_UNDO_MS && events.some((e) => e.clientEventId === lastTap.eventId) && !voidedIds.has(lastTap.eventId) ? lastTap : null;
 
+  // The quick controls' runner and rep, to nudge; a nudge keeps them up a little longer.
+  const quickRep = quickUndo ? (state.athletes.get(quickUndo.athleteId)?.find((r) => r.finishEventId === quickUndo.eventId) ?? null) : null;
+  const quickNudge = (deltaMs: number) => {
+    if (!quickUndo || !quickRep) return;
+    nudge(quickRep, deltaMs);
+    setLastTap({ ...quickUndo, at: now });
+  };
+
   // The rep the finished list is about: the one running, or the one just run.
   const listRepIndex = lapRepIndex;
   const listRows = listRepIndex < 0 ? [] : rowsAt(listRepIndex);
@@ -473,9 +481,10 @@ export function WorkoutRecorder({
               type="button"
               onClick={() => setListOpen(true)}
               className="-mr-1.5 shrink-0 rounded-md border border-ink/15 bg-ink/[0.04] px-2 py-1 text-sm font-semibold text-ink tabular-nums hover:bg-ink/[0.08]"
-              aria-label={`Rep ${listRepIndex + 1}: ${listDone.length} of ${listCount} in. Open the list`}
+              aria-label={`Rep ${listRepIndex + 1}: ${listDone.length} of ${listCount} finished. Open the list`}
             >
-              {listDone.length}/{listCount} in
+              {listDone.length}/{listCount} finished
+              <ChevronRight className="-mr-0.5 ml-0.5 inline size-3.5 -translate-y-px text-ink-2" />
             </button>
           )}
         </div>
@@ -912,19 +921,32 @@ export function WorkoutRecorder({
           {lapOpen && !plan.finishedAt && (
             // The quick Undo for the last tap shares Finish's row, so it covers nothing new; Finish keeps its place on the right.
             <div className="flex w-full gap-2">
-              {quickUndo && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    send({ type: "void", targetEventId: quickUndo.eventId });
-                    setLastTap(null);
-                  }}
-                  className="pointer-events-auto flex h-16 w-28 shrink-0 flex-col items-center justify-center rounded-xl border border-line-strong bg-surface text-ink shadow-sheet active:bg-surface-2"
-                  aria-label={`Undo ${nameOf.get(quickUndo.athleteId)}'s finish`}
-                >
-                  <span className="text-sm font-semibold">↶ Undo</span>
-                  <span className="max-w-full truncate px-2 text-xs text-ink-2">{(nameOf.get(quickUndo.athleteId) ?? "").split(" ")[0]}</span>
-                </button>
+              {quickUndo && quickRep && (
+                // The last runner tapped: whose time, and a second either way or undo, without opening anything.
+                <div className="pointer-events-auto flex h-16 w-40 shrink-0 flex-col justify-center gap-1 rounded-xl border border-line-strong bg-surface px-1.5 shadow-sheet">
+                  <div className="truncate px-1 text-center text-xs text-ink-2">
+                    <span className="font-semibold text-ink">{(nameOf.get(quickUndo.athleteId) ?? "").split(" ")[0]}</span> {quickRep.elapsedMs !== null ? ft(quickRep.elapsedMs) : ""}
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    <button type="button" onClick={() => quickNudge(-1000)} className="h-8 rounded-md border border-line-strong font-mono text-xs text-ink active:bg-surface-2" aria-label="One second faster">
+                      −1s
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        send({ type: "void", targetEventId: quickUndo.eventId });
+                        setLastTap(null);
+                      }}
+                      className="h-8 rounded-md border border-line-strong text-xs font-semibold text-ink active:bg-surface-2"
+                      aria-label={`Undo ${nameOf.get(quickUndo.athleteId)}'s finish`}
+                    >
+                      Undo
+                    </button>
+                    <button type="button" onClick={() => quickNudge(1000)} className="h-8 rounded-md border border-line-strong font-mono text-xs text-ink active:bg-surface-2" aria-label="One second slower">
+                      +1s
+                    </button>
+                  </div>
+                </div>
               )}
               <button
                 type="button"
@@ -941,7 +963,7 @@ export function WorkoutRecorder({
       )}
 
       {listOpen && listRepIndex >= 0 && (
-        <Sheet title={`Rep ${listRepIndex + 1} · ${listDone.length} of ${listCount} in`} subtitle="Newest first. Nudge a time a second, undo it, or ⋯ for more." onClose={() => setListOpen(false)}>
+        <Sheet title={`Rep ${listRepIndex + 1} · ${listDone.length} of ${listCount} finished`} subtitle="Newest first. Nudge a time a second, undo it, or ⋯ for more." onClose={() => setListOpen(false)}>
           {listDone.length === 0 ? (
             <p className="text-sm text-ink-3">Nobody&rsquo;s in yet.</p>
           ) : (
