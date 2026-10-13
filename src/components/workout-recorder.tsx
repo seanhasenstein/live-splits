@@ -61,6 +61,7 @@ function beep(go: boolean) {
   }
 }
 const ALERT_KEY = "ls_workout_alerts";
+const SINK_KEY = "ls_workout_sink";
 const tapTime = () => {
   const now = Date.now();
   return lastPointerDownMs && now - lastPointerDownMs < 1500 ? lastPointerDownMs : now;
@@ -112,6 +113,21 @@ export function WorkoutRecorder({
   const order: TileOrder = orderPref === "last" || orderPref === "name" ? orderPref : "goal";
   const [largePref, setLargePref] = useLocalValue(LARGE_KEY);
   const large = largePref === "1";
+  const [sinkPref, setSinkPref] = useLocalValue(SINK_KEY);
+  const sink = sinkPref !== "off";
+  const [frozen, setFrozen] = useState<{ key: string; ids: string[] } | null>(null);
+  const [tapSeq, setTapSeq] = useState(0);
+  const [lastTap, setLastTap] = useState<{ eventId: string; name: string; ms: number } | null>(null);
+  // A second after the last tap the tiles settle; the undo offer lasts a little longer.
+  useEffect(() => {
+    if (tapSeq === 0) return;
+    const settle = setTimeout(() => setFrozen(null), 1200);
+    const forget = setTimeout(() => setLastTap(null), 6000);
+    return () => {
+      clearTimeout(settle);
+      clearTimeout(forget);
+    };
+  }, [tapSeq]);
   const [alertPref, setAlertPref] = useLocalValue(ALERT_KEY);
   const alerts = alertPref !== "off";
 
@@ -165,7 +181,19 @@ export function WorkoutRecorder({
     );
   };
   // Every tile stays where it is for the whole rep: one vanishing would slide the next under the coach's thumb.
-  const tiles = phase.kind === "running" ? sortRows(rowsAt(repIndex).filter(({ r }) => r.status !== "stopped"), repIndex) : [];
+  // Finished runners move to the bottom in finish order (so after the last one the grid reads fastest
+  // to slowest) — but only once tapping pauses: during a pack nothing moves under the thumb.
+  const tileKey = `${group.id}:${repIndex}`;
+  const ordered = phase.kind === "running" ? sortRows(rowsAt(repIndex).filter(({ r }) => r.status !== "stopped"), repIndex) : [];
+  const sunk = sink
+    ? [...ordered.filter(({ r }) => r.status !== "done"), ...ordered.filter(({ r }) => r.status === "done").sort((a, b) => (a.r.finishMs ?? Infinity) - (b.r.finishMs ?? Infinity))]
+    : ordered;
+  const tiles =
+    frozen && frozen.key === tileKey
+      ? [...frozen.ids.map((id) => sunk.find((t) => t.id === id)).filter((t) => t !== undefined), ...sunk.filter((t) => !frozen.ids.includes(t.id))]
+      : sunk;
+  const inCount = tiles.filter(({ r }) => r.status === "done").length;
+  const outOf = tiles.filter(({ r }) => r.status !== "skipped").length;
   const finishedRows = lastIndex >= 0 ? rowsAt(lastIndex).filter(({ r }) => r.status === "done").sort((a, b) => (a.r.finishMs ?? 0) - (b.r.finishMs ?? 0)) : [];
   const notRunning = lastIndex >= 0 ? rowsAt(lastIndex).filter(({ r }) => r.status === "skipped" || r.status === "stopped" || r.status === "unfinished") : [];
   // Runners still out when the coach started the rest: they can still be tapped in for that rep.
@@ -196,7 +224,14 @@ export function WorkoutRecorder({
     setStartArmedKey(null);
     send({ type: "rep_start", groupId: group.id, repId: rep.id, at: tapTime() });
   };
-  const finish = (athleteId: string, repId = rep.id) => send({ type: "finish", groupId: group.id, athleteId, repId, at: tapTime() });
+  const finish = (athleteId: string, repId = rep.id) => {
+    const at = tapTime();
+    const eventId = send({ type: "finish", groupId: group.id, athleteId, repId, at });
+    // Hold the tiles where they are until tapping pauses; offer to undo this tap for a few seconds.
+    if (sink) setFrozen((f) => (f && f.key === tileKey ? f : { key: tileKey, ids: tiles.map((t) => t.id) }));
+    setTapSeq((n) => n + 1);
+    setLastTap({ eventId, name: (nameOf.get(athleteId) ?? "?").split(" ")[0], ms: at });
+  };
   // Starting the rest early takes two taps: the first arms it for a few seconds, so a stray tap mid-rep does nothing.
   const [restArmedKey, setRestArmedKey] = useState<string | null>(null);
   const restArmed = restArmedKey === armKey;
@@ -297,7 +332,7 @@ export function WorkoutRecorder({
   const notInWorkout = people.filter((p) => !state.athletes.has(p.id));
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 pb-20">
       {plan.groups.length > 1 && <Segmented value={group.id} onChange={setGroupId} options={plan.groups.map((g) => ({ value: g.id, label: g.name }))} />}
       {/* Which group this phone is timing, said plainly, and how the runners are laid out. */}
       <div className="flex items-center justify-between gap-2">
@@ -330,13 +365,12 @@ export function WorkoutRecorder({
           {unsent > 0 ? " and they'll send" : ""}.
         </Alert>
       ) : (
-        (!online || unsent > 0) && (
+        // Only when offline: online, a tap sends in a moment, and a banner flashing in would shove the tiles down mid-pack.
+        !online && (
           <Alert tone="gold">
-            {!online
-              ? unsent > 0
-                ? `Offline: ${unsent} tap${unsent === 1 ? "" : "s"} saved on this phone, sending when the connection's back.`
-                : "Offline: keep tapping; taps are saved on this phone until the connection's back."
-              : `Sending ${unsent}…`}
+            {unsent > 0
+              ? `Offline: ${unsent} tap${unsent === 1 ? "" : "s"} saved on this phone, sending when the connection's back.`
+              : "Offline: keep tapping; taps are saved on this phone until the connection's back."}
           </Alert>
         )
       )}
@@ -366,6 +400,12 @@ export function WorkoutRecorder({
           <div className="mt-0.5 text-[13px] text-ink-2">
             {phase.kind === "rest" ? `Rep ${repIndex + 1} is ${rep.label}` : rep.label}
             {phase.kind === "running" && rep.restAfter && <span className="text-ink-3"> · then {describeRest(rep.restAfter)}</span>}
+            {phase.kind === "running" && outOf > 0 && (
+              <span className="font-semibold text-ink">
+                {" "}
+                · {inCount} of {outOf} in
+              </span>
+            )}
           </div>
         )}
         {phase.kind === "running" || phase.kind === "rest" ? (
@@ -712,6 +752,28 @@ export function WorkoutRecorder({
         />
       )}
 
+      {/* Undo the last tap, at the bottom where the thumb is: wrong-runner taps happen in packs. */}
+      {lastTap && (
+        <div className="fixed inset-x-0 bottom-0 z-20 flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="flex items-center gap-3 rounded-full border border-line-strong bg-surface py-1.5 pr-1.5 pl-4 shadow-sheet">
+            <span className="text-sm text-ink">
+              Tapped <span className="font-semibold">{lastTap.name}</span>
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="rounded-full"
+              onClick={() => {
+                send({ type: "void", targetEventId: lastTap.eventId });
+                setLastTap(null);
+              }}
+            >
+              Undo
+            </Button>
+          </div>
+        </div>
+      )}
+
       {marking && (
         <MarkRunnersSheet
           reps={reps}
@@ -769,7 +831,15 @@ export function WorkoutRecorder({
             ))}
           </div>
           <SectionLabel className="mt-5 mb-1.5">Tiles</SectionLabel>
-          <ChoiceRow active={large} label="Large tiles" hint="One name per row, bigger text." onClick={() => setLargePref(large ? null : "1")} />
+          <div className="space-y-2">
+            <ChoiceRow active={large} label="Large tiles" hint="One name per row, bigger text." onClick={() => setLargePref(large ? null : "1")} />
+            <ChoiceRow
+              active={sink}
+              label="Finished runners move down"
+              hint="A second after your last tap, so nothing moves while you're tapping a pack. Ends fastest to slowest."
+              onClick={() => setSinkPref(sink ? "off" : null)}
+            />
+          </div>
           <SectionLabel className="mt-5 mb-1.5">Countdown</SectionLabel>
           <ChoiceRow
             active={alerts}
