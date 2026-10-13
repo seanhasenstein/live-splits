@@ -228,7 +228,10 @@ export function WorkoutRecorder({
   // A lap is named by a finish that points back to it, so undoing that finish puts the lap back in line.
   const voidedIds = new Set(events.filter((e) => e.type === "void").map((e) => e.targetEventId));
   const namedLaps = new Set(events.filter((e) => e.type === "finish" && e.targetEventId && !voidedIds.has(e.clientEventId)).map((e) => e.targetEventId));
-  const lapRepIndex = phase.kind === "running" ? phase.repIndex : phase.kind === "rest" && stillOut.length > 0 ? phase.afterRepIndex : -1;
+  // The rep laps belong to: the one running, or the one just run (so a leftover lap is still there to clear).
+  const lapRepIndex = phase.kind === "running" ? phase.repIndex : phase.kind === "rest" ? phase.afterRepIndex : phase.kind === "done" ? (phase.endedEarlyAfter ?? reps.length - 1) : -1;
+  // The Lap button is for a rep someone is still running.
+  const lapOpen = phase.kind === "running" || (phase.kind === "rest" && stillOut.length > 0);
   const lapStartMs = phase.kind === "running" ? phase.startMs : (state.groupLog.get(group.id)?.find((l) => l.repIndex === lapRepIndex)?.startMs ?? null);
   const lapAt = (e: (typeof events)[number]) => e.timeMs ?? e.serverTimeMs;
   const pendingLaps =
@@ -238,6 +241,9 @@ export function WorkoutRecorder({
           .filter((e) => e.type === "lap" && e.groupId === group.id && e.repId === reps[lapRepIndex].id && !voidedIds.has(e.clientEventId) && !namedLaps.has(e.clientEventId))
           .sort((a, b) => lapAt(a) - lapAt(b));
   const takeLap = () => send({ type: "lap", groupId: group.id, repId: reps[lapRepIndex].id, at: tapTime() });
+  // More laps than runners left to name: a tap too many, most likely the last one(s).
+  const leftToName = lapRepIndex < 0 ? 0 : rowsAt(lapRepIndex).filter(({ r }) => r.status === "running" && !r.makeUp).length;
+  const extraLaps = Math.max(0, pendingLaps.length - leftToName);
   const finish = (athleteId: string, repId = rep.id) => {
     const at = tapTime();
     // With laps waiting, a tap names the oldest one instead of taking the time now.
@@ -350,7 +356,7 @@ export function WorkoutRecorder({
   const notInWorkout = people.filter((p) => !state.athletes.has(p.id));
 
   return (
-    <div className="space-y-3 pb-20">
+    <div className={`space-y-3 ${lapOpen ? "pb-40" : "pb-20"}`}>
       {plan.groups.length > 1 && <Segmented value={group.id} onChange={setGroupId} options={plan.groups.map((g) => ({ value: g.id, label: g.name }))} />}
       {/* Which group this phone is timing, said plainly, and how the runners are laid out. */}
       <div className="flex items-center justify-between gap-2">
@@ -452,13 +458,9 @@ export function WorkoutRecorder({
           </Button>
         ) : null}
         {phase.kind === "running" && !plan.finishedAt && (
-          <div className={`mt-4 grid gap-2 ${repIndex < reps.length - 1 ? "grid-cols-3" : "grid-cols-2"}`}>
+          <div className={`mt-4 grid gap-2 ${repIndex < reps.length - 1 ? "grid-cols-2" : "grid-cols-1"}`}>
             <Button variant="tint" size="touch" disabled={!startEventId} onClick={() => setAdjustingKey(adjusting ? null : armKey)} aria-pressed={adjusting}>
               Fix the clock
-            </Button>
-            {/* A pack coming in: one tap per runner crossing, names after. */}
-            <Button variant="tint" size="touch" onPointerDown={notePointerDown} onClick={takeLap}>
-              Lap{pendingLaps.length > 0 ? ` (${pendingLaps.length})` : ""}
             </Button>
             {/* No rest after the last rep: it's over when everyone's in. */}
             {repIndex < reps.length - 1 && (
@@ -506,19 +508,34 @@ export function WorkoutRecorder({
       </div>
 
       {pendingLaps.length > 0 && (
-        <div className="rounded-lg border border-brand/30 bg-brand-soft/40 px-3 py-2.5">
+        <div className={`rounded-lg border px-3 py-2.5 ${extraLaps > 0 ? "border-danger/40 bg-danger-soft/50" : "border-brand/30 bg-brand-soft/40"}`}>
           <div className="text-[13px] font-medium text-ink">
-            {pendingLaps.length} lap{pendingLaps.length === 1 ? "" : "s"} to name: tap runners in the order they finished.
+            {extraLaps > 0 && leftToName === 0
+              ? `Everyone's in: ${extraLaps === 1 ? "this lap is" : `these ${extraLaps} laps are`} extra.`
+              : extraLaps > 0
+                ? `${pendingLaps.length} laps but only ${leftToName} runner${leftToName === 1 ? "" : "s"} left: ${extraLaps} ${extraLaps === 1 ? "is" : "are"} extra.`
+                : `${pendingLaps.length} lap${pendingLaps.length === 1 ? "" : "s"} to name: tap runners in the order they finished.`}
           </div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {pendingLaps.map((e, i) => (
-              <span key={e.clientEventId} className={`inline-flex items-center gap-1 rounded-full border py-0.5 pr-1 pl-2.5 ${i === 0 ? "border-brand bg-surface" : "border-line bg-surface/60"}`}>
+              <span
+                key={e.clientEventId}
+                className={`inline-flex items-center gap-1 rounded-full border py-0.5 pr-1 pl-2.5 ${
+                  i >= pendingLaps.length - extraLaps ? "border-danger/50 bg-surface" : i === 0 ? "border-brand bg-surface" : "border-line bg-surface/60"
+                }`}
+              >
                 <Time className={`text-[13px] ${i === 0 ? "font-semibold text-ink" : "text-ink-2"}`}>{lapStartMs !== null ? formatElapsed(Math.max(0, lapAt(e) - lapStartMs)) : "—"}</Time>
                 <button type="button" onClick={() => send({ type: "void", targetEventId: e.clientEventId })} className="rounded-full px-1 text-[12px] text-ink-3 hover:text-ink" aria-label="Throw away this lap">
                   ✕
                 </button>
               </span>
             ))}
+            {/* The extra is usually the last tap; any chip's ✕ throws away a different one. */}
+            {extraLaps > 0 && (
+              <Button variant="danger" size="sm" className="rounded-full" onClick={() => pendingLaps.slice(-extraLaps).forEach((e) => send({ type: "void", targetEventId: e.clientEventId }))}>
+                Throw away the last {extraLaps === 1 ? "one" : extraLaps}
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -792,9 +809,11 @@ export function WorkoutRecorder({
         />
       )}
 
-      {/* Undo the last tap, at the bottom where the thumb is: wrong-runner taps happen in packs. */}
-      {lastTap && (
-        <div className="fixed inset-x-0 bottom-0 z-20 flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      {/* The thumb's corner of the screen: Undo for the last tap (wrong-runner taps happen in packs), and,
+          while a rep is on, a big Lap button to hit without looking as a pack comes across. */}
+      {(lastTap || (lapOpen && !plan.finishedAt)) && (
+        <div className="fixed inset-x-0 bottom-0 z-20 mx-auto flex max-w-2xl flex-col items-center gap-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          {lastTap && (
           <div className="flex items-center gap-3 rounded-full border border-line-strong bg-surface py-1.5 pr-1.5 pl-4 shadow-sheet">
             <span className="text-sm text-ink">
               Tapped <span className="font-semibold">{lastTap.name}</span>
@@ -811,6 +830,18 @@ export function WorkoutRecorder({
               Undo
             </Button>
           </div>
+          )}
+          {lapOpen && !plan.finishedAt && (
+            <button
+              type="button"
+              onPointerDown={notePointerDown}
+              onClick={takeLap}
+              className="flex h-16 w-full items-center justify-center gap-3 rounded-xl bg-ink text-bg shadow-sheet select-none active:bg-ink/80"
+            >
+              <span className="text-xl font-semibold">Lap</span>
+              {pendingLaps.length > 0 && <span className="rounded-full bg-bg/20 px-2.5 py-0.5 text-sm font-medium">{pendingLaps.length} to name</span>}
+            </button>
+          )}
         </div>
       )}
 
