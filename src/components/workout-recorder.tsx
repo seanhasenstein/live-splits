@@ -16,6 +16,7 @@ import { useWorkoutEvents } from "@/lib/client/use-workout-events";
 import type { Workout } from "@/lib/db/schema";
 import { describeRest } from "@/lib/workout-plan";
 import { type AthleteRep, type FlatRep, replayWorkout, summarize } from "@/lib/workout-replay";
+import { shortNames as shortNamesOf } from "@/lib/names";
 import { formatElapsed } from "@/lib/time";
 
 type Plan = Pick<Workout, "sets" | "groups" | "athletes"> & { finishedAt: string | null };
@@ -110,6 +111,9 @@ export function WorkoutRecorder({
   const group = plan.groups.find((g) => g.id === groupId) ?? plan.groups[0];
   const state = useMemo(() => replayWorkout(plan, events), [plan, events]);
   const nameOf = useMemo(() => new Map(people.map((p) => [p.id, p.name])), [people]);
+  // Short names for tight spots, told apart within this workout ("Emma K." / "Emma W.").
+  const short = useMemo(() => shortNamesOf([...state.athletes.keys()].map((id) => ({ id, name: nameOf.get(id) ?? "?" }))), [state.athletes, nameOf]);
+  const shortOf = (id: string) => short.get(id) ?? (nameOf.get(id) ?? "?").split(" ")[0];
   const [sheetFor, setSheetFor] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
@@ -557,7 +561,7 @@ export function WorkoutRecorder({
               <p className="mt-2 rounded-md bg-gold-soft px-3 py-2 text-[13px] text-ink">
                 {pendingLaps.length > 0
                   ? `${pendingLaps.length} finish${pendingLaps.length === 1 ? " isn't" : "es aren't"} named yet. Name ${pendingLaps.length === 1 ? "it" : "them"} first (tap runners in order), or tap again to start rep ${repIndex + 1} and let ${pendingLaps.length === 1 ? "it" : "them"} go.`
-                  : `${listNames(shortNames(stillOut.map(({ id }) => nameOf.get(id) ?? "?")))} ${stillOut.length === 1 ? "is" : "are"} still out on rep ${repIndex}. Starting rep ${repIndex + 1} leaves ${stillOut.length === 1 ? "them" : "them each"} with no time for rep ${repIndex}. You can add one later by tapping their name.`}
+                  : `${listNames(stillOut.map(({ id }) => shortOf(id)))} ${stillOut.length === 1 ? "is" : "are"} still out on rep ${repIndex}. Starting rep ${repIndex + 1} leaves ${stillOut.length === 1 ? "them" : "them each"} with no time for rep ${repIndex}. You can add one later by tapping their name.`}
               </p>
             )}
           </>
@@ -712,7 +716,7 @@ export function WorkoutRecorder({
           </div>
           {allReps && lastIndex > 0 ? (
             <GroupRepsGrid
-              rows={[...finishedRows, ...stillOut, ...notRunning].map(({ id }) => ({ id, name: nameOf.get(id) ?? "?", list: state.athletes.get(id)!.slice(0, lastIndex + 1) }))}
+              rows={[...finishedRows, ...stillOut, ...notRunning].map(({ id }) => ({ id, name: shortOf(id), list: state.athletes.get(id)!.slice(0, lastIndex + 1) }))}
               reps={reps}
               ft={ft}
               tenths={tenths}
@@ -835,6 +839,7 @@ export function WorkoutRecorder({
       {sheetFor && sheetRep && (
         <AthleteActions
           name={nameOf.get(sheetFor) ?? "?"}
+          shortName={shortOf(sheetFor)}
           rep={sheetRep[phase.kind === "running" ? repIndex : Math.max(0, lastIndex)]}
           repNumber={phase.kind === "running" ? repIndex + 1 : Math.max(0, lastIndex) + 1}
           next={phase.kind === "done" ? null : { index: repIndex, entry: sheetRep[repIndex] }}
@@ -856,6 +861,26 @@ export function WorkoutRecorder({
               .filter((id) => id !== sheetFor && state.athletes.get(id)![ri]?.status === "running" && state.athletes.get(id)![ri].groupId === group.id)
               .map((id) => ({ id, name: nameOf.get(id) ?? "?" }));
           })()}
+          finishedWith={(() => {
+            // Runners already in on the rep on screen: "who'd you finish with?"
+            const ri = phase.kind === "running" ? repIndex : Math.max(0, lastIndex);
+            return allIds
+              .filter((id) => id !== sheetFor && state.athletes.get(id)![ri]?.status === "done" && state.athletes.get(id)![ri].finishMs !== null && state.athletes.get(id)![ri].groupId === group.id)
+              .sort((a, b) => state.athletes.get(a)![ri].finishMs! - state.athletes.get(b)![ri].finishMs!)
+              .map((id) => ({ id, name: shortOf(id), time: ft(state.athletes.get(id)![ri].elapsedMs ?? 0) }));
+          })()}
+          onFinishedWith={(otherId) => {
+            const ri = phase.kind === "running" ? repIndex : Math.max(0, lastIndex);
+            const mine = sheetRep[ri];
+            const theirs = state.athletes.get(otherId)![ri];
+            if (theirs.finishMs === null) return;
+            // The same moment as theirs: an edit to my typed time or tap, else a finish of my own at that moment.
+            if (mine.typedEventId) {
+              if (mine.startMs !== null) send({ type: "edit", targetEventId: mine.typedEventId, timeMs: theirs.finishMs - mine.startMs });
+            } else if (mine.finishEventId) send({ type: "edit", targetEventId: mine.finishEventId, timeMs: theirs.finishMs });
+            else send({ type: "finish", groupId: group.id, athleteId: sheetFor, repId: mine.repId, timeMs: theirs.finishMs });
+            setSheetFor(null);
+          }}
           onGiveTo={(otherId) => {
             const ri = phase.kind === "running" ? repIndex : Math.max(0, lastIndex);
             const r = sheetRep[ri];
@@ -920,15 +945,15 @@ export function WorkoutRecorder({
 
           {lapOpen && !plan.finishedAt && (
             // The quick Undo for the last tap shares Finish's row, so it covers nothing new; Finish keeps its place on the right.
-            <div className="flex w-full gap-2">
+            <div className="flex w-full items-end gap-2">
               {quickUndo && quickRep && (
                 // The last runner tapped: whose time, and a second either way or undo, without opening anything.
-                <div className="pointer-events-auto flex h-16 w-40 shrink-0 flex-col justify-center gap-1 rounded-xl border border-line-strong bg-surface px-1.5 shadow-sheet">
+                <div className="pointer-events-auto flex w-52 shrink-0 flex-col justify-center gap-1 rounded-xl border border-line-strong bg-surface px-1.5 py-1.5 shadow-sheet">
                   <div className="truncate px-1 text-center text-xs text-ink-2">
-                    <span className="font-semibold text-ink">{(nameOf.get(quickUndo.athleteId) ?? "").split(" ")[0]}</span> {quickRep.elapsedMs !== null ? ft(quickRep.elapsedMs) : ""}
+                    <span className="font-semibold text-ink">{shortOf(quickUndo.athleteId)}</span> {quickRep.elapsedMs !== null ? ft(quickRep.elapsedMs) : ""}
                   </div>
                   <div className="grid grid-cols-3 gap-1">
-                    <button type="button" onClick={() => quickNudge(-1000)} className="h-8 rounded-md border border-line-strong font-mono text-xs text-ink active:bg-surface-2" aria-label="One second faster">
+                    <button type="button" onClick={() => quickNudge(-1000)} className="h-11 rounded-md border border-line-strong font-mono text-sm text-ink active:bg-surface-2" aria-label="One second faster">
                       −1s
                     </button>
                     <button
@@ -937,12 +962,12 @@ export function WorkoutRecorder({
                         send({ type: "void", targetEventId: quickUndo.eventId });
                         setLastTap(null);
                       }}
-                      className="h-8 rounded-md border border-line-strong text-xs font-semibold text-ink active:bg-surface-2"
+                      className="h-11 rounded-md border border-line-strong text-sm font-semibold text-ink active:bg-surface-2"
                       aria-label={`Undo ${nameOf.get(quickUndo.athleteId)}'s finish`}
                     >
                       Undo
                     </button>
-                    <button type="button" onClick={() => quickNudge(1000)} className="h-8 rounded-md border border-line-strong font-mono text-xs text-ink active:bg-surface-2" aria-label="One second slower">
+                    <button type="button" onClick={() => quickNudge(1000)} className="h-11 rounded-md border border-line-strong font-mono text-sm text-ink active:bg-surface-2" aria-label="One second slower">
                       +1s
                     </button>
                   </div>
@@ -1158,7 +1183,7 @@ function GroupRepsGrid({
               <tr key={id} className="border-b border-line last:border-0">
                 <td className="sticky left-0 bg-surface p-0">
                   <button type="button" onClick={() => onOpen(id)} className="block max-w-32 truncate px-4 py-1.5 text-left text-ink hover:underline">
-                    {name.split(" ")[0]}
+                    {name}
                   </button>
                 </td>
                 <td className="px-2 py-1 text-right">
@@ -1204,11 +1229,6 @@ function ChoiceRow({ active, label, hint, onClick }: { active: boolean; label: s
 /** "Ajani", "Ajani and Joe", "Ajani, Joe and Will". */
 const listNames = (names: string[]) => (names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
 
-/** First names, unless two share one: then full names, so "Emma and Emma" can't happen. */
-const shortNames = (full: string[]) => {
-  const first = full.map((n) => n.split(" ")[0]);
-  return full.map((n, i) => (first.filter((f) => f === first[i]).length > 1 ? n : first[i]));
-};
 
 /** "Addyson's", "James'". */
 const possessive = (first: string) => (/s$/i.test(first) ? `${first}'` : `${first}'s`);
@@ -1216,6 +1236,7 @@ const possessive = (first: string) => (/s$/i.test(first) ? `${first}'` : `${firs
 /** What can happen to one runner mid-workout. */
 function AthleteActions({
   name,
+  shortName,
   rep,
   repNumber,
   next,
@@ -1229,10 +1250,14 @@ function AthleteActions({
   list,
   giveTo,
   onGiveTo,
+  finishedWith,
+  onFinishedWith,
   onAddTime,
   ft,
 }: {
   name: string;
+  /** Their name for messages, told apart from others with the same first name. */
+  shortName: string;
   /** The rep on screen: running now, or the one just run. */
   rep: AthleteRep;
   repNumber: number;
@@ -1252,13 +1277,16 @@ function AthleteActions({
   /** Runners still out on this rep: a time tapped on the wrong runner can go to one of them instead. */
   giveTo: { id: string; name: string }[];
   onGiveTo: (athleteId: string) => void;
+  /** Runners already in on this rep: a missed or doubtful runner can take the time of the one they finished with. */
+  finishedWith: { id: string; name: string; time: string }[];
+  onFinishedWith: (athleteId: string) => void;
   /** A typed time for any rep: fix one, or add one that has none. The sheet stays open for the next. */
   onAddTime: (rep: AthleteRep, elapsedMs: number) => void;
   ft: (ms: number) => string;
 }) {
   const btn = "w-full rounded-md border border-line px-3 py-3 text-left text-sm text-ink hover:bg-surface-2";
   const upId = next ? reps[next.index].id : null;
-  const first = name.split(" ")[0];
+  const first = shortName;
   return (
     <Sheet title={name} subtitle={rep.status === "done" && rep.elapsedMs !== null ? `Rep ${repNumber}: ${ft(rep.elapsedMs)}` : `Rep ${repNumber}`} onClose={onClose}>
       {/* What to do now first (that's why it's open mid-workout); their whole workout below, where any rep can be fixed. */}
@@ -1268,6 +1296,22 @@ function AthleteActions({
             Undo the finish (still running)
             <span className="mt-0.5 block text-[13px] text-ink-2">Tapped by mistake? This puts them back on the course.</span>
           </button>
+        )}
+        {/* "Who'd you finish with?": a missed runner, or one whose time looks wrong, takes that runner's time. */}
+        {(rep.status === "running" || rep.status === "unfinished" || rep.status === "done") && finishedWith.length > 0 && (
+          <div className="rounded-md border border-line px-3 py-3">
+            <div className="text-sm text-ink">Finished with…</div>
+            <div className="mt-0.5 text-[13px] text-ink-2">
+              {rep.status === "done" ? `Time look wrong? ${first} gets the same time as the runner they came in with.` : `Missed? ${first} gets the same time as the runner they came in with.`} Just behind? Nudge +1s in the finished list after.
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {finishedWith.map((f) => (
+                <button key={f.id} type="button" onClick={() => onFinishedWith(f.id)} className="h-9 rounded-md border border-line-strong bg-surface px-3 text-sm text-ink hover:bg-surface-2">
+                  {f.name} <span className="text-ink-2">{f.time}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         {/* Tapped the wrong runner in a pack: give the time to the right one, at the same moment. */}
         {rep.status === "done" && rep.finishEventId && !rep.typedEventId && giveTo.length > 0 && (
