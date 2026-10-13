@@ -61,7 +61,8 @@ export async function GET(request: Request, { params }: RouteContext<"/api/meets
   const csv = toCsv([[title], [note], [], ...rows]);
   const fileName = `${meet.date}-${meet.name}-${race.name}.csv`.replace(/[^\w.-]+/g, "-").toLowerCase();
 
-  return new Response(csv, {
+  // The byte-order mark tells Excel it's UTF-8, so "·" and accented names don't come out garbled.
+  return new Response("\uFEFF" + csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="${fileName}"`,

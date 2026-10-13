@@ -86,6 +86,9 @@ last time they ran this workout.
 
 ## Later
 
+A detailed CSV (one row per runner per rep: time, +/- vs goal, own rest, typed
+or tapped) for pivot tables across a season; the sheet-shaped CSV is built.
+
 Rests: rest equal to the rep (1:1, 2:1: each group's rest scales with how long
 the rep took); a different rest after each rep of a ladder (400-800-1200 with
 1, 2, 3 min) without making each step its own set.

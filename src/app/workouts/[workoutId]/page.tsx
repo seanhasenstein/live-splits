@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { Pencil, Timer } from "lucide-react";
+import { Download, Pencil, Timer } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
-import { AppHeader, Card, CardBody, CardHeader, LinkButton, Page, PageTitle } from "@/components/ui";
+import { AnchorButton, AppHeader, Card, CardBody, CardHeader, LinkButton, Page, PageTitle } from "@/components/ui";
 import { canUseWorkouts, getSession, isSchoolCoach } from "@/lib/auth/session";
 import { SessionMenu } from "@/components/session-menu";
 import { WorkoutBoard } from "@/components/workout-board";
@@ -38,6 +38,10 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
             coach && (
             <div className="flex flex-wrap items-center justify-end gap-2">
               <WorkoutFinishButton workoutId={workout._id} finished={!!workout.finishedAt} />
+              <AnchorButton href={`/api/workouts/${workout._id}/export`} size="sm" variant="secondary" download>
+                <Download className="size-3.5" />
+                CSV
+              </AnchorButton>
               <LinkButton href={`/workouts/${workout._id}/edit`} size="sm" variant="secondary">
                 <Pencil className="size-3.5" />
                 Edit
