@@ -6,7 +6,7 @@ import { changeRepsAction } from "@/app/actions/workouts";
 import { AthleteBreakdown, setRepTime } from "@/components/workout-athlete-sheet";
 import { MarkRunnersSheet } from "@/components/workout-mark-sheet";
 import { RepCell, SHOW_DELTAS_KEY } from "@/components/workout-rep-cell";
-import { groupTint, ON_GOAL_MS, repCellTone } from "@/components/workout-tint";
+import { countdownFlash, groupTint, ON_GOAL_MS, repCellTone } from "@/components/workout-tint";
 import { Alert, Button, Card, SectionLabel, Segmented, Sheet, Switch, Time } from "@/components/ui";
 import { offsetForTap, useClock } from "@/lib/client/clock";
 import { useLocalValue } from "@/lib/client/use-local-value";
@@ -31,9 +31,9 @@ const notePointerDown = () => {
 };
 
 /**
- * The countdown alert: a beep (and a buzz where the phone supports it; iPhones
- * don't) at 10 s to go and a double one at Go. Browsers only allow sound after
- * a tap, so the audio is switched on by the first tap on the screen.
+ * The countdown alert at 10 s to go and at Go: a silent buzz where the phone can (Android; iPhones can't
+ * from a web page), a flash of the status card on every phone, and a beep only for whoever turns it on.
+ * Browsers only allow sound after a tap, so the audio is switched on by the first tap on the screen.
  */
 let audio: AudioContext | null = null;
 function unlockAudio() {
@@ -44,8 +44,10 @@ function unlockAudio() {
     // no Web Audio: the buzz (where there is one) still works
   }
 }
-function beep(go: boolean) {
+function buzz(go: boolean) {
   navigator.vibrate?.(go ? [200, 100, 200] : 150);
+}
+function beep(go: boolean) {
   if (!audio || audio.state !== "running") return;
   const tones = go ? [0, 0.22] : [0];
   for (const at of tones) {
@@ -60,7 +62,8 @@ function beep(go: boolean) {
     osc.stop(audio.currentTime + at + 0.2);
   }
 }
-const ALERT_KEY = "ls_workout_alerts";
+/** The beep is opt-in ("1"); the buzz and the flash are always on. */
+const BEEP_KEY = "ls_workout_beep";
 const SINK_KEY = "ls_workout_sink";
 const SETTLE_KEY = "ls_workout_settle_ms";
 const tapTime = () => {
@@ -134,8 +137,8 @@ export function WorkoutRecorder({
       clearTimeout(forget);
     };
   }, [tapSeq, settleMs]);
-  const [alertPref, setAlertPref] = useLocalValue(ALERT_KEY);
-  const alerts = alertPref !== "off";
+  const [beepPref, setBeepPref] = useLocalValue(BEEP_KEY);
+  const beepOn = beepPref === "1";
 
   // The clocks: server time, ticking at tenths.
   // Keyed on the offset, not the clock object (a new one each render would restart the ticker).
@@ -310,8 +313,8 @@ export function WorkoutRecorder({
   // After an early rest the rep clock keeps going for whoever is still out: coaches call those times.
   const outRepStartMs = phase.kind === "rest" && stillOut.length > 0 ? (state.groupLog.get(group.id)?.find((l) => l.repIndex === phase.afterRepIndex)?.startMs ?? null) : null;
 
-  // Beep as the rest counts down: once at 10 s to go, twice at Go. Only on a change seen
-  // here, so opening the screen mid-countdown doesn't beep for a moment already past.
+  // Buzz (and beep, if on) as the rest counts down: once at 10 s to go, twice at Go. Only on a change
+  // seen here, so opening the screen mid-countdown doesn't go off for a moment already past.
   // (Nothing until the clock has ticked once: `now` starts at 0, which would read as a countdown just begun.)
   const ticking = now > 0;
   const countdownStage = ticking && phase.kind === "rest" && phase.nextStartMs !== null ? (now >= phase.nextStartMs ? 2 : phase.nextStartMs - now <= 10_000 ? 1 : 0) : -1;
@@ -320,8 +323,12 @@ export function WorkoutRecorder({
   useEffect(() => {
     const prev = lastStage.current;
     lastStage.current = { key: restKey, stage: countdownStage };
-    if (alerts && restKey && prev.key === restKey && countdownStage > prev.stage && countdownStage > 0) beep(countdownStage === 2);
-  }, [countdownStage, restKey, alerts]);
+    if (!restKey || prev.key !== restKey || countdownStage <= prev.stage || countdownStage <= 0) return;
+    buzz(countdownStage === 2);
+    if (beepOn) beep(countdownStage === 2);
+  }, [countdownStage, restKey, beepOn]);
+  // The flash, worked out from the clock: the first moment past 10 s to go (amber) and past Go (red).
+  const flash = phase.kind === "rest" && ticking ? countdownFlash(phase.nextStartMs, now) : null;
 
   // The big clock.
   let clockLabel = "";
@@ -421,7 +428,11 @@ export function WorkoutRecorder({
 
       {plan.finishedAt && <Alert tone="gold">This workout has been ended. Times can still be fixed; reopen it from Overview to run more reps.</Alert>}
       {/* Where the group is, and the one clock that matters right now. */}
-      <div className={`rounded-lg border px-4 py-4 shadow-card ${groupTint(phase, now)}`}>
+      <div
+        className={`rounded-lg border px-4 py-4 shadow-card transition-[outline-color] ${groupTint(phase, now)} ${
+          flash === "go" ? "outline-4 outline-offset-2 outline-danger" : flash === "soon" ? "outline-4 outline-offset-2 outline-gold" : "outline-4 outline-offset-2 outline-transparent"
+        }`}
+      >
         {/* The rep, big: what a coach glances at between taps; how many are in at the far end, on the same line. */}
         <div className="flex items-baseline justify-between gap-3">
         <div className="min-w-0 text-xl leading-tight font-semibold text-ink">
@@ -987,13 +998,14 @@ export function WorkoutRecorder({
             )}
           </div>
           <SectionLabel className="mt-5 mb-1.5">Countdown</SectionLabel>
+          <p className="mb-2 text-xs text-ink-2">At 10 s to go and at Go the card flashes, and Android phones buzz. (iPhones can&rsquo;t buzz from a web page.)</p>
           <ChoiceRow
-            active={alerts}
-            label="Beep at 10 s and at Go"
-            hint="Before each timed rest ends, so you can watch the runners. Turn the phone's sound up."
+            active={beepOn}
+            label="Also beep"
+            hint="A short beep at 10 s and a double one at Go. Turn the phone's sound up."
             onClick={() => {
               unlockAudio();
-              setAlertPref(alerts ? "off" : null);
+              setBeepPref(beepOn ? null : "1");
             }}
           />
         </Sheet>

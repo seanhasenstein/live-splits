@@ -21,3 +21,14 @@ export const ON_GOAL_MS = 1000;
 /** A rep time's cell against the runner's goal: green under, red over, plain within a second. */
 export const repCellTone = (delta: number | null) =>
   delta === null ? "text-ink" : Math.abs(delta) <= ON_GOAL_MS ? "text-ink" : delta < 0 ? "bg-brand-soft text-brand-text" : "bg-danger-soft text-danger";
+
+/** How long the status card flashes when the countdown passes 10 s to go, and Go. */
+export const FLASH_MS = 700;
+
+/** "soon" just after 10 s to go, "go" just after the next rep is due, else null. */
+export function countdownFlash(nextStartMs: number | null, now: number): "soon" | "go" | null {
+  if (nextStartMs === null) return null;
+  if (now >= nextStartMs && now < nextStartMs + FLASH_MS) return "go";
+  if (now >= nextStartMs - 10_000 && now < nextStartMs - 10_000 + FLASH_MS) return "soon";
+  return null;
+}
