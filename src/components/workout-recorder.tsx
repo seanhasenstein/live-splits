@@ -1,9 +1,10 @@
 "use client";
 
-import { Check, MoreHorizontal, Play, Plus, SlidersHorizontal, UserPlus } from "lucide-react";
+import { Check, ListChecks, MoreHorizontal, Play, Plus, SlidersHorizontal, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { changeRepsAction } from "@/app/actions/workouts";
 import { AthleteBreakdown, setRepTime } from "@/components/workout-athlete-sheet";
+import { MarkRunnersSheet } from "@/components/workout-mark-sheet";
 import { RepCell, SHOW_DELTAS_KEY } from "@/components/workout-rep-cell";
 import { groupTint, ON_GOAL_MS, repCellTone } from "@/components/workout-tint";
 import { Alert, Button, Card, SectionLabel, Segmented, Sheet, Switch, Time } from "@/components/ui";
@@ -264,6 +265,7 @@ export function WorkoutRecorder({
 
   // Changing the plan mid-workout: one more rep at the end, or drop the last one.
   const [repsOpen, setRepsOpen] = useState(false);
+  const [marking, setMarking] = useState(false);
   const [repsError, setRepsError] = useState<string | null>(null);
   const [changingReps, startChange] = useTransition();
   const lastRep = reps[reps.length - 1];
@@ -623,23 +625,32 @@ export function WorkoutRecorder({
       {repsOpen && (
         <Sheet title="More" subtitle={`${group.name} · ${reps.length} reps in the plan`} onClose={() => setRepsOpen(false)}>
           <div className="space-y-2">
+            <SectionLabel className="mb-1">Runners</SectionLabel>
+            <button
+              type="button"
+              onClick={() => {
+                setRepsOpen(false);
+                setMarking(true);
+              }}
+              className="flex w-full items-center gap-2 rounded-md border border-line px-3 py-3 text-left text-sm text-ink hover:bg-surface-2"
+            >
+              <ListChecks className="size-4 text-ink-2" />
+              Mark runners: done for today, skipped…
+            </button>
             {phase.kind !== "done" && notInWorkout.length > 0 && (
-              <>
-                <SectionLabel className="mb-1">Runners</SectionLabel>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRepsOpen(false);
-                    setAdding(true);
-                  }}
-                  className="flex w-full items-center gap-2 rounded-md border border-line px-3 py-3 text-left text-sm text-ink hover:bg-surface-2"
-                >
-                  <UserPlus className="size-4 text-ink-2" />
-                  Add a runner to {group.name}
-                </button>
-                <SectionLabel className="mt-4 mb-1">Reps</SectionLabel>
-              </>
+              <button
+                type="button"
+                onClick={() => {
+                  setRepsOpen(false);
+                  setAdding(true);
+                }}
+                className="flex w-full items-center gap-2 rounded-md border border-line px-3 py-3 text-left text-sm text-ink hover:bg-surface-2"
+              >
+                <UserPlus className="size-4 text-ink-2" />
+                Add a runner to {group.name}
+              </button>
             )}
+            <SectionLabel className="mt-4 mb-1">Reps</SectionLabel>
             <button type="button" disabled={changingReps} onClick={() => changeReps("add")} className="w-full rounded-md border border-line px-3 py-3 text-left text-sm text-ink hover:bg-surface-2 disabled:opacity-50">
               Add rep {reps.length + 1}: {lastRep.label}
               <span className="mt-0.5 block text-[13px] text-ink-2">
@@ -698,6 +709,19 @@ export function WorkoutRecorder({
           list={sheetRep}
           onAddTime={(r, ms) => setRepTime(send, sheetFor, r, ms)}
           ft={ft}
+        />
+      )}
+
+      {marking && (
+        <MarkRunnersSheet
+          reps={reps}
+          runners={allIds
+            .filter((id) => state.athletes.get(id)!.some((r) => r.groupId === group.id))
+            .map((id) => ({ id, name: nameOf.get(id) ?? "?", list: state.athletes.get(id)! }))
+            .sort((a, b) => a.name.localeCompare(b.name))}
+          initialRepIndex={Math.min(repIndex, reps.length - 1)}
+          onApply={(evs) => evs.forEach((e) => send(e))}
+          onClose={() => setMarking(false)}
         />
       )}
 

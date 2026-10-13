@@ -301,6 +301,21 @@ describe("typed rep times", () => {
   });
 });
 
+describe("marking runners after the fact", () => {
+  it("done for today from a past rep turns a no-time into done-for-today, but keeps any real time", () => {
+    const evs = [
+      ev("rep_start", 0, { groupId: "g1", repId: "a1" }),
+      ev("finish", 76_000, { athleteId: "eddy", repId: "a1" }),
+      ev("rep_start", 140_000, { groupId: "g1", repId: "a2" }),
+      ev("finish", 215_000, { athleteId: "eddy", repId: "a2" }),
+      ev("finish", 218_000, { athleteId: "titus", repId: "a2" }),
+    ];
+    expect(replayWorkout(workout, evs).athletes.get("titus")![0].status).toBe("unfinished");
+    const marked = replayWorkout(workout, [...evs, ev("stop", 900_000, { athleteId: "titus", repId: "a1" })]).athletes.get("titus")!;
+    expect(marked.map((r) => r.status)).toEqual(["stopped", "done", "stopped", "stopped", "stopped"]);
+  });
+});
+
 describe("summarize", () => {
   it("average pace, average vs goal, spread and fade across reps of any distance", () => {
     const reps = flattenPlan(workout);

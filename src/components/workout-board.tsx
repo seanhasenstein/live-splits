@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Segmented, Switch, Time } from "@/components/ui";
 import { setRepTime, WorkoutAthleteSheet } from "@/components/workout-athlete-sheet";
+import { MarkRunnersSheet } from "@/components/workout-mark-sheet";
 import { RepCell, SHOW_DELTAS_KEY } from "@/components/workout-rep-cell";
 import { useLocalValue } from "@/lib/client/use-local-value";
 import { groupTint, ON_GOAL_MS, repCellTone } from "@/components/workout-tint";
@@ -59,6 +60,7 @@ export function WorkoutBoard({
   const [filter, setFilter] = useState<string>("all");
   const [openId, setOpenId] = useState<string | null>(null);
   const [entering, setEntering] = useState(false);
+  const [marking, setMarking] = useState(false);
   const [deltasPref, setDeltasPref] = useLocalValue(SHOW_DELTAS_KEY);
   const showDeltas = deltasPref !== "off";
 
@@ -105,6 +107,11 @@ export function WorkoutBoard({
       {/* Typing times in from the paper sheet (or a watch): every cell becomes a box. */}
       <div className="flex items-center justify-end gap-2">
         {entering && <span className="mr-auto text-[13px] text-ink-2">Type each time (116 is 1:16); Enter goes down the column. Typed times win over taps.</span>}
+        {!entering && (
+          <Button variant="secondary" size="sm" onClick={() => setMarking(true)}>
+            Mark runners
+          </Button>
+        )}
         <Button variant={entering ? "primary" : "secondary"} size="sm" onClick={() => setEntering((e) => !e)}>
           {entering ? "Done entering" : "Enter times"}
         </Button>
@@ -221,6 +228,15 @@ export function WorkoutBoard({
           </table>
         </div>
       </Card>
+      {marking && (
+        <MarkRunnersSheet
+          reps={reps}
+          runners={rows.map(({ id, list }) => ({ id, name: byId.get(id)?.name ?? "?", list })).sort((a, b) => a.name.localeCompare(b.name))}
+          initialRepIndex={Math.max(0, ...rows.flatMap(({ list }) => list.map((r, i) => (r.status === "pending" || r.status === "not_run" ? 0 : i))))}
+          onApply={(evs) => evs.forEach((e) => send(e))}
+          onClose={() => setMarking(false)}
+        />
+      )}
       {openId && state.athletes.get(openId) && (
         <WorkoutAthleteSheet
           name={byId.get(openId)?.name ?? "?"}
