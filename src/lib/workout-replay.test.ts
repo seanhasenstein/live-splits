@@ -360,6 +360,20 @@ describe("typed times and rests", () => {
   });
 });
 
+describe("flags and the paper cross-check", () => {
+  it("a flag sits on a runner's rep until it's checked; the tapped time stays visible under a typed one", () => {
+    const evs = [
+      ev("rep_start", 0, { groupId: "g1", repId: "a1" }),
+      ev("finish", 76_000, { athleteId: "eddy", repId: "a1" }),
+      ev("flag", 77_000, { athleteId: "eddy", repId: "a1", note: "guess", clientEventId: "fl1" }),
+      ev("time", 300_000, { athleteId: "eddy", repId: "a1", timeMs: 74_000 }),
+    ];
+    const r = replayWorkout(workout, evs).athletes.get("eddy")![0];
+    expect(r).toMatchObject({ elapsedMs: 74_000, tappedElapsedMs: 76_000, flag: { eventId: "fl1", reason: "guess", by: "Coach" } });
+    expect(replayWorkout(workout, [...evs, ev("void", 400_000, { targetEventId: "fl1" })]).athletes.get("eddy")![0].flag).toBeNull();
+  });
+});
+
 describe("summarize", () => {
   it("average pace, average vs goal, spread and fade across reps of any distance", () => {
     const reps = flattenPlan(workout);

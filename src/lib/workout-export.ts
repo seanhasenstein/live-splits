@@ -52,7 +52,7 @@ export function buildWorkoutCsvRows({
     [],
   ];
 
-  const columns = ["Runner", "Group", "Goal", ...reps.map((r, i) => (sets ? `${r.setIndex + 1}.${r.number}` : `Rep ${i + 1}`)), `Avg / ${base.label}`, "vs goal", "Spread", "Fade"];
+  const columns = ["Runner", "Group", "Goal", ...reps.map((r, i) => (sets ? `${r.setIndex + 1}.${r.number}` : `Rep ${i + 1}`)), `Avg / ${base.label}`, "vs goal", "Spread", "Fade", "To check"];
 
   const rows = [...state.athletes.entries()]
     .map(([id, list]) => ({ id, list, summary: summarize(reps, list), group: list.at(-1)?.groupId ?? workout.groups[0].id, goalMs: list.find((r) => r.goalMs !== null)?.goalMs ?? null }))
@@ -72,13 +72,18 @@ export function buildWorkoutCsvRows({
       signed(summary.avgDeltaMs, precision),
       per(summary.spreadMsPerKm) !== null ? (per(summary.spreadMsPerKm)! / 1000).toFixed(precision === "tenths" ? 1 : 0) : "",
       signed(per(summary.fadeMsPerKm), precision),
+      // Times flagged at practice and not yet checked: "Rep 3 (guess); Rep 5".
+      list
+        .map((r, i) => (r.flag ? `Rep ${i + 1}${r.flag.reason ? ` (${r.flag.reason})` : ""}` : null))
+        .filter(Boolean)
+        .join("; "),
     ]);
 
   // The rest each group took after each rep, under that rep's column.
   const rests = workout.groups
     .map((g) => ({ g, log: new Map((state.groupLog.get(g.id) ?? []).map((l) => [l.repIndex, l])) }))
     .filter(({ log }) => [...log.values()].some((l) => l.restMs !== null))
-    .map(({ g, log }) => ["Rest after", g.name, "", ...reps.map((_, i) => (log.get(i)?.restMs != null ? formatElapsed(log.get(i)!.restMs!, "seconds") : "")), "", "", "", ""]);
+    .map(({ g, log }) => ["Rest after", g.name, "", ...reps.map((_, i) => (log.get(i)?.restMs != null ? formatElapsed(log.get(i)!.restMs!, "seconds") : "")), "", "", "", "", ""]);
 
   return [...header, columns, ...rows, ...(rests.length ? [[], ...rests] : [])];
 }

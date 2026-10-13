@@ -9,7 +9,7 @@ import { decrypt, formatCode } from "@/lib/auth/crypto";
 import { canUseWorkouts, getSession, isSchoolCoach } from "@/lib/auth/session";
 import { getProgram } from "@/lib/data";
 import { describePlan, EFFORT_LABEL } from "@/lib/workout-plan";
-import { listWorkouts } from "@/lib/workouts";
+import { flagCounts, listWorkouts } from "@/lib/workouts";
 import { formatLocalDate } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Workouts" };
@@ -19,6 +19,7 @@ export default async function WorkoutsPage() {
   if (!canUseWorkouts(session)) redirect(session ? "/meets" : "/join");
   const coach = isSchoolCoach(session);
   const [workouts, program] = await Promise.all([listWorkouts(session!.schoolId), coach ? getProgram(session!.schoolId, "xc") : null]);
+  const toCheck = await flagCounts(workouts.map((w) => w._id));
   const workoutCode = program?.workoutCode ? decrypt(program.workoutCode.enc) : null;
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: workouts[0]?.timeZone ?? "America/Chicago" }).format(new Date());
   const upcoming = workouts.filter((w) => w.date >= today && !w.finishedAt).sort((a, b) => a.date.localeCompare(b.date));
@@ -35,6 +36,10 @@ export default async function WorkoutsPage() {
           {[formatLocalDate(w.date), describePlan(w.sets) === w.name ? null : describePlan(w.sets), EFFORT_LABEL[w.effort], `${w.athletes.length} runners`].filter(Boolean).join(" · ")}
         </span>
       </span>
+      {/* Flagged times still waiting to be checked, so a workout isn't left half-fixed. */}
+      {(toCheck.get(w._id) ?? 0) > 0 && (
+        <span className="shrink-0 rounded-full border border-gold/40 bg-gold-soft px-2 py-0.5 text-xs font-medium text-ink">⚑ {toCheck.get(w._id)} to check</span>
+      )}
     </a>
   );
 

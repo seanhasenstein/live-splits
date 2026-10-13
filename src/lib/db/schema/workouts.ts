@@ -125,6 +125,7 @@ export const WorkoutEventType = z.enum([
   "group_end", // the group stops after repId: the reps after it aren't run
   "time", // athleteId ran repId in timeMs (a rep time, not a clock time): typed in from a watch or the paper sheet
   "lap", // a finish time on repId with no name yet (a pack coming in); a finish naming it points back with targetEventId
+  "flag", // athleteId's time on repId is flagged to check later; note = the reason ("guess", "unsure who", "missed tap") or null. Voided when checked.
 ]);
 export type WorkoutEventType = z.infer<typeof WorkoutEventType>;
 

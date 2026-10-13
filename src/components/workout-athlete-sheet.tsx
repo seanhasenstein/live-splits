@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button, Input, SectionLabel, Sheet, Time } from "@/components/ui";
+import { differsFromTap } from "@/components/workout-rep-cell";
 import { ON_GOAL_MS } from "@/components/workout-tint";
 import { useTimeFormat } from "@/lib/client/time-format";
 import { type AthleteRep, type FlatRep, summarize } from "@/lib/workout-replay";
@@ -27,6 +28,7 @@ export function WorkoutAthleteSheet({
   last,
   surface,
   onAddTime,
+  onChecked,
   onClose,
 }: {
   name: string;
@@ -39,6 +41,7 @@ export function WorkoutAthleteSheet({
   surface: Surface;
   /** A typed time for a rep: a new finish, or an edit to the one there. */
   onAddTime: (rep: AthleteRep, elapsedMs: number) => void;
+  onChecked?: (rep: AthleteRep) => void;
   onClose: () => void;
 }) {
   const { ft } = useTimeFormat();
@@ -47,7 +50,7 @@ export function WorkoutAthleteSheet({
   const goalPerBase = goalMs !== null ? (goalMs * base.meters) / reps[list.findIndex((r) => r.goalMs !== null)].meters : null;
   return (
     <Sheet title={name} subtitle={[groupName, goalPerBase !== null ? `goal ${ft(goalPerBase, "seconds")} per ${base.label}` : "no goal"].filter(Boolean).join(" · ")} onClose={onClose}>
-      <AthleteBreakdown reps={reps} list={list} last={last} surface={surface} onAddTime={onAddTime} />
+      <AthleteBreakdown reps={reps} list={list} last={last} surface={surface} onAddTime={onAddTime} onChecked={onChecked} />
     </Sheet>
   );
 }
@@ -63,6 +66,7 @@ export function AthleteBreakdown({
   last,
   surface = null,
   onAddTime,
+  onChecked,
 }: {
   reps: FlatRep[];
   list: AthleteRep[];
@@ -70,6 +74,8 @@ export function AthleteBreakdown({
   /** Today's surface, to say when last time was somewhere else. */
   surface?: Surface | null;
   onAddTime: (rep: AthleteRep, elapsedMs: number) => void;
+  /** Mark a flagged rep checked (clears the flag). */
+  onChecked?: (rep: AthleteRep) => void;
 }) {
   const { ft, team } = useTimeFormat();
   const tenths = team === "tenths";
@@ -143,7 +149,11 @@ export function AthleteBreakdown({
                   {r.status === "done" && r.elapsedMs !== null ? (
                     <>
                       <Time className="font-semibold text-ink">{ft(r.elapsedMs)}</Time>
-                      {r.typedEventId && <span className="ml-1.5 text-[11px] text-ink-3">typed</span>}
+                      {r.typedEventId && (
+                        <span className={`ml-1.5 text-[11px] ${differsFromTap(r) ? "text-gold-text" : "text-ink-3"}`}>
+                          typed{r.tappedElapsedMs !== null ? ` · tapped ${ft(r.tappedElapsedMs)}` : ""}
+                        </span>
+                      )}
                     </>
                   ) : (
                     <span className="text-ink-3">
@@ -155,6 +165,18 @@ export function AthleteBreakdown({
                 <Time className={`w-12 text-right text-[13px] ${tone(r.deltaMs)}`}>{r.status === "done" && r.deltaMs !== null ? signed(r.deltaMs) : ""}</Time>
                 <Time className="w-20 text-right text-[13px] text-ink-3">{restMs !== null ? `${formatElapsed(restMs, "seconds")} rest` : ""}</Time>
               </button>
+              {r.flag && (
+                <div className="-mt-1 flex items-center justify-between gap-2 pb-2 pl-[76px] text-[12px]">
+                  <span className="min-w-0 truncate text-gold-text">
+                    ⚑ {r.flag.reason ? `${r.flag.reason[0].toUpperCase()}${r.flag.reason.slice(1)}` : "Flagged to check"} · {r.flag.by}
+                  </span>
+                  {onChecked && (
+                    <button type="button" onClick={() => onChecked(r)} className="shrink-0 rounded-md border border-line-strong px-2 py-1 font-medium text-ink hover:bg-surface-2">
+                      Mark checked
+                    </button>
+                  )}
+                </div>
+              )}
               {editing === i && canType && (
                 <div className="space-y-2 pb-3">
                   <Input autoFocus onFocus={(e) => e.target.select()} value={typed} onChange={(e) => setTyped(e.target.value)} inputMode="decimal" className="h-11! font-mono text-lg!" aria-label={`Rep ${i + 1} time`} />

@@ -32,10 +32,13 @@ export async function canTimeWorkout(workout: Workout) {
  * runners (done for today, skipped, back in) after the fact. Reopen it to run more reps.
  */
 const allowedWhenEnded = (e: WorkoutEventInput) =>
-  ["edit", "void", "note", "time", "stop", "skip", "rejoin"].includes(e.type) || (e.type === "finish" && e.timeMs !== null);
+  ["edit", "void", "note", "time", "stop", "skip", "rejoin", "flag"].includes(e.type) || (e.type === "finish" && e.timeMs !== null);
 
 /** A typed rep time names a runner and a rep, and is a believable rep (under two hours). */
 const typedTimeOk = (e: WorkoutEventInput) => e.type !== "time" || (e.athleteId !== null && e.repId !== null && e.timeMs !== null && e.timeMs < 2 * 3_600_000);
+
+/** A flag is on one runner's rep, with an optional short reason. */
+const flagOk = (e: WorkoutEventInput) => e.type !== "flag" || (e.athleteId !== null && e.repId !== null && (e.note === null || e.note.length <= 40));
 
 /** A lap is a group's time on a rep, not yet anyone's. */
 const lapOk = (e: WorkoutEventInput) => e.type !== "lap" || (e.groupId !== null && e.repId !== null && e.athleteId === null);
@@ -92,6 +95,7 @@ export async function recordWorkoutEvents(workout: Workout, inputs: WorkoutEvent
       (e.type !== "time" || inWorkout.has(e.athleteId!)) &&
       typedTimeOk(e) &&
       lapOk(e) &&
+      flagOk(e) &&
       (!workout.finishedAt || allowedWhenEnded(e));
     if (!fits) {
       rejected.push(e.clientEventId);

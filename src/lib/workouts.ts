@@ -104,3 +104,21 @@ export async function lastTimeRan(workout: Workout): Promise<Record<string, Last
   }
   return out;
 }
+
+/** How many times are flagged to check, per workout (a flag counts until it's voided: "checked"). */
+export async function flagCounts(workoutIds: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (workoutIds.length === 0) return out;
+  const events = await collection(await getDb(), "workoutEvents")
+    .find({ workoutId: { $in: workoutIds }, type: { $in: ["flag", "void"] } }, { projection: { clientEventId: 1, workoutId: 1, type: 1, athleteId: 1, repId: 1, targetEventId: 1 } })
+    .toArray();
+  const voided = new Set(events.filter((e) => e.type === "void").map((e) => e.targetEventId));
+  const open = new Map<string, Set<string>>(); // workout -> runner:rep with a live flag
+  for (const e of events) {
+    if (e.type !== "flag" || voided.has(e.clientEventId)) continue;
+    if (!open.has(e.workoutId)) open.set(e.workoutId, new Set());
+    open.get(e.workoutId)!.add(`${e.athleteId}:${e.repId}`);
+  }
+  for (const [id, keys] of open) out.set(id, keys.size);
+  return out;
+}

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Segmented, Switch, Time } from "@/components/ui";
 import { setRepTime, WorkoutAthleteSheet } from "@/components/workout-athlete-sheet";
 import { MarkRunnersSheet } from "@/components/workout-mark-sheet";
-import { RepCell, SHOW_DELTAS_KEY } from "@/components/workout-rep-cell";
+import { differsFromTap, RepCell, repCellTitle, SHOW_DELTAS_KEY } from "@/components/workout-rep-cell";
 import { useLocalValue } from "@/lib/client/use-local-value";
 import { groupTint, ON_GOAL_MS, repCellTone } from "@/components/workout-tint";
 import { offsetForTap, useClock } from "@/lib/client/clock";
@@ -60,6 +60,12 @@ export function WorkoutBoard({
   const [filter, setFilter] = useState<string>("all");
   const [openId, setOpenId] = useState<string | null>(null);
   const [entering, setEntering] = useState(false);
+  // Flags on any rep (whatever the filter: they're the whole workout's to-do list), in rep order.
+  const toCheck = [...state.athletes.entries()]
+    .flatMap(([id, list]) => list.map((r, i) => ({ id, i, r })))
+    .filter(({ r }) => r.flag !== null)
+    .sort((a, b) => a.i - b.i || (byId.get(a.id)?.name ?? "").localeCompare(byId.get(b.id)?.name ?? ""));
+  const differing = [...state.athletes.values()].flat().filter(differsFromTap).length;
   const [marking, setMarking] = useState(false);
   const [deltasPref, setDeltasPref] = useLocalValue(SHOW_DELTAS_KEY);
   const showDeltas = deltasPref !== "off";
@@ -109,9 +115,44 @@ export function WorkoutBoard({
         ))}
       </div>
       )}
+      {/* Times flagged to check: the list to work through after practice. */}
+      {toCheck.length > 0 && (
+        <Card>
+          <div className="flex items-baseline justify-between border-b border-line px-4 py-2.5">
+            <span className="text-sm font-semibold text-ink">
+              <span className="text-gold-text">⚑</span> To check ({toCheck.length})
+            </span>
+            <span className="text-[12px] text-ink-3">Fix the time if needed, then mark it checked.</span>
+          </div>
+          <div className="divide-y divide-line">
+            {toCheck.map(({ id, i, r }) => (
+              <div key={`${id}:${i}`} className="flex items-center gap-3 px-4 py-2 text-sm">
+                <button type="button" onClick={() => setOpenId(id)} className="min-w-0 flex-1 text-left">
+                  <span className="block truncate font-medium text-ink hover:underline">
+                    {byId.get(id)?.name ?? "?"} <span className="font-normal text-ink-2">· rep {i + 1}</span>
+                  </span>
+                  <span className="block truncate text-[12px] text-ink-3">
+                    {r.flag!.reason ? `${r.flag!.reason[0].toUpperCase()}${r.flag!.reason.slice(1)}` : "Flagged"} · {r.flag!.by}
+                  </span>
+                </button>
+                <Time className="font-semibold text-ink">{r.status === "done" && r.elapsedMs !== null ? ft(r.elapsedMs) : "—"}</Time>
+                <Button variant="secondary" size="sm" onClick={() => send({ type: "void", targetEventId: r.flag!.eventId })}>
+                  Checked
+                </Button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {/* Typing times in from the paper sheet (or a watch): every cell becomes a box. */}
       <div className="flex items-center justify-end gap-2">
-        {entering && <span className="mr-auto text-[13px] text-ink-2">Type each time: 45 is 45 s, 116 is 1:16. Enter goes down the column. Typed times win over taps.</span>}
+        {entering && (
+          <span className="mr-auto text-[13px] text-ink-2">
+            Type each time: 45 is 45 s, 116 is 1:16. Enter goes down the column. Typed times win over taps.
+            {differing > 0 && <span className="text-gold-text"> {differing} typed time{differing === 1 ? " differs" : "s differ"} from the tap by more than a second (outlined).</span>}
+          </span>
+        )}
         {!entering && (
           <Button variant="secondary" size="sm" onClick={() => setMarking(true)}>
             Mark runners
@@ -167,9 +208,11 @@ export function WorkoutBoard({
                           ft={ft}
                           onSave={(ms) => setRepTime(send, id, r, ms)}
                           onClear={r.typedEventId ? () => send({ type: "void", targetEventId: r.typedEventId! }) : null}
+                          mark={differsFromTap(r) ? "differs" : r.flag ? "flagged" : null}
+                          hint={repCellTitle(r, ft)}
                         />
                       ) : r.status === "done" && r.elapsedMs !== null ? (
-                        <RepCell time={ft(r.elapsedMs)} delta={showDeltas && r.deltaMs !== null ? signed(r.deltaMs, digits) : null} tone={repCellTone(r.deltaMs)} typed={!!r.typedEventId} />
+                        <RepCell time={ft(r.elapsedMs)} delta={showDeltas && r.deltaMs !== null ? signed(r.deltaMs, digits) : null} tone={repCellTone(r.deltaMs)} typed={!!r.typedEventId} flagged={!!r.flag} differs={differsFromTap(r)} title={repCellTitle(r, ft)} />
                       ) : r.status === "skipped" ? (
                         <span className="px-1.5 text-xs whitespace-nowrap text-ink-3">skipped</span>
                       ) : r.status === "stopped" ? (
@@ -259,6 +302,7 @@ export function WorkoutBoard({
           last={lastTimes[openId] ?? null}
           surface={surface}
           onAddTime={(r, ms) => setRepTime(send, openId, r, ms)}
+          onChecked={(r) => r.flag && send({ type: "void", targetEventId: r.flag.eventId })}
           onClose={() => setOpenId(null)}
         />
       )}
@@ -353,19 +397,40 @@ function Clock({ label, value, tone = "text-ink", note = null, noteTone = "text-
  * typed time takes it back out; a tapped time can't be cleared here (the box puts it back).
  * While the box has focus it keeps what's being typed, whatever the other phones send meanwhile.
  */
-function TimeInput({ cell, label, valueMs, ft, onSave, onClear }: { cell: string; label: string; valueMs: number | null; ft: (ms: number) => string; onSave: (ms: number) => void; onClear: (() => void) | null }) {
+function TimeInput({
+  cell,
+  label,
+  valueMs,
+  ft,
+  onSave,
+  onClear,
+  mark,
+  hint,
+}: {
+  cell: string;
+  label: string;
+  valueMs: number | null;
+  ft: (ms: number) => string;
+  onSave: (ms: number) => void;
+  onClear: (() => void) | null;
+  /** Worth a second look while entering: flagged at practice, or the paper disagrees with the tap. */
+  mark: "flagged" | "differs" | null;
+  hint?: string;
+}) {
   const shown = valueMs !== null ? ft(valueMs) : "";
   const [draft, setDraft] = useState<string | null>(null); // null: not editing, show the saved time
   const text = draft ?? shown;
-  const parsed = text.trim() ? parseDuration(text) : null;
-  const bad = text.trim() !== "" && parsed === null;
-  const commit = () => {
+  const bad = text.trim() !== "" && parseDuration(text) === null;
+  // Saves what's in the box at that moment (read from the box itself: a quick "type, Enter" can land
+  // before the typing has re-rendered, and the draft from the last render would be stale).
+  const commit = (value: string) => {
     if (draft === null) return;
     setDraft(null);
-    if (!draft.trim()) {
+    if (!value.trim()) {
       if (valueMs !== null && onClear) onClear();
       return;
     }
+    const parsed = parseDuration(value);
     if (parsed !== null && (valueMs === null || ft(parsed) !== ft(valueMs))) onSave(parsed);
   };
   return (
@@ -377,7 +442,7 @@ function TimeInput({ cell, label, valueMs, ft, onSave, onClear }: { cell: string
         setDraft(shown);
         e.target.select();
       }}
-      onBlur={commit}
+      onBlur={(e) => commit(e.currentTarget.value)}
       onKeyDown={(e) => {
         if (e.key !== "Enter") return;
         e.preventDefault();
@@ -394,7 +459,10 @@ function TimeInput({ cell, label, valueMs, ft, onSave, onClear }: { cell: string
       inputMode="decimal"
       aria-label={`${label} time`}
       aria-invalid={bad}
-      className={`h-8 w-16 rounded border bg-surface px-1.5 text-right font-mono text-[13px] text-ink outline-none focus:border-brand ${bad ? "border-danger" : "border-line-strong"}`}
+      title={hint}
+      className={`h-8 w-16 rounded border px-1.5 text-right font-mono text-[13px] text-ink outline-none focus:border-brand ${
+        bad ? "border-danger bg-surface" : mark ? "border-gold bg-gold-soft" : "border-line-strong bg-surface"
+      }`}
     />
   );
 }

@@ -34,16 +34,17 @@ describe("workout CSV", () => {
       ev("rep_start", 145_000, { groupId: "g1", repId: "s1-r2" }),
       ev("finish", 222_000, { athleteId: "eddy", repId: "s1-r2" }),
       ev("skip", 146_000, { athleteId: "titus", repId: "s1-r2" }),
+      ev("flag", 230_000, { athleteId: "eddy", repId: "s1-r2", note: "guess" }),
     ]);
     const rows = buildWorkoutCsvRows({ workout, state, names: new Map([["eddy", "Eddy Giebler"], ["titus", "Titus Gottschalk"]]), precision: "seconds" });
     expect(rows[0]).toEqual(["3 × 400m"]);
     expect(rows[1][0]).toBe("Monday, Oct 12, 2026 · School grounds · on grass · windy · VO₂ / intervals");
     expect(rows[2][0]).toBe("3 × 400m · 1 min rest · 1,200m total");
     const header = rows.find((r) => r[0] === "Runner")!;
-    expect(header).toEqual(["Runner", "Group", "Goal", "Rep 1", "Rep 2", "Rep 3", "Avg / 400m", "vs goal", "Spread", "Fade"]);
+    expect(header).toEqual(["Runner", "Group", "Goal", "Rep 1", "Rep 2", "Rep 3", "Avg / 400m", "vs goal", "Spread", "Fade", "To check"]);
     const eddy = rows.find((r) => r[0] === "Eddy Giebler")!;
     // Average 1:16.5 shows as 1:16 (times truncate, as everywhere in the app); vs goal −1.5 → −1; slower by 1 s on rep 2.
-    expect(eddy).toEqual(["Eddy Giebler", "Fast", "1:18", "1:16", "1:17", "", "1:16", "-1", "1", "+1"]);
+    expect(eddy).toEqual(["Eddy Giebler", "Fast", "1:18", "1:16", "1:17", "", "1:16", "-1", "1", "+1", "Rep 2 (guess)"]);
     const titus = rows.find((r) => r[0] === "Titus Gottschalk")!;
     expect(titus.slice(3, 6)).toEqual(["1:22", "skipped", ""]);
     // Rest after rep 1: from the last one in (82 s) to the start of rep 2 (145 s).

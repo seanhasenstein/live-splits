@@ -75,6 +75,10 @@ export type AthleteRep = {
   finishEventId: string | null;
   /** A typed rep time, when there is one (it wins over a tap): to edit or undo it. */
   typedEventId: string | null;
+  /** The time from the tap alone, under any typed one: to cross-check a paper time against it. */
+  tappedElapsedMs: number | null;
+  /** Flagged to check later: why (if said) and by whom; the event, to mark it checked. */
+  flag: { eventId: string; reason: string | null; by: string } | null;
   /** Their own start (a late start), when they have one: undo it to go back to the group's clock. */
   ownStartEventId: string | null;
   /** Skipped with the group, then run later on their own ("make-up"). */
@@ -194,6 +198,9 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
   }
   const finishes = new Map<string, WorkoutEvent>(); // `${athleteId}:${ri}`, latest
   for (const e of ordered.filter((e) => e.type === "finish" && e.athleteId)) finishes.set(`${e.athleteId}:${repOf(e)}`, e);
+  // Flags to check later, latest per runner and rep (a void clears it: "checked").
+  const flags = new Map<string, { eventId: string; reason: string | null; by: string }>();
+  for (const e of ordered.filter((e) => e.type === "flag" && e.athleteId)) flags.set(`${e.athleteId}:${repOf(e)}`, { eventId: e.clientEventId, reason: e.note, by: e.createdBy.name });
   // Typed rep times (from a watch or the paper sheet): the time itself, no start or finish needed. Latest wins.
   const typedTimes = new Map<string, WorkoutEvent>(); // `${athleteId}:${ri}`
   for (const e of ordered.filter((e) => e.type === "time" && e.athleteId && e.timeMs !== null)) typedTimes.set(`${e.athleteId}:${repOf(e)}`, e);
@@ -256,6 +263,8 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
         deltaMs: elapsedMs !== null && goalMs !== null ? elapsedMs - goalMs : null,
         finishEventId: fin?.clientEventId ?? null,
         typedEventId: typedEvent?.clientEventId ?? null,
+        tappedElapsedMs: startMs !== null && tappedMs !== null && tappedMs > startMs ? tappedMs - startMs : null,
+        flag: flags.get(`${id}:${rep.index}`) ?? null,
         ownStartEventId: ownStartEvent.get(`${id}:${rep.index}`) ?? null,
         makeUp,
         skipEventId: skipped.get(`${id}:${rep.index}`) ?? null,

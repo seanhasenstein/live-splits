@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { changeRepsAction } from "@/app/actions/workouts";
 import { AthleteBreakdown, setRepTime } from "@/components/workout-athlete-sheet";
 import { MarkRunnersSheet } from "@/components/workout-mark-sheet";
-import { RepCell, SHOW_DELTAS_KEY } from "@/components/workout-rep-cell";
+import { differsFromTap, RepCell, repCellTitle, SHOW_DELTAS_KEY } from "@/components/workout-rep-cell";
 import { countdownFlash, groupTint, ON_GOAL_MS, repCellTone } from "@/components/workout-tint";
 import { Alert, Button, Card, SectionLabel, Segmented, Sheet, Switch, Time } from "@/components/ui";
 import { offsetForTap, useClock } from "@/lib/client/clock";
@@ -605,6 +605,7 @@ export function WorkoutRecorder({
                   <span className="flex items-baseline gap-2">
                     <Time className={`${large ? "text-xl" : "text-base"} font-semibold text-ink`}>{ft(r.elapsedMs)}</Time>
                     {r.deltaMs !== null && <Time className={`text-xs ${deltaTone(r.deltaMs)}`}>{deltaText(r.deltaMs, tenths)}</Time>}
+                    {r.flag && <span className="text-xs text-gold-text" title="Flagged to check">⚑</span>}
                   </span>
                 ) : r.status === "skipped" ? (
                   <span className="text-xs text-ink-3">skipping</span>
@@ -1015,6 +1016,7 @@ export function WorkoutRecorder({
                       <Time className="text-base font-semibold text-ink">{r.elapsedMs !== null ? ft(r.elapsedMs) : "—"}</Time>
                       {r.deltaMs !== null && <Time className={`text-xs ${deltaTone(r.deltaMs)}`}>{deltaText(r.deltaMs, tenths)}</Time>}
                       {r.typedEventId && <span className="text-[11px] text-ink-3">typed</span>}
+                      {r.flag && <span className="text-[11px] text-gold-text">⚑ {r.flag.reason ?? "check"}</span>}
                     </div>
                   </div>
                   <Button variant="secondary" size="sm" className="w-11 font-mono" onClick={() => nudge(r, -1000)} aria-label={`${nameOf.get(id)}: one second faster`}>
@@ -1206,7 +1208,7 @@ function GroupRepsGrid({
                 {list.map((r) => (
                   <td key={r.repId} className="px-0.5 py-1 text-right">
                     {r.status === "done" && r.elapsedMs !== null ? (
-                      <RepCell time={ft(r.elapsedMs)} delta={showDeltas && r.deltaMs !== null ? deltaText(r.deltaMs, tenths) : null} tone={repCellTone(r.deltaMs)} typed={!!r.typedEventId} />
+                      <RepCell time={ft(r.elapsedMs)} delta={showDeltas && r.deltaMs !== null ? deltaText(r.deltaMs, tenths) : null} tone={repCellTone(r.deltaMs)} typed={!!r.typedEventId} flagged={!!r.flag} differs={differsFromTap(r)} title={repCellTitle(r, ft)} />
                     ) : (
                       <span className="px-1 text-xs text-ink-3">{r.status === "skipped" ? "skip" : r.status === "unfinished" ? "no time" : r.status === "stopped" ? "done" : r.status === "running" ? "now" : "·"}</span>
                     )}
@@ -1301,7 +1303,7 @@ function AthleteActions({
   groupStartMs: number | null;
   otherGroups: { id: string; name: string }[];
   onClose: () => void;
-  act: (type: "void" | "edit" | "skip" | "stop" | "rejoin" | "move" | "rep_start" | "finish", extra: { repId?: string; targetEventId?: string; timeMs?: number; groupId?: string }) => void;
+  act: (type: "void" | "edit" | "skip" | "stop" | "rejoin" | "move" | "rep_start" | "finish" | "flag", extra: { repId?: string; targetEventId?: string; timeMs?: number; groupId?: string; note?: string | null }) => void;
   reps: FlatRep[];
   /** Their reps before the one on screen (for make-ups of skipped ones). */
   soFar: AthleteRep[];
@@ -1329,6 +1331,39 @@ function AthleteActions({
             Undo the finish (still running)
             <span className="mt-0.5 block text-[13px] text-ink-2">Tapped by mistake? This puts them back on the course.</span>
           </button>
+        )}
+        {/* Not sure of a time? Flag it and keep going; it waits in Overview's "To check" list. */}
+        {rep.status !== "pending" && rep.status !== "not_run" && (
+          <div className="rounded-md border border-line px-3 py-3">
+            {rep.flag ? (
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 text-sm text-ink">
+                  <span className="text-gold-text">⚑</span> Flagged to check{rep.flag.reason ? `: ${rep.flag.reason}` : ""}
+                  <span className="block text-[13px] text-ink-2">by {rep.flag.by}</span>
+                </span>
+                <Button variant="secondary" size="sm" onClick={() => act("void", { targetEventId: rep.flag!.eventId })}>
+                  Mark checked
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="text-sm text-ink">Flag this time to check later</div>
+                <div className="mt-0.5 text-[13px] text-ink-2">Keep going; it waits in the workout&rsquo;s &ldquo;To check&rdquo; list. Why?</div>
+                <div className="mt-2 grid grid-cols-2 gap-1.5">
+                  {(["guess", "unsure who", "missed tap", null] as const).map((reason) => (
+                    <button
+                      key={reason ?? "none"}
+                      type="button"
+                      onClick={() => act("flag", { repId: rep.repId, note: reason })}
+                      className="h-11 rounded-md border border-line-strong bg-surface px-3 text-sm text-ink hover:bg-surface-2"
+                    >
+                      {reason ? `${reason[0].toUpperCase()}${reason.slice(1)}` : "Just flag it"}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         )}
         {/* "Who'd you finish with?": a missed runner, or one whose time looks wrong, takes that runner's time. */}
         {(rep.status === "running" || rep.status === "unfinished" || rep.status === "done") && finishedWith.length > 0 && (
@@ -1410,7 +1445,7 @@ function AthleteActions({
           ))}
       </div>
       <SectionLabel className="mt-5 mb-2">Their workout</SectionLabel>
-      <AthleteBreakdown reps={reps} list={list} last={null} onAddTime={onAddTime} />
+      <AthleteBreakdown reps={reps} list={list} last={null} onAddTime={onAddTime} onChecked={(r) => r.flag && act("void", { targetEventId: r.flag.eventId })} />
     </Sheet>
   );
 }
