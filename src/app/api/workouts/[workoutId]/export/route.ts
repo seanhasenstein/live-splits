@@ -1,11 +1,11 @@
 import { getSession, isSchoolCoach } from "@/lib/auth/session";
-import { getProgram, listRoster } from "@/lib/data";
+import { getProgram } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
 import { toCsv } from "@/lib/export";
 import { buildWorkoutCsvRows } from "@/lib/workout-export";
 import { replayWorkout } from "@/lib/workout-replay";
-import { getWorkout } from "@/lib/workouts";
+import { getWorkout, workoutPeople } from "@/lib/workouts";
 
 /** A workout as CSV, laid out like the paper sheet. Coaches only, like the meet export. */
 export async function GET(_request: Request, { params }: RouteContext<"/api/workouts/[workoutId]/export">) {
@@ -17,7 +17,7 @@ export async function GET(_request: Request, { params }: RouteContext<"/api/work
 
   const [events, roster, program] = await Promise.all([
     collection(await getDb(), "workoutEvents").find({ workoutId: workout._id }).toArray(),
-    listRoster(workout.seasonId),
+    workoutPeople(workout),
     getProgram(workout.schoolId, "xc"),
   ]);
   const rows = buildWorkoutCsvRows({

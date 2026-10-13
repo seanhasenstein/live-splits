@@ -369,8 +369,11 @@ describe("flags and the paper cross-check", () => {
       ev("time", 300_000, { athleteId: "eddy", repId: "a1", timeMs: 74_000 }),
     ];
     const r = replayWorkout(workout, evs).athletes.get("eddy")![0];
-    expect(r).toMatchObject({ elapsedMs: 74_000, tappedElapsedMs: 76_000, flag: { eventId: "fl1", reason: "guess", by: "Coach" } });
+    expect(r).toMatchObject({ elapsedMs: 74_000, tappedElapsedMs: 76_000, flag: { eventId: "fl1", eventIds: ["fl1"], reason: "guess", by: "Coach" } });
     expect(replayWorkout(workout, [...evs, ev("void", 400_000, { targetEventId: "fl1" })]).athletes.get("eddy")![0].flag).toBeNull();
+    // Flagged twice (two phones, offline): the newest shows, and checking means voiding both.
+    const twice = replayWorkout(workout, [...evs, ev("flag", 78_000, { athleteId: "eddy", repId: "a1", note: "missed tap", clientEventId: "fl2" })]).athletes.get("eddy")![0];
+    expect(twice.flag).toMatchObject({ eventId: "fl2", eventIds: ["fl1", "fl2"], reason: "missed tap" });
   });
 });
 

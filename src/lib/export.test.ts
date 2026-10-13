@@ -63,6 +63,8 @@ test("no gun: times blank but rows still present", () => {
 
 test("csv quoting", () => {
   expect(toCsv([["a", 'b "q"', "c,d"]])).toBe('a,"b ""q""","c,d"\r\n');
+  // A name that would run as a formula in Excel stays text; signed numbers stay numbers.
+  expect(toCsv([['=HYPERLINK("x")', "+Fast", "-1", "+2", "1:12"]])).toBe(`"'=HYPERLINK(""x"")",'+Fast,-1,+2,1:12\r\n`);
   expect(formatWorkbookTime(61_999)).toBe("1:01");
 });
 

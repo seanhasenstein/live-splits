@@ -17,4 +17,15 @@ describe("shortNames", () => {
     expect(names.get("e3")).toBe("Emma Kowalski");
     expect(names.get("j1")).toBe("Joe Vanic");
   });
+
+  it("uses the last name, not a middle name or suffix", () => {
+    const names = shortNames([
+      { id: "a", name: "Emma Rose Kay" },
+      { id: "b", name: "Emma Winter" },
+      { id: "c", name: "Joe Smith Jr." },
+      { id: "d", name: "Joe Vanic" },
+    ]);
+    expect(names.get("a")).toBe("Emma K.");
+    expect(names.get("c")).toBe("Joe S.");
+  });
 });

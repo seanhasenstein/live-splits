@@ -132,9 +132,22 @@ export function WorkoutRecorder({
   const [frozen, setFrozen] = useState<{ key: string; ids: string[] } | null>(null);
   const [tapSeq, setTapSeq] = useState(0);
   /** The last runner tapped in, for the quick Undo beside Finish (a few seconds, on the clock). */
-  const [lastTap, setLastTap] = useState<{ eventId: string; athleteId: string; at: number; undoId?: string; groupId: string } | null>(null);
+  /**
+   * The last change, for the quick controls: the finish (or typed time) it's about, and how to undo it.
+   * undoIds: changes to void (a Finished-with edit and any nudges after it), instead of the whole finish.
+   * restore: after "Give this time to…", the runner the time came from, to give it back.
+   */
+  const [lastTap, setLastTap] = useState<{
+    eventId: string;
+    athleteId: string;
+    at: number;
+    groupId: string;
+    undoIds?: string[];
+    restore?: { athleteId: string; repId: string; finishMs: number; lapId?: string };
+  } | null>(null);
   /** The rep's finished list (from the "n/m in" count): undo, nudge or fix any runner's time. */
-  const [listOpen, setListOpen] = useState(false);
+  /** The finished list, opened on a rep (that rep stays, even if another phone starts the next one). */
+  const [listRep, setListRep] = useState<number | null>(null);
   // A moment after the last tap the tiles settle.
   useEffect(() => {
     if (tapSeq === 0) return;
@@ -288,20 +301,31 @@ export function WorkoutRecorder({
   const quickRep = quickUndo ? (state.athletes.get(quickUndo.athleteId)?.find((r) => r.finishEventId === quickUndo.eventId || r.typedEventId === quickUndo.eventId) ?? null) : null;
   const quickNudge = (deltaMs: number) => {
     if (!quickUndo || !quickRep) return;
-    nudge(quickRep, deltaMs);
-    setLastTap({ ...quickUndo, at: now });
+    const id = nudge(quickRep, deltaMs);
+    // When Undo means "back to the time before", the nudge is part of what it takes back.
+    setLastTap({ ...quickUndo, at: now, undoIds: quickUndo.undoIds && id ? [...quickUndo.undoIds, id] : quickUndo.undoIds });
+  };
+  const quickUndoNow = () => {
+    if (!quickUndo) return;
+    if (quickUndo.undoIds) quickUndo.undoIds.forEach((id) => send({ type: "void", targetEventId: id }));
+    else send({ type: "void", targetEventId: quickUndo.eventId });
+    // A time given to the wrong runner goes back to the one it came from.
+    const back = quickUndo.restore;
+    if (back) send({ type: "finish", groupId: group.id, athleteId: back.athleteId, repId: back.repId, timeMs: back.finishMs, targetEventId: back.lapId });
+    setLastTap(null);
   };
 
-  // The rep the finished list is about: the one running, or the one just run.
-  const listRepIndex = lapRepIndex;
+  // The rep the finished list is about: the one it was opened on, else the one running or just run.
+  const listRepIndex = listRep ?? lapRepIndex;
   const listRows = listRepIndex < 0 ? [] : rowsAt(listRepIndex);
   const listDone = listRows.filter(({ r }) => r.status === "done").sort((a, b) => (b.r.finishMs ?? 0) - (a.r.finishMs ?? 0));
   const listOut = listRows.filter(({ r }) => r.status === "running");
   const listCount = listRows.filter(({ r }) => r.status !== "skipped" && r.status !== "stopped" && r.status !== "not_run").length;
   /** Nudge a runner's time by a second (typed or tapped), from the list. */
-  const nudge = (r: AthleteRep, deltaMs: number) => {
-    if (r.typedEventId && r.elapsedMs !== null) send({ type: "edit", targetEventId: r.typedEventId, timeMs: Math.max(1000, r.elapsedMs + deltaMs) });
-    else if (r.finishEventId && r.finishMs !== null) send({ type: "edit", targetEventId: r.finishEventId, timeMs: r.finishMs + deltaMs });
+  const nudge = (r: AthleteRep, deltaMs: number): string | null => {
+    if (r.typedEventId && r.elapsedMs !== null) return send({ type: "edit", targetEventId: r.typedEventId, timeMs: Math.max(1000, r.elapsedMs + deltaMs) });
+    if (r.finishEventId && r.finishMs !== null) return send({ type: "edit", targetEventId: r.finishEventId, timeMs: r.finishMs + deltaMs });
+    return null;
   };
   const undoFinish = (r: AthleteRep) => {
     const id = r.typedEventId ?? r.finishEventId;
@@ -411,7 +435,7 @@ export function WorkoutRecorder({
   const notInWorkout = people.filter((p) => !state.athletes.has(p.id));
 
   return (
-    <div className={`space-y-3 ${pendingLaps.length > 0 ? "pb-64" : lapOpen ? "pb-40" : "pb-20"}`}>
+    <div className={`space-y-3 ${pendingLaps.length > 0 ? "pb-72" : lapOpen || quickRep ? "pb-40" : "pb-20"}`}>
       {plan.groups.length > 1 && <Segmented value={group.id} onChange={setGroupId} options={plan.groups.map((g) => ({ value: g.id, label: g.name }))} />}
       {/* Which group this phone is timing, said plainly, and how the runners are laid out. */}
       <div className="flex items-center justify-between gap-2">
@@ -484,7 +508,7 @@ export function WorkoutRecorder({
           {(phase.kind === "running" || phase.kind === "rest") && listCount > 0 && (
             <button
               type="button"
-              onClick={() => setListOpen(true)}
+              onClick={() => setListRep(listRepIndex)}
               className="-mr-1.5 shrink-0 rounded-md border border-ink/15 bg-ink/[0.04] px-2 py-1 text-sm font-semibold text-ink tabular-nums hover:bg-ink/[0.08]"
               aria-label={`Rep ${listRepIndex + 1}: ${listDone.length} of ${listCount} finished. Open the list`}
             >
@@ -606,7 +630,11 @@ export function WorkoutRecorder({
                   <span className="flex items-baseline gap-2">
                     <Time className={`${large ? "text-xl" : "text-base"} font-semibold text-ink`}>{ft(r.elapsedMs)}</Time>
                     {r.deltaMs !== null && <Time className={`text-xs ${deltaTone(r.deltaMs)}`}>{deltaText(r.deltaMs, tenths)}</Time>}
-                    {r.flag && <span className="text-xs text-gold-text" title="Flagged to check">⚑</span>}
+                    {r.flag && (
+                      <span className="text-xs text-gold-text" title="Flagged to check" aria-label="Flagged to check">
+                        ⚑
+                      </span>
+                    )}
                   </span>
                 ) : r.status === "skipped" ? (
                   <span className="text-xs text-ink-3">skipping</span>
@@ -883,7 +911,9 @@ export function WorkoutRecorder({
             let eventId = "";
             let undoId: string | undefined;
             if (mine.typedEventId) {
-              if (mine.startMs !== null) undoId = send({ type: "edit", targetEventId: mine.typedEventId, timeMs: theirs.finishMs - mine.startMs });
+              // A typed time with no start to measure from: the same moment can't be worked out, so nothing changes.
+              if (mine.startMs === null) return setSheetFor(null);
+              undoId = send({ type: "edit", targetEventId: mine.typedEventId, timeMs: theirs.finishMs - mine.startMs });
               eventId = mine.typedEventId;
             } else if (mine.finishEventId) {
               undoId = send({ type: "edit", targetEventId: mine.finishEventId, timeMs: theirs.finishMs });
@@ -891,7 +921,7 @@ export function WorkoutRecorder({
             } else eventId = send({ type: "finish", groupId: group.id, athleteId: sheetFor, repId: mine.repId, timeMs: theirs.finishMs });
             setSheetFor(null);
             // The quick −1s · Undo · +1s box, so "just behind" is one more tap.
-            setLastTap({ eventId, athleteId: sheetFor, at: now, undoId, groupId: group.id });
+            setLastTap({ eventId, athleteId: sheetFor, at: now, groupId: group.id, undoIds: undoId ? [undoId] : undefined });
           }}
           onGiveTo={(otherId) => {
             const ri = phase.kind === "running" ? repIndex : Math.max(0, lastIndex);
@@ -903,7 +933,7 @@ export function WorkoutRecorder({
             send({ type: "void", targetEventId: r.finishEventId });
             setSheetFor(null);
             // The quick −1s · Undo · +1s box for the runner who now has the time.
-            setLastTap({ eventId: given, athleteId: otherId, at: now, groupId: group.id });
+            setLastTap({ eventId: given, athleteId: otherId, at: now, groupId: group.id, restore: { athleteId: sheetFor, repId: r.repId, finishMs: r.finishMs, lapId } });
           }}
           onAddTime={(r, ms) => setRepTime(send, sheetFor, r, ms)}
           ft={ft}
@@ -958,53 +988,62 @@ export function WorkoutRecorder({
 
 
           {((lapOpen && !plan.finishedAt) || quickRep) && (
-            // The quick controls for the last tap share Finish's row, so they cover nothing new; Finish keeps its place on the right.
-            <div className="flex w-full items-end gap-2">
-              {quickUndo && quickRep && (
-                // The last runner tapped: whose time, and a second either way or undo, without opening anything.
-                <div className="pointer-events-auto flex w-52 shrink-0 flex-col justify-center gap-1 rounded-xl border border-line-strong bg-surface px-1.5 py-1.5 shadow-sheet">
+            // A fixed layout: a left slot of constant size beside Finish, so Finish never moves or resizes.
+            // The slot holds the last tap's −1s · Undo · +1s for a few seconds, and otherwise the finished list.
+            <div className="flex w-full gap-2">
+              {quickUndo && quickRep ? (
+                <div className="pointer-events-auto flex h-20 w-44 shrink-0 flex-col justify-center gap-1 rounded-xl border border-line-strong bg-surface px-1.5 shadow-sheet">
                   <div className="truncate px-1 text-center text-xs text-ink-2">
                     <span className="font-semibold text-ink">{shortOf(quickUndo.athleteId)}</span> {quickRep.elapsedMs !== null ? ft(quickRep.elapsedMs) : ""}
                   </div>
                   <div className="grid grid-cols-3 gap-1">
-                    <button type="button" onClick={() => quickNudge(-1000)} className="h-11 rounded-md border border-line-strong font-mono text-sm text-ink active:bg-surface-2" aria-label="One second faster">
+                    <button type="button" onClick={() => quickNudge(-1000)} className="h-11 rounded-md border border-line-strong font-mono text-sm text-ink active:bg-surface-2" aria-label={`${nameOf.get(quickUndo.athleteId)}: one second faster`}>
                       −1s
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        send({ type: "void", targetEventId: quickUndo.undoId ?? quickUndo.eventId });
-                        setLastTap(null);
-                      }}
-                      className="h-11 rounded-md border border-line-strong text-sm font-semibold text-ink active:bg-surface-2"
-                      aria-label={`Undo ${nameOf.get(quickUndo.athleteId)}'s finish`}
-                    >
+                    <button type="button" onClick={quickUndoNow} className="h-11 rounded-md border border-line-strong text-sm font-semibold text-ink active:bg-surface-2" aria-label={`Undo ${nameOf.get(quickUndo.athleteId)}'s last change`}>
                       Undo
                     </button>
-                    <button type="button" onClick={() => quickNudge(1000)} className="h-11 rounded-md border border-line-strong font-mono text-sm text-ink active:bg-surface-2" aria-label="One second slower">
+                    <button type="button" onClick={() => quickNudge(1000)} className="h-11 rounded-md border border-line-strong font-mono text-sm text-ink active:bg-surface-2" aria-label={`${nameOf.get(quickUndo.athleteId)}: one second slower`}>
                       +1s
                     </button>
                   </div>
                 </div>
+              ) : (
+                lapOpen &&
+                !plan.finishedAt &&
+                listCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setListRep(listRepIndex)}
+                    className="pointer-events-auto flex h-20 w-44 shrink-0 flex-col items-center justify-center rounded-xl border border-line-strong bg-surface text-ink shadow-sheet active:bg-surface-2"
+                  >
+                    <span className="text-lg font-semibold tabular-nums">
+                      {listDone.length}/{listCount}
+                    </span>
+                    <span className="flex items-center text-xs text-ink-2">
+                      finished <ChevronRight className="size-3.5" />
+                    </span>
+                  </button>
+                )
               )}
               {lapOpen && !plan.finishedAt && (
-              <button
-                type="button"
-                onPointerDown={notePointerDown}
-                onClick={takeLap}
-                className="pointer-events-auto flex h-16 min-w-0 flex-1 items-center justify-center gap-3 rounded-xl bg-ink text-bg shadow-sheet select-none active:bg-ink/80"
-              >
-                <span className="text-xl font-semibold">Finish</span>
-                {pendingLaps.length > 0 && <span className="rounded-full bg-bg/20 px-2.5 py-0.5 text-sm font-medium">{pendingLaps.length} to name</span>}
-              </button>
+                <button
+                  type="button"
+                  onPointerDown={notePointerDown}
+                  onClick={takeLap}
+                  className="pointer-events-auto flex h-20 min-w-0 flex-1 items-center justify-center gap-3 rounded-xl bg-ink text-bg shadow-sheet select-none active:bg-ink/80"
+                >
+                  <span className="text-xl font-semibold">Finish</span>
+                  {pendingLaps.length > 0 && <span className="rounded-full bg-bg/20 px-2.5 py-0.5 text-sm font-medium">{pendingLaps.length} to name</span>}
+                </button>
               )}
             </div>
           )}
         </div>
       )}
 
-      {listOpen && listRepIndex >= 0 && (
-        <Sheet title={`Rep ${listRepIndex + 1} · ${listDone.length} of ${listCount} finished`} subtitle="Newest first. Nudge a time a second, undo it, or ⋯ for more." onClose={() => setListOpen(false)}>
+      {listRep !== null && listRepIndex >= 0 && (
+        <Sheet title={`Rep ${listRepIndex + 1} · ${listDone.length} of ${listCount} finished`} subtitle="Newest first. Nudge a time a second, undo it, or ⋯ for more." onClose={() => setListRep(null)}>
           {listDone.length === 0 ? (
             <p className="text-sm text-ink-3">Nobody&rsquo;s in yet.</p>
           ) : (
@@ -1020,20 +1059,20 @@ export function WorkoutRecorder({
                       {r.flag && <span className="text-[11px] text-gold-text">⚑ {r.flag.reason ?? "check"}</span>}
                     </div>
                   </div>
-                  <Button variant="secondary" size="sm" className="w-11 font-mono" onClick={() => nudge(r, -1000)} aria-label={`${nameOf.get(id)}: one second faster`}>
+                  <Button variant="secondary" size="touch" className="w-12 px-0 font-mono" onClick={() => nudge(r, -1000)} aria-label={`${nameOf.get(id)}: one second faster`}>
                     −1s
                   </Button>
-                  <Button variant="secondary" size="sm" className="w-11 font-mono" onClick={() => nudge(r, 1000)} aria-label={`${nameOf.get(id)}: one second slower`}>
+                  <Button variant="secondary" size="touch" className="w-12 px-0 font-mono" onClick={() => nudge(r, 1000)} aria-label={`${nameOf.get(id)}: one second slower`}>
                     +1s
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={() => undoFinish(r)} aria-label={`Undo ${nameOf.get(id)}'s finish`}>
-                    Undo
+                  <Button variant="secondary" size="touch" className="px-2.5" onClick={() => undoFinish(r)} aria-label={r.typedEventId ? `Remove ${nameOf.get(id)}'s typed time` : `Undo ${nameOf.get(id)}'s finish`}>
+                    {r.typedEventId ? "Remove typed" : "Undo"}
                   </Button>
                   {/* Give to…, Fix time and the rest live in the runner's sheet. */}
                   <button
                     type="button"
                     onClick={() => {
-                      setListOpen(false);
+                      setListRep(null);
                       setSheetFor(id);
                     }}
                     className="rounded-md p-2 text-ink-3 hover:bg-surface-2 hover:text-ink"
@@ -1340,9 +1379,9 @@ function AthleteActions({
               <div className="flex items-center justify-between gap-2">
                 <span className="min-w-0 text-sm text-ink">
                   <span className="text-gold-text">⚑</span> Flagged to check{rep.flag.reason ? `: ${rep.flag.reason}` : ""}
-                  <span className="block text-[13px] text-ink-2">by {rep.flag.by}</span>
+                  {rep.flag.by && <span className="block text-[13px] text-ink-2">by {rep.flag.by}</span>}
                 </span>
-                <Button variant="secondary" size="sm" onClick={() => act("void", { targetEventId: rep.flag!.eventId })}>
+                <Button variant="secondary" size="sm" onClick={() => rep.flag!.eventIds.forEach((id) => act("void", { targetEventId: id }))}>
                   Mark checked
                 </Button>
               </div>
@@ -1446,7 +1485,7 @@ function AthleteActions({
           ))}
       </div>
       <SectionLabel className="mt-5 mb-2">Their workout</SectionLabel>
-      <AthleteBreakdown reps={reps} list={list} last={null} onAddTime={onAddTime} onChecked={(r) => r.flag && act("void", { targetEventId: r.flag.eventId })} />
+      <AthleteBreakdown reps={reps} list={list} last={null} onAddTime={onAddTime} onChecked={(r) => r.flag?.eventIds.forEach((id) => act("void", { targetEventId: id }))} />
     </Sheet>
   );
 }

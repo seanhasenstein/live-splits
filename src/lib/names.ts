@@ -5,9 +5,13 @@
  * Each name is only as long as it has to be: one shared first name doesn't lengthen anyone else's.
  */
 export function shortNames(people: { id: string; name: string }[]): Map<string, string> {
+  // The last name is the last word that isn't a suffix ("Emma Rose Kay" → Kay; "Joe Smith Jr." → Smith).
+  const SUFFIX = /^(jr|sr|ii|iii|iv)\.?$/i;
   const parts = people.map(({ id, name }) => {
     const words = name.trim().split(/\s+/);
-    return { id, name: name.trim(), first: words[0] ?? "", last: words.slice(1).join(" ") };
+    const rest = words.slice(1);
+    const last = rest.filter((w) => !SUFFIX.test(w)).at(-1) ?? rest.join(" ");
+    return { id, name: name.trim(), first: words[0] ?? "", last };
   });
   const count = (key: (p: (typeof parts)[number]) => string) => {
     const n = new Map<string, number>();

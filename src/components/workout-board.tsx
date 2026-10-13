@@ -132,11 +132,11 @@ export function WorkoutBoard({
                     {byId.get(id)?.name ?? "?"} <span className="font-normal text-ink-2">· rep {i + 1}</span>
                   </span>
                   <span className="block truncate text-[12px] text-ink-3">
-                    {r.flag!.reason ? `${r.flag!.reason[0].toUpperCase()}${r.flag!.reason.slice(1)}` : "Flagged"} · {r.flag!.by}
+                    {[r.flag!.reason ? `${r.flag!.reason[0].toUpperCase()}${r.flag!.reason.slice(1)}` : "Flagged", r.flag!.by].filter(Boolean).join(" · ")}
                   </span>
                 </button>
                 <Time className="font-semibold text-ink">{r.status === "done" && r.elapsedMs !== null ? ft(r.elapsedMs) : "—"}</Time>
-                <Button variant="secondary" size="sm" onClick={() => send({ type: "void", targetEventId: r.flag!.eventId })}>
+                <Button variant="secondary" size="sm" onClick={() => r.flag!.eventIds.forEach((id) => send({ type: "void", targetEventId: id }))}>
                   Checked
                 </Button>
               </div>
@@ -302,7 +302,7 @@ export function WorkoutBoard({
           last={lastTimes[openId] ?? null}
           surface={surface}
           onAddTime={(r, ms) => setRepTime(send, openId, r, ms)}
-          onChecked={(r) => r.flag && send({ type: "void", targetEventId: r.flag.eventId })}
+          onChecked={(r) => r.flag?.eventIds.forEach((id) => send({ type: "void", targetEventId: id }))}
           onClose={() => setOpenId(null)}
         />
       )}

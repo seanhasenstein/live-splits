@@ -76,9 +76,9 @@ export async function recordWorkoutEvents(workout: Workout, inputs: WorkoutEvent
     if (e.type === "finish") return t.type === "lap" && t.groupId === e.groupId && t.repId === e.repId;
     return true;
   };
-  // A typed time is for a runner in the workout: planned, or moved in during it (a late arrival).
+  // A typed time or a flag is for a runner in the workout: planned, or moved in during it (a late arrival).
   const inWorkout = new Set(workout.athletes.map((a) => a.athleteId));
-  const typedFor = [...new Set(inputs.filter((e) => e.type === "time" && e.athleteId && !inWorkout.has(e.athleteId)).map((e) => e.athleteId!))];
+  const typedFor = [...new Set(inputs.filter((e) => (e.type === "time" || e.type === "flag") && e.athleteId && !inWorkout.has(e.athleteId)).map((e) => e.athleteId!))];
   if (typedFor.length) {
     for (const e of inputs) if (e.type === "move" && e.athleteId) inWorkout.add(e.athleteId);
     for (const e of await events.find({ workoutId: workout._id, type: "move", athleteId: { $in: typedFor } }, { projection: { athleteId: 1 } }).toArray()) inWorkout.add(e.athleteId!);
@@ -92,7 +92,7 @@ export async function recordWorkoutEvents(workout: Workout, inputs: WorkoutEvent
       (e.groupId === null || groups.has(e.groupId)) &&
       (e.athleteId === null || athletes.has(e.athleteId)) &&
       targetOk(e) &&
-      (e.type !== "time" || inWorkout.has(e.athleteId!)) &&
+      ((e.type !== "time" && e.type !== "flag") || inWorkout.has(e.athleteId!)) &&
       typedTimeOk(e) &&
       lapOk(e) &&
       flagOk(e) &&

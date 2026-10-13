@@ -5,8 +5,7 @@ import { WorkoutRecorder } from "@/components/workout-recorder";
 import { LayoutDashboard } from "lucide-react";
 import { AppHeader, LinkButton, Page } from "@/components/ui";
 import { canUseWorkouts, getSession, isSchoolCoach } from "@/lib/auth/session";
-import { listRoster } from "@/lib/data";
-import { getWorkout } from "@/lib/workouts";
+import { getWorkout, workoutPeople } from "@/lib/workouts";
 
 export const metadata: Metadata = { title: "Time workout" };
 
@@ -17,7 +16,7 @@ export default async function RecordWorkoutPage({ params, searchParams }: PagePr
   if (!canUseWorkouts(session)) redirect("/meets");
   const workout = await getWorkout(workoutId);
   if (!workout || workout.schoolId !== session!.schoolId) notFound();
-  const roster = await listRoster(workout.seasonId);
+  const roster = await workoutPeople(workout);
   return (
     <>
       <AppHeader

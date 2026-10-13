@@ -1,5 +1,6 @@
 import "server-only";
 import type { Condition, Surface, Workout, WorkoutEvent, WorkoutTemplate } from "@/lib/db/schema";
+import { listAthletes, listRoster, type RosterAthlete } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
 import { describePlan, surfaceOf } from "@/lib/workout-plan";
@@ -109,16 +110,31 @@ export async function lastTimeRan(workout: Workout): Promise<Record<string, Last
 export async function flagCounts(workoutIds: string[]): Promise<Map<string, number>> {
   const out = new Map<string, number>();
   if (workoutIds.length === 0) return out;
-  const events = await collection(await getDb(), "workoutEvents")
-    .find({ workoutId: { $in: workoutIds }, type: { $in: ["flag", "void"] } }, { projection: { clientEventId: 1, workoutId: 1, type: 1, athleteId: 1, repId: 1, targetEventId: 1 } })
-    .toArray();
-  const voided = new Set(events.filter((e) => e.type === "void").map((e) => e.targetEventId));
+  const events = collection(await getDb(), "workoutEvents");
+  // The flags, then only the voids aimed at them (not every Undo of every workout on the list).
+  const flags = await events.find({ workoutId: { $in: workoutIds }, type: "flag" }, { projection: { clientEventId: 1, workoutId: 1, athleteId: 1, repId: 1 } }).toArray();
+  if (flags.length === 0) return out;
+  const voided = new Set(
+    (await events.find({ workoutId: { $in: [...new Set(flags.map((f) => f.workoutId))] }, type: "void", targetEventId: { $in: flags.map((f) => f.clientEventId) } }, { projection: { targetEventId: 1 } }).toArray()).map((e) => e.targetEventId),
+  );
   const open = new Map<string, Set<string>>(); // workout -> runner:rep with a live flag
-  for (const e of events) {
-    if (e.type !== "flag" || voided.has(e.clientEventId)) continue;
+  for (const e of flags) {
+    if (voided.has(e.clientEventId)) continue;
     if (!open.has(e.workoutId)) open.set(e.workoutId, new Set());
     open.get(e.workoutId)!.add(`${e.athleteId}:${e.repId}`);
   }
   for (const [id, keys] of open) out.set(id, keys.size);
   return out;
+}
+
+/**
+ * Everyone a workout's screens need a name for: the season's roster, plus anyone in the workout who has
+ * since come off it (their times still need their name, not "?").
+ */
+export async function workoutPeople(workout: Workout): Promise<RosterAthlete[]> {
+  const roster = await listRoster(workout.seasonId);
+  const onRoster = new Set(roster.map((a) => a._id));
+  const missing = workout.athletes.map((a) => a.athleteId).filter((id) => !onRoster.has(id));
+  const extra = missing.length ? await listAthletes(workout.schoolId, missing) : [];
+  return [...roster, ...extra.map((a) => ({ ...a, defaultLevelId: "" }))];
 }

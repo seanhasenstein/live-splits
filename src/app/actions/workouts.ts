@@ -9,7 +9,7 @@ import { collection, COLLECTIONS } from "@/lib/db/collections";
 import { canTimeWorkout } from "@/lib/workout-events";
 import { addRepAtEnd, dropLastRep, expandSets, WorkoutPayload } from "@/lib/workout-plan";
 import type { Workout } from "@/lib/db/schema";
-import { getWorkout } from "@/lib/workouts";
+import { flagCounts, getWorkout } from "@/lib/workouts";
 
 /**
  * What an edit would break once times are in: a rep, group or runner with times taken out, or a
@@ -225,4 +225,13 @@ export async function changeRepsAction(workoutId: string, change: "add" | "drop"
     current = fresh;
   }
   return { error: "The plan was changing on another phone. Try again." };
+}
+
+/** How many times are flagged to check on a workout right now (for End workout's reminder). */
+export async function flagCountAction(workoutId: string): Promise<number> {
+  const session = await getSession();
+  if (!isSchoolCoach(session)) return 0;
+  const workout = await getWorkout(workoutId);
+  if (!workout || workout.schoolId !== session!.schoolId) return 0;
+  return (await flagCounts([workout._id])).get(workout._id) ?? 0;
 }

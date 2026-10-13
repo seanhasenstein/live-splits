@@ -8,7 +8,7 @@ export const differsFromTap = (r: AthleteRep) => r.typedEventId !== null && r.ta
 export function repCellTitle(r: AthleteRep, ft: (ms: number) => string): string | undefined {
   const bits = [
     r.typedEventId ? (r.tappedElapsedMs !== null ? `Typed in (tapped ${ft(r.tappedElapsedMs)})` : "Typed in") : null,
-    r.flag ? `Flagged to check${r.flag.reason ? `: ${r.flag.reason}` : ""} (${r.flag.by})` : null,
+    r.flag ? `Flagged to check${r.flag.reason ? `: ${r.flag.reason}` : ""}${r.flag.by ? ` (${r.flag.by})` : ""}` : null,
   ].filter(Boolean);
   return bits.length ? bits.join(" · ") : undefined;
 }
@@ -38,7 +38,11 @@ export function RepCell({
   return (
     <span className={`inline-flex flex-col items-end rounded px-1.5 py-0.5 leading-tight ${tone} ${differs ? "outline-2 outline-gold" : ""}`} title={title}>
       <Time className={`text-[13px] ${typed ? "underline decoration-dotted underline-offset-2" : ""}`}>
-        {flagged && <span className="mr-0.5 text-gold-text">⚑</span>}
+        {flagged && (
+          <span className="mr-0.5 text-gold-text" aria-label="Flagged to check">
+            ⚑
+          </span>
+        )}
         {time}
       </Time>
       {delta !== null && <Time className="text-[10px] opacity-75">{delta}</Time>}

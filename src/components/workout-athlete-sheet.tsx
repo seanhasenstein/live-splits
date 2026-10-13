@@ -168,7 +168,7 @@ export function AthleteBreakdown({
               {r.flag && (
                 <div className="-mt-1 flex items-center justify-between gap-2 pb-2 pl-[76px] text-[12px]">
                   <span className="min-w-0 truncate text-gold-text">
-                    ⚑ {r.flag.reason ? `${r.flag.reason[0].toUpperCase()}${r.flag.reason.slice(1)}` : "Flagged to check"} · {r.flag.by}
+                    ⚑ {[r.flag.reason ? `${r.flag.reason[0].toUpperCase()}${r.flag.reason.slice(1)}` : "Flagged to check", r.flag.by].filter(Boolean).join(" · ")}
                   </span>
                   {onChecked && (
                     <button type="button" onClick={() => onChecked(r)} className="shrink-0 rounded-md border border-line-strong px-2 py-1 font-medium text-ink hover:bg-surface-2">

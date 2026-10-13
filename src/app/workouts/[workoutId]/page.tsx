@@ -6,10 +6,10 @@ import { canUseWorkouts, getSession, isSchoolCoach } from "@/lib/auth/session";
 import { SessionMenu } from "@/components/session-menu";
 import { WorkoutBoard } from "@/components/workout-board";
 import { WorkoutFinishButton } from "@/components/workout-finish-button";
-import { getProgram, listRoster } from "@/lib/data";
+import { getProgram } from "@/lib/data";
 import { conditionsText, describePlan, describeRest, describeTotal, EFFORT_LABEL, surfaceOf, surfaceText } from "@/lib/workout-plan";
 import { flattenPlan } from "@/lib/workout-replay";
-import { flagCounts, getWorkout, lastTimeRan } from "@/lib/workouts";
+import { getWorkout, lastTimeRan, workoutPeople } from "@/lib/workouts";
 import { formatLocalDateLong } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Workout" };
@@ -21,7 +21,7 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
   const coach = isSchoolCoach(session);
   const workout = await getWorkout(workoutId);
   if (!workout || workout.schoolId !== session!.schoolId) notFound();
-  const [roster, program, lastTimes, flags] = await Promise.all([listRoster(workout.seasonId), getProgram(workout.schoolId, "xc"), lastTimeRan(workout), flagCounts([workout._id])]);
+  const [roster, program, lastTimes] = await Promise.all([workoutPeople(workout), getProgram(workout.schoolId, "xc"), lastTimeRan(workout)]);
   const levelLabel = (id: string) => program?.settings.levels.find((l) => l.id === id)?.label ?? id;
   const people = roster.map((a) => ({ id: a._id, name: a.displayName, gender: a.gender, level: levelLabel(a.defaultLevelId) }));
   const reps = flattenPlan(workout);
@@ -37,7 +37,7 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
           action={
             coach && (
             <div className="flex flex-wrap items-center justify-end gap-2">
-              <WorkoutFinishButton workoutId={workout._id} finished={!!workout.finishedAt} toCheck={flags.get(workout._id) ?? 0} />
+              <WorkoutFinishButton workoutId={workout._id} finished={!!workout.finishedAt} />
               <AnchorButton href={`/api/workouts/${workout._id}/export`} size="sm" variant="secondary" download>
                 <Download className="size-3.5" />
                 CSV
