@@ -65,8 +65,8 @@ function beep(go: boolean) {
 /** The beep is opt-in ("1"); the buzz and the flash are always on. */
 const BEEP_KEY = "ls_workout_beep";
 const SINK_KEY = "ls_workout_sink";
-/** How long a tapped runner's tile offers Undo. */
-const UNDO_MS = 10_000;
+/** How long the quick Undo for the last tap stays beside Finish. */
+const QUICK_UNDO_MS = 6_000;
 const SETTLE_KEY = "ls_workout_settle_ms";
 const tapTime = () => {
   const now = Date.now();
@@ -127,11 +127,10 @@ export function WorkoutRecorder({
   const settleMs = settlePref === "600" ? 600 : settlePref === "2000" ? 2000 : 1200;
   const [frozen, setFrozen] = useState<{ key: string; ids: string[] } | null>(null);
   const [tapSeq, setTapSeq] = useState(0);
-  /**
-   * Runners tapped in lately (`${athleteId}:${repId}` -> the finish and when, on the clock): each one's tile
-   * offers Undo for a few seconds, so any of a pack can be taken back, not just the last.
-   */
-  const [recent, setRecent] = useState<Record<string, { eventId: string; at: number }>>({});
+  /** The last runner tapped in, for the quick Undo beside Finish (a few seconds, on the clock). */
+  const [lastTap, setLastTap] = useState<{ eventId: string; athleteId: string; at: number } | null>(null);
+  /** The rep's finished list (from the "n/m in" count): undo, nudge or fix any runner's time. */
+  const [listOpen, setListOpen] = useState(false);
   // A moment after the last tap the tiles settle.
   useEffect(() => {
     if (tapSeq === 0) return;
@@ -202,8 +201,6 @@ export function WorkoutRecorder({
     frozen && frozen.key === tileKey
       ? [...frozen.ids.map((id) => sunk.find((t) => t.id === id)).filter((t) => t !== undefined), ...sunk.filter((t) => !frozen.ids.includes(t.id))]
       : sunk;
-  const inCount = tiles.filter(({ r }) => r.status === "done").length;
-  const outOf = tiles.filter(({ r }) => r.status !== "skipped").length;
   const finishedRows = lastIndex >= 0 ? rowsAt(lastIndex).filter(({ r }) => r.status === "done").sort((a, b) => (a.r.finishMs ?? 0) - (b.r.finishMs ?? 0)) : [];
   const notRunning = lastIndex >= 0 ? rowsAt(lastIndex).filter(({ r }) => r.status === "skipped" || r.status === "stopped" || r.status === "unfinished") : [];
   // Runners still out when the coach started the rest: they can still be tapped in for that rep.
@@ -273,25 +270,29 @@ export function WorkoutRecorder({
     const eventId = lap
       ? send({ type: "finish", groupId: group.id, athleteId, repId, targetEventId: lap.clientEventId, timeMs: lapAt(lap), at })
       : send({ type: "finish", groupId: group.id, athleteId, repId, at });
-    // Hold the tiles where they are until tapping pauses; their own Undo shows for a few seconds.
+    // Hold the tiles where they are until tapping pauses; the quick Undo shows for a few seconds.
     if (sink) setFrozen((f) => (f && f.key === tileKey ? f : { key: tileKey, ids: tiles.map((t) => t.id) }));
     setTapSeq((n) => n + 1);
-    setRecent((m) => ({ ...m, [`${athleteId}:${repId}`]: { eventId, at: now } }));
+    setLastTap({ eventId, athleteId, at: now });
   };
-  // The Undo a tapped runner's tile (or results row) offers for a few seconds after the tap.
-  const undoFor = (athleteId: string, r: AthleteRep) => {
-    const t = recent[`${athleteId}:${r.repId}`];
-    return t && r.status === "done" && r.finishEventId === t.eventId && now - t.at < UNDO_MS ? t : null;
+  // The quick Undo: the last runner tapped in, while it's fresh and still stands.
+  const quickUndo =
+    lastTap && now - lastTap.at < QUICK_UNDO_MS && events.some((e) => e.clientEventId === lastTap.eventId) && !voidedIds.has(lastTap.eventId) ? lastTap : null;
+
+  // The rep the finished list is about: the one running, or the one just run.
+  const listRepIndex = lapRepIndex;
+  const listRows = listRepIndex < 0 ? [] : rowsAt(listRepIndex);
+  const listDone = listRows.filter(({ r }) => r.status === "done").sort((a, b) => (b.r.finishMs ?? 0) - (a.r.finishMs ?? 0));
+  const listOut = listRows.filter(({ r }) => r.status === "running");
+  const listCount = listRows.filter(({ r }) => r.status !== "skipped" && r.status !== "stopped" && r.status !== "not_run").length;
+  /** Nudge a runner's time by a second (typed or tapped), from the list. */
+  const nudge = (r: AthleteRep, deltaMs: number) => {
+    if (r.typedEventId && r.elapsedMs !== null) send({ type: "edit", targetEventId: r.typedEventId, timeMs: Math.max(1000, r.elapsedMs + deltaMs) });
+    else if (r.finishEventId && r.finishMs !== null) send({ type: "edit", targetEventId: r.finishEventId, timeMs: r.finishMs + deltaMs });
   };
-  const undoTap = (athleteId: string, r: AthleteRep) => {
-    const t = undoFor(athleteId, r);
-    if (!t) return;
-    send({ type: "void", targetEventId: t.eventId });
-    setRecent((m) => {
-      const next = { ...m };
-      delete next[`${athleteId}:${r.repId}`];
-      return next;
-    });
+  const undoFinish = (r: AthleteRep) => {
+    const id = r.typedEventId ?? r.finishEventId;
+    if (id) send({ type: "void", targetEventId: id });
   };
   // Starting the rest early takes two taps: the first arms it for a few seconds, so a stray tap mid-rep does nothing.
   const [restArmedKey, setRestArmedKey] = useState<string | null>(null);
@@ -466,10 +467,16 @@ export function WorkoutRecorder({
             repLabel(repIndex)
           )}
         </div>
-          {phase.kind === "running" && outOf > 0 && (
-            <span className="shrink-0 text-sm font-semibold text-ink tabular-nums">
-              {inCount}/{outOf} in
-            </span>
+          {/* Who's in on this rep; opens the list to undo, nudge or fix any of them. */}
+          {(phase.kind === "running" || phase.kind === "rest") && listCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setListOpen(true)}
+              className="-mr-1.5 shrink-0 rounded-md border border-ink/15 bg-ink/[0.04] px-2 py-1 text-sm font-semibold text-ink tabular-nums hover:bg-ink/[0.08]"
+              aria-label={`Rep ${listRepIndex + 1}: ${listDone.length} of ${listCount} in. Open the list`}
+            >
+              {listDone.length}/{listCount} in
+            </button>
           )}
         </div>
         {phase.kind !== "done" && (
@@ -565,8 +572,7 @@ export function WorkoutRecorder({
                 onClick={() => {
                   if (r.status === "running") return finish(id);
                   // A quick second tap on a runner just tapped in is a double tap, not a request for their sheet.
-                  const t = undoFor(id, r);
-                  if (t && now - t.at < 800) return;
+                  if (lastTap && lastTap.athleteId === id && now - lastTap.at < 800) return;
                   setSheetFor(id);
                 }}
                 className={`flex w-full rounded-lg border text-left ${large ? "min-h-16 items-center justify-between gap-3 py-2 pr-11 pl-4" : "h-20 flex-col items-start justify-between px-3 py-2"} ${
@@ -609,21 +615,9 @@ export function WorkoutRecorder({
                   </span>
                 )}
               </button>
-              {/* For a few seconds after the tap the corner is Undo (any of a pack can be taken back); then the ⋯ menu. */}
-              {undoFor(id, r) ? (
-                <button
-                  type="button"
-                  onClick={() => undoTap(id, r)}
-                  className={`absolute right-1.5 rounded-md border border-line-strong bg-surface px-2 py-1 text-xs font-medium text-ink shadow-card hover:bg-surface-2 ${large ? "top-1/2 -translate-y-1/2" : "top-1.5"}`}
-                  aria-label={`Undo ${nameOf.get(id)}'s finish`}
-                >
-                  Undo
-                </button>
-              ) : (
-                <button type="button" onClick={() => setSheetFor(id)} className={`absolute right-1 rounded p-1.5 text-ink-3 ${large ? "top-1/2 -translate-y-1/2" : "top-1"} hover:bg-surface-2 hover:text-ink`} aria-label={`More for ${nameOf.get(id)}`}>
-                  <MoreHorizontal className="size-4" />
-                </button>
-              )}
+              <button type="button" onClick={() => setSheetFor(id)} className={`absolute right-1 rounded p-1.5 text-ink-3 ${large ? "top-1/2 -translate-y-1/2" : "top-1"} hover:bg-surface-2 hover:text-ink`} aria-label={`More for ${nameOf.get(id)}`}>
+                <MoreHorizontal className="size-4" />
+              </button>
             </div>
           ))}
         </div>
@@ -730,14 +724,7 @@ export function WorkoutRecorder({
                   <Time className="w-10 text-right text-[13px] text-ink-3">{r.goalMs !== null ? ft(r.goalMs, "seconds") : ""}</Time>
                   <Time className="w-12 text-right font-semibold text-ink">{r.elapsedMs !== null ? ft(r.elapsedMs) : "—"}</Time>
                 </button>
-                {/* Just tapped in (often from a still-out tile, which then goes away): Undo here for a few seconds. */}
-                {undoFor(id, r) ? (
-                  <button type="button" onClick={() => undoTap(id, r)} className="mr-2 ml-1 w-14 rounded-md border border-line-strong bg-surface py-1 text-xs font-medium text-ink hover:bg-surface-2" aria-label={`Undo ${nameOf.get(id)}'s finish`}>
-                    Undo
-                  </button>
-                ) : (
-                  <Time className={`w-12 pr-4 text-right text-[13px] ${r.deltaMs !== null ? deltaTone(r.deltaMs) : "text-ink-3"}`}>{r.deltaMs !== null ? deltaText(r.deltaMs, tenths) : ""}</Time>
-                )}
+                <Time className={`w-12 pr-4 text-right text-[13px] ${r.deltaMs !== null ? deltaTone(r.deltaMs) : "text-ink-3"}`}>{r.deltaMs !== null ? deltaText(r.deltaMs, tenths) : ""}</Time>
               </div>
             ))}
             {notRunning.map(({ id, r }) => (
@@ -923,17 +910,84 @@ export function WorkoutRecorder({
 
 
           {lapOpen && !plan.finishedAt && (
-            <button
-              type="button"
-              onPointerDown={notePointerDown}
-              onClick={takeLap}
-              className="pointer-events-auto flex h-16 w-full items-center justify-center gap-3 rounded-xl bg-ink text-bg shadow-sheet select-none active:bg-ink/80"
-            >
-              <span className="text-xl font-semibold">Finish</span>
-              {pendingLaps.length > 0 && <span className="rounded-full bg-bg/20 px-2.5 py-0.5 text-sm font-medium">{pendingLaps.length} to name</span>}
-            </button>
+            // The quick Undo for the last tap shares Finish's row, so it covers nothing new; Finish keeps its place on the right.
+            <div className="flex w-full gap-2">
+              {quickUndo && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    send({ type: "void", targetEventId: quickUndo.eventId });
+                    setLastTap(null);
+                  }}
+                  className="pointer-events-auto flex h-16 w-28 shrink-0 flex-col items-center justify-center rounded-xl border border-line-strong bg-surface text-ink shadow-sheet active:bg-surface-2"
+                  aria-label={`Undo ${nameOf.get(quickUndo.athleteId)}'s finish`}
+                >
+                  <span className="text-sm font-semibold">↶ Undo</span>
+                  <span className="max-w-full truncate px-2 text-xs text-ink-2">{(nameOf.get(quickUndo.athleteId) ?? "").split(" ")[0]}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onPointerDown={notePointerDown}
+                onClick={takeLap}
+                className="pointer-events-auto flex h-16 min-w-0 flex-1 items-center justify-center gap-3 rounded-xl bg-ink text-bg shadow-sheet select-none active:bg-ink/80"
+              >
+                <span className="text-xl font-semibold">Finish</span>
+                {pendingLaps.length > 0 && <span className="rounded-full bg-bg/20 px-2.5 py-0.5 text-sm font-medium">{pendingLaps.length} to name</span>}
+              </button>
+            </div>
           )}
         </div>
+      )}
+
+      {listOpen && listRepIndex >= 0 && (
+        <Sheet title={`Rep ${listRepIndex + 1} · ${listDone.length} of ${listCount} in`} subtitle="Newest first. Nudge a time a second, undo it, or ⋯ for more." onClose={() => setListOpen(false)}>
+          {listDone.length === 0 ? (
+            <p className="text-sm text-ink-3">Nobody&rsquo;s in yet.</p>
+          ) : (
+            <div className="divide-y divide-line">
+              {listDone.map(({ id, r }) => (
+                <div key={id} className="flex items-center gap-2 py-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-ink">{nameOf.get(id) ?? "?"}</div>
+                    <div className="flex items-baseline gap-2">
+                      <Time className="text-base font-semibold text-ink">{r.elapsedMs !== null ? ft(r.elapsedMs) : "—"}</Time>
+                      {r.deltaMs !== null && <Time className={`text-xs ${deltaTone(r.deltaMs)}`}>{deltaText(r.deltaMs, tenths)}</Time>}
+                      {r.typedEventId && <span className="text-[11px] text-ink-3">typed</span>}
+                    </div>
+                  </div>
+                  <Button variant="secondary" size="sm" className="w-11 font-mono" onClick={() => nudge(r, -1000)} aria-label={`${nameOf.get(id)}: one second faster`}>
+                    −1s
+                  </Button>
+                  <Button variant="secondary" size="sm" className="w-11 font-mono" onClick={() => nudge(r, 1000)} aria-label={`${nameOf.get(id)}: one second slower`}>
+                    +1s
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => undoFinish(r)} aria-label={`Undo ${nameOf.get(id)}'s finish`}>
+                    Undo
+                  </Button>
+                  {/* Give to…, Fix time and the rest live in the runner's sheet. */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setListOpen(false);
+                      setSheetFor(id);
+                    }}
+                    className="rounded-md p-2 text-ink-3 hover:bg-surface-2 hover:text-ink"
+                    aria-label={`More for ${nameOf.get(id)}`}
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {listOut.length > 0 && (
+            <>
+              <SectionLabel className="mt-4 mb-1.5">Still out</SectionLabel>
+              <p className="text-sm text-ink-2">{listOut.map(({ id }) => nameOf.get(id) ?? "?").join(", ")}</p>
+            </>
+          )}
+        </Sheet>
       )}
 
       {marking && (
