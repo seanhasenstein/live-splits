@@ -132,7 +132,7 @@ export function WorkoutRecorder({
   const [frozen, setFrozen] = useState<{ key: string; ids: string[] } | null>(null);
   const [tapSeq, setTapSeq] = useState(0);
   /** The last runner tapped in, for the quick Undo beside Finish (a few seconds, on the clock). */
-  const [lastTap, setLastTap] = useState<{ eventId: string; athleteId: string; at: number; undoId?: string } | null>(null);
+  const [lastTap, setLastTap] = useState<{ eventId: string; athleteId: string; at: number; undoId?: string; groupId: string } | null>(null);
   /** The rep's finished list (from the "n/m in" count): undo, nudge or fix any runner's time. */
   const [listOpen, setListOpen] = useState(false);
   // A moment after the last tap the tiles settle.
@@ -277,11 +277,12 @@ export function WorkoutRecorder({
     // Hold the tiles where they are until tapping pauses; the quick Undo shows for a few seconds.
     if (sink) setFrozen((f) => (f && f.key === tileKey ? f : { key: tileKey, ids: tiles.map((t) => t.id) }));
     setTapSeq((n) => n + 1);
-    setLastTap({ eventId, athleteId, at: now });
+    setLastTap({ eventId, athleteId, at: now, groupId: group.id });
   };
   // The quick Undo: the last runner tapped in, while it's fresh and still stands.
   const quickUndo =
-    lastTap && now - lastTap.at < QUICK_UNDO_MS && events.some((e) => e.clientEventId === lastTap.eventId) && !voidedIds.has(lastTap.eventId) ? lastTap : null;
+    // (Only on the group it was tapped on: switching groups puts it away.)
+    lastTap && lastTap.groupId === group.id && now - lastTap.at < QUICK_UNDO_MS && events.some((e) => e.clientEventId === lastTap.eventId) && !voidedIds.has(lastTap.eventId) ? lastTap : null;
 
   // The quick controls' runner and rep, to nudge; a nudge keeps them up a little longer.
   const quickRep = quickUndo ? (state.athletes.get(quickUndo.athleteId)?.find((r) => r.finishEventId === quickUndo.eventId || r.typedEventId === quickUndo.eventId) ?? null) : null;
@@ -890,7 +891,7 @@ export function WorkoutRecorder({
             } else eventId = send({ type: "finish", groupId: group.id, athleteId: sheetFor, repId: mine.repId, timeMs: theirs.finishMs });
             setSheetFor(null);
             // The quick −1s · Undo · +1s box, so "just behind" is one more tap.
-            setLastTap({ eventId, athleteId: sheetFor, at: now, undoId });
+            setLastTap({ eventId, athleteId: sheetFor, at: now, undoId, groupId: group.id });
           }}
           onGiveTo={(otherId) => {
             const ri = phase.kind === "running" ? repIndex : Math.max(0, lastIndex);
@@ -902,7 +903,7 @@ export function WorkoutRecorder({
             send({ type: "void", targetEventId: r.finishEventId });
             setSheetFor(null);
             // The quick −1s · Undo · +1s box for the runner who now has the time.
-            setLastTap({ eventId: given, athleteId: otherId, at: now });
+            setLastTap({ eventId: given, athleteId: otherId, at: now, groupId: group.id });
           }}
           onAddTime={(r, ms) => setRepTime(send, sheetFor, r, ms)}
           ft={ft}
