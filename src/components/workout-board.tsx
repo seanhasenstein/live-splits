@@ -10,7 +10,7 @@ import { groupTint, ON_GOAL_MS, repCellTone } from "@/components/workout-tint";
 import { offsetForTap, useClock } from "@/lib/client/clock";
 import { useTimeFormat } from "@/lib/client/time-format";
 import { useWorkoutEvents } from "@/lib/client/use-workout-events";
-import type { Workout } from "@/lib/db/schema";
+import type { Surface, Workout } from "@/lib/db/schema";
 import type { LastTime } from "@/lib/workouts";
 import { type GroupPhase, type GroupRepLog, replayWorkout, summarize } from "@/lib/workout-replay";
 import { formatElapsed, parseDuration } from "@/lib/time";
@@ -34,13 +34,13 @@ export function WorkoutBoard({
   initialPlan,
   people,
   lastTimes,
-  onGrass,
+  surface,
 }: {
   workoutId: string;
   initialPlan: Plan;
   people: Person[];
   lastTimes: Record<string, LastTime>;
-  onGrass: boolean;
+  surface: Surface;
 }) {
   const { events, plan, recording, send } = useWorkoutEvents(workoutId, initialPlan);
   const { ft, team } = useTimeFormat();
@@ -249,7 +249,7 @@ export function WorkoutBoard({
           reps={reps}
           list={state.athletes.get(openId)!}
           last={lastTimes[openId] ?? null}
-          onGrass={onGrass}
+          surface={surface}
           onAddTime={(r, ms) => setRepTime(send, openId, r, ms)}
           onClose={() => setOpenId(null)}
         />

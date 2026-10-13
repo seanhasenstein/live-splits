@@ -1165,7 +1165,7 @@ function AthleteActions({
           ))}
       </div>
       <SectionLabel className="mt-5 mb-2">Their workout</SectionLabel>
-      <AthleteBreakdown reps={reps} list={list} last={null} onGrass={false} onAddTime={onAddTime} />
+      <AthleteBreakdown reps={reps} list={list} last={null} onAddTime={onAddTime} />
     </Sheet>
   );
 }

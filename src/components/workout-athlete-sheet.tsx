@@ -6,6 +6,8 @@ import { ON_GOAL_MS } from "@/components/workout-tint";
 import { useTimeFormat } from "@/lib/client/time-format";
 import { type AthleteRep, type FlatRep, summarize } from "@/lib/workout-replay";
 import { formatDateWithYear, formatElapsed, parseDuration } from "@/lib/time";
+import type { Surface } from "@/lib/db/schema";
+import { conditionsText, surfaceText } from "@/lib/workout-plan";
 import type { LastTime } from "@/lib/workouts";
 
 
@@ -23,7 +25,7 @@ export function WorkoutAthleteSheet({
   reps,
   list,
   last,
-  onGrass,
+  surface,
   onAddTime,
   onClose,
 }: {
@@ -33,8 +35,8 @@ export function WorkoutAthleteSheet({
   list: AthleteRep[];
   /** Their last run of the same reps, if any. */
   last: LastTime | null;
-  /** Today's workout is on grass. */
-  onGrass: boolean;
+  /** Where today's workout is run. */
+  surface: Surface;
   /** A typed time for a rep: a new finish, or an edit to the one there. */
   onAddTime: (rep: AthleteRep, elapsedMs: number) => void;
   onClose: () => void;
@@ -45,7 +47,7 @@ export function WorkoutAthleteSheet({
   const goalPerBase = goalMs !== null ? (goalMs * base.meters) / reps[list.findIndex((r) => r.goalMs !== null)].meters : null;
   return (
     <Sheet title={name} subtitle={[groupName, goalPerBase !== null ? `goal ${ft(goalPerBase, "seconds")} per ${base.label}` : "no goal"].filter(Boolean).join(" · ")} onClose={onClose}>
-      <AthleteBreakdown reps={reps} list={list} last={last} onGrass={onGrass} onAddTime={onAddTime} />
+      <AthleteBreakdown reps={reps} list={list} last={last} surface={surface} onAddTime={onAddTime} />
     </Sheet>
   );
 }
@@ -59,13 +61,14 @@ export function AthleteBreakdown({
   reps,
   list,
   last,
-  onGrass,
+  surface = null,
   onAddTime,
 }: {
   reps: FlatRep[];
   list: AthleteRep[];
   last: LastTime | null;
-  onGrass: boolean;
+  /** Today's surface, to say when last time was somewhere else. */
+  surface?: Surface | null;
   onAddTime: (rep: AthleteRep, elapsedMs: number) => void;
 }) {
   const { ft, team } = useTimeFormat();
@@ -101,7 +104,7 @@ export function AthleteBreakdown({
 
       {last && (
         <p className="border-b border-line py-2.5 text-[13px] text-ink-2">
-          <span className="font-medium text-ink">Last time</span> ({formatDateWithYear(last.date)}{last.approximateDistances !== onGrass ? (last.approximateDistances ? ", on grass" : ", not on grass") : ""}): {per(last.avgPaceMsPerKm) !== null ? `${ft(per(last.avgPaceMsPerKm)!)} average per ${base.label}` : "no times"}
+          <span className="font-medium text-ink">Last time</span> ({[formatDateWithYear(last.date), surface && last.surface !== surface ? surfaceText(last.surface) : null, last.conditions.length ? conditionsText(last.conditions) : null].filter(Boolean).join(", ")}): {per(last.avgPaceMsPerKm) !== null ? `${ft(per(last.avgPaceMsPerKm)!)} average per ${base.label}` : "no times"}
           {last.avgDeltaMs !== null && `, ${signed(last.avgDeltaMs)} vs goal then`}
           {per(last.avgPaceMsPerKm) !== null && per(s.avgPaceMsPerKm) !== null && (() => {
             const d = per(s.avgPaceMsPerKm)! - per(last.avgPaceMsPerKm)!;

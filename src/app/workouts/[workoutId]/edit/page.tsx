@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { WorkoutForm } from "@/components/workout-form";
 import { AppHeader, Page, PageTitle } from "@/components/ui";
 import { getSession, isSchoolCoach } from "@/lib/auth/session";
-import { toSetInputs } from "@/lib/workout-plan";
+import { surfaceOf, toSetInputs } from "@/lib/workout-plan";
 import { workoutFormData } from "@/lib/workout-form-data";
 import { getWorkout } from "@/lib/workouts";
 
@@ -28,7 +28,8 @@ export default async function EditWorkoutPage({ params }: PageProps<"/workouts/[
             name: workout.name,
             date: workout.date,
             place: workout.place,
-            approximateDistances: workout.approximateDistances,
+            surface: surfaceOf(workout),
+            conditions: workout.conditions,
             effort: workout.effort,
             sets: toSetInputs(workout.sets),
             groups: workout.groups,

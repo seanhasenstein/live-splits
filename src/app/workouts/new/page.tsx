@@ -8,7 +8,7 @@ import { Alert, AppHeader, Card, CardBody, CardHeader, Page, PageTitle } from "@
 import { getSession, isSchoolCoach } from "@/lib/auth/session";
 import { getProgram, getSchool } from "@/lib/data";
 import { workoutFormData } from "@/lib/workout-form-data";
-import { describePlan, EFFORT_LABEL, toSetInputs } from "@/lib/workout-plan";
+import { describePlan, EFFORT_LABEL, surfaceOf, toSetInputs } from "@/lib/workout-plan";
 import { listTemplates } from "@/lib/workouts";
 
 export const metadata: Metadata = { title: "New workout" };
@@ -64,7 +64,8 @@ export default async function NewWorkoutPage({ searchParams }: PageProps<"/worko
               name: template?.name ?? "",
               date: today,
               place: null,
-              approximateDistances: template?.approximateDistances ?? true,
+              surface: template ? surfaceOf(template) : "grass",
+              conditions: [],
               effort: template?.effort ?? "vo2",
               // Fresh set ids: the workout's reps are its own, not the template's.
               sets: template ? toSetInputs(template.sets).map((s) => ({ ...s, id: undefined })) : [{ count: 12, value: 400, unit: "m", rest: { kind: "time", ms: 60_000 }, restAfter: null }],

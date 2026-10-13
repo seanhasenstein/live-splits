@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DistanceUnit, Rest, type RepSet, WorkoutEffort, WorkoutGroup } from "@/lib/db/schema";
+import { Condition, DistanceUnit, Rest, type RepSet, Surface, WorkoutEffort, WorkoutGroup } from "@/lib/db/schema";
 import { distanceValue } from "@/lib/distance";
 
 /**
@@ -22,7 +22,8 @@ export const WorkoutPayload = z.object({
   name: z.string().trim().min(1, "Give the workout a name").max(120),
   date: z.iso.date(),
   place: z.string().trim().max(120).nullable(),
-  approximateDistances: z.boolean(),
+  surface: Surface,
+  conditions: z.array(Condition).max(6),
   effort: WorkoutEffort,
   sets: z.array(PlanSetInput).min(1, "Add at least one set").max(30),
   groups: z.array(WorkoutGroup).min(1).max(12),
@@ -118,3 +119,21 @@ export function dropLastRep(sets: RepSet[]): RepSet[] | null {
   const rest = sets.slice(0, -1);
   return [...rest.slice(0, -1), { ...rest[rest.length - 1], restAfter: null }];
 }
+
+export const SURFACE_LABEL: Record<Surface, string> = { track: "Track", grass: "Grass", road: "Road", trail: "Trail" };
+const SURFACE_PHRASE: Record<Surface, string> = { track: "on the track", grass: "on grass", road: "on the road", trail: "on trails" };
+
+/** A workout's surface; older ones only had "approximate distances", which meant grass. */
+export const surfaceOf = (w: { surface?: Surface | null; approximateDistances: boolean }): Surface => w.surface ?? (w.approximateDistances ? "grass" : "track");
+
+/** "on the track", "on grass", … */
+export const surfaceText = (s: Surface) => SURFACE_PHRASE[s];
+
+export const CONDITION_LABEL: Record<Condition, string> = { hot: "Hot", cold: "Cold", windy: "Windy", rain: "Rain", muddy: "Muddy", hilly: "Hilly" };
+
+/** "hot, windy", always in the same order whatever order they were tagged in. */
+export const conditionsText = (c: Condition[]) =>
+  Condition.options
+    .filter((x) => c.includes(x))
+    .map((x) => CONDITION_LABEL[x].toLowerCase())
+    .join(", ");

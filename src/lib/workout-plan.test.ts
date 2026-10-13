@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RepSet } from "@/lib/db/schema";
-import { addRepAtEnd, describePlan, describeRest, dropLastRep, expandSets, toSetInputs } from "./workout-plan";
+import { addRepAtEnd, conditionsText, describePlan, describeRest, dropLastRep, expandSets, surfaceOf, surfaceText, toSetInputs } from "./workout-plan";
 
 const m = (meters: number) => ({ value: meters, unit: "m" as const, meters });
 const sets: RepSet[] = [
@@ -47,5 +47,15 @@ describe("plan round trips and labels", () => {
   it("add, drop, add again reuses the free id without colliding", () => {
     const dropped = dropLastRep(addRepAtEnd(sets))!;
     expect(addRepAtEnd(dropped)[1].reps.map((r) => r.id)).toEqual(["s2-r1", "s2-r2"]);
+  });
+});
+
+describe("surface and conditions", () => {
+  it("older workouts read their surface from the grass flag; tags read in a fixed order", () => {
+    expect(surfaceOf({ surface: null, approximateDistances: true })).toBe("grass");
+    expect(surfaceOf({ surface: null, approximateDistances: false })).toBe("track");
+    expect(surfaceOf({ surface: "trail", approximateDistances: true })).toBe("trail");
+    expect(surfaceText("track")).toBe("on the track");
+    expect(conditionsText(["windy", "hot"])).toBe("hot, windy");
   });
 });

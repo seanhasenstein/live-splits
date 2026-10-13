@@ -46,6 +46,14 @@ export type RepSet = z.infer<typeof RepSet>;
 export const WorkoutEffort = z.enum(["vo2", "threshold", "tempo", "race", "custom"]);
 export type WorkoutEffort = z.infer<typeof WorkoutEffort>;
 
+/** Where it was run. Track distances are measured; the others are approximate. */
+export const Surface = z.enum(["track", "grass", "road", "trail"]);
+export type Surface = z.infer<typeof Surface>;
+
+/** What the day was like, tagged by the coach, so a slow day explains itself later. */
+export const Condition = z.enum(["hot", "cold", "windy", "rain", "muddy", "hilly"]);
+export type Condition = z.infer<typeof Condition>;
+
 export const WorkoutGroup = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -73,8 +81,11 @@ export const Workout = tenantDoc({
   timeZone: z.string().min(1),
   /** Where, free text ("school grounds, grass loop"). Distances there may be approximate. */
   place: z.string().nullable(),
-  /** True on grass or anywhere the distances are approximate: paces are shown as rough. */
+  /** True anywhere but the track: distances are approximate. Kept in step with surface. */
   approximateDistances: z.boolean(),
+  /** Null on workouts from before surfaces: read approximateDistances (true was "on grass"). */
+  surface: Surface.nullable().default(null),
+  conditions: z.array(Condition).default([]),
   effort: WorkoutEffort,
   sets: z.array(RepSet).min(1),
   groups: z.array(WorkoutGroup).min(1),
@@ -95,6 +106,7 @@ export const WorkoutTemplate = tenantDoc({
   effort: WorkoutEffort,
   sets: z.array(RepSet).min(1),
   approximateDistances: z.boolean(),
+  surface: Surface.nullable().default(null),
 });
 export type WorkoutTemplate = z.infer<typeof WorkoutTemplate>;
 

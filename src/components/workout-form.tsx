@@ -3,10 +3,10 @@
 import { Plus, Trash2, X } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { saveWorkoutAction } from "@/app/actions/workouts";
-import { Alert, Button, Card, CardBody, CardHeader, Checkbox, CheckboxCard, Field, Input, LinkButton, SectionLabel, Select } from "@/components/ui";
-import type { DistanceUnit, Rest, WorkoutEffort } from "@/lib/db/schema";
+import { Alert, Button, Card, CardBody, CardHeader, Checkbox, Field, Input, LinkButton, SectionLabel, Segmented, Select } from "@/components/ui";
+import type { Condition, DistanceUnit, Rest, Surface, WorkoutEffort } from "@/lib/db/schema";
 import { toMeters } from "@/lib/distance";
-import { describePlan, describeTotal, EFFORT_LABEL, type PlanSetInput, type WorkoutPayload } from "@/lib/workout-plan";
+import { CONDITION_LABEL, describePlan, describeTotal, EFFORT_LABEL, SURFACE_LABEL, type PlanSetInput, type WorkoutPayload } from "@/lib/workout-plan";
 import { goalPaceFrom5K } from "@/lib/workout-replay";
 import { formatDuration, formatElapsed, parseDuration } from "@/lib/time";
 
@@ -58,7 +58,8 @@ export function WorkoutForm({
   const [name, setName] = useState(initial.name);
   const [date, setDate] = useState(initial.date);
   const [place, setPlace] = useState(initial.place ?? "");
-  const [approx, setApprox] = useState(initial.approximateDistances);
+  const [surface, setSurface] = useState<Surface>(initial.surface);
+  const [conditions, setConditions] = useState<Condition[]>(initial.conditions);
   const [effort, setEffort] = useState<WorkoutEffort>(initial.effort);
   const [notes, setNotes] = useState(initial.notes ?? "");
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
@@ -127,7 +128,8 @@ export function WorkoutForm({
       name: name.trim() || describePlan(asSets(plan)),
       date,
       place: place.trim() || null,
-      approximateDistances: approx,
+      surface,
+      conditions,
       effort,
       sets: plan,
       groups,
@@ -172,7 +174,28 @@ export function WorkoutForm({
           <Field label="Where">
             <Input value={place} onChange={(e) => setPlace(e.target.value)} placeholder="School grounds" maxLength={120} />
           </Field>
-          <CheckboxCard title="On grass" description="Distances are rough there, so times compare best with other grass days." checked={approx} onChange={setApprox} />
+          <Field label="Surface" hint={surface === "track" ? "Measured distances." : "Distances are approximate, so times compare best with other days on the same surface."}>
+            <Segmented value={surface} onChange={setSurface} options={(Object.keys(SURFACE_LABEL) as Surface[]).map((v) => ({ value: v, label: SURFACE_LABEL[v] }))} />
+          </Field>
+          {/* Tags in the coach's words, so a slow day explains itself months later. */}
+          <Field label="Conditions" hint="Optional. Shown with the workout and in each runner's “last time”.">
+            <div className="flex flex-wrap gap-1.5">
+              {(Object.keys(CONDITION_LABEL) as Condition[]).map((c) => {
+                const on = conditions.includes(c);
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setConditions((list) => (on ? list.filter((x) => x !== c) : [...list, c]))}
+                    className={`h-8 rounded-full border px-3 text-[13px] font-medium transition-colors ${on ? "border-brand bg-brand-soft text-ink" : "border-line-strong bg-surface text-ink-2 hover:text-ink"}`}
+                  >
+                    {CONDITION_LABEL[c]}
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
         </CardBody>
       </Card>
 

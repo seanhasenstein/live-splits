@@ -1,20 +1,24 @@
 import "server-only";
-import type { Workout, WorkoutEvent, WorkoutTemplate } from "@/lib/db/schema";
+import type { Condition, Surface, Workout, WorkoutEvent, WorkoutTemplate } from "@/lib/db/schema";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
-import { describePlan } from "@/lib/workout-plan";
+import { describePlan, surfaceOf } from "@/lib/workout-plan";
 import { replayWorkout, summarize } from "@/lib/workout-replay";
 
+/** Fields added after the first workouts were saved: reads fill them in, as the schema's defaults would. */
+const withDefaults = (w: Workout): Workout => ({ ...w, surface: w.surface ?? null, conditions: w.conditions ?? [] });
+
 export async function listWorkouts(schoolId: string): Promise<Workout[]> {
-  return collection(await getDb(), "workouts").find({ schoolId, deletedAt: null }).sort({ date: -1, createdAt: -1 }).toArray();
+  return (await collection(await getDb(), "workouts").find({ schoolId, deletedAt: null }).sort({ date: -1, createdAt: -1 }).toArray()).map(withDefaults);
 }
 
 export async function listTemplates(schoolId: string, programId: string): Promise<WorkoutTemplate[]> {
-  return collection(await getDb(), "workoutTemplates").find({ schoolId, programId, deletedAt: null }).sort({ name: 1 }).toArray();
+  return (await collection(await getDb(), "workoutTemplates").find({ schoolId, programId, deletedAt: null }).sort({ name: 1 }).toArray()).map((t) => ({ ...t, surface: t.surface ?? null }));
 }
 
 export async function getWorkout(id: string): Promise<Workout | null> {
-  return collection(await getDb(), "workouts").findOne({ _id: id, deletedAt: null });
+  const w = await collection(await getDb(), "workouts").findOne({ _id: id, deletedAt: null });
+  return w && withDefaults(w);
 }
 
 /**
@@ -53,8 +57,9 @@ export async function fiveKBests(schoolId: string, seasonId: string, athleteIds:
 export type LastTime = {
   workoutId: string;
   date: string;
-  /** On grass then (times on grass and track don't compare straight). */
-  approximateDistances: boolean;
+  /** Where and how it was run then (a track day and a muddy grass day don't compare straight). */
+  surface: Surface;
+  conditions: Condition[];
   /** Each rep's time, in order; null where they have none. */
   repMs: (number | null)[];
   avgPaceMsPerKm: number | null;
@@ -73,7 +78,7 @@ export async function lastTimeRan(workout: Workout): Promise<Record<string, Last
       .find({ schoolId: workout.schoolId, programId: workout.programId, deletedAt: null, date: { $lte: workout.date }, _id: { $ne: workout._id } })
       .sort({ date: -1, createdAt: -1 })
       .limit(60)
-      .project<Pick<Workout, "_id" | "date" | "createdAt" | "sets" | "groups" | "athletes" | "approximateDistances">>({ _id: 1, date: 1, createdAt: 1, sets: 1, groups: 1, athletes: 1, approximateDistances: 1 })
+      .project<Pick<Workout, "_id" | "date" | "createdAt" | "sets" | "groups" | "athletes" | "approximateDistances" | "surface" | "conditions">>({ _id: 1, date: 1, createdAt: 1, sets: 1, groups: 1, athletes: 1, approximateDistances: 1, surface: 1, conditions: 1 })
       .toArray()
   )
     .filter((w) => describePlan(w.sets) === signature && (w.date < workout.date || w.createdAt < workout.createdAt))
@@ -93,7 +98,7 @@ export async function lastTimeRan(workout: Workout): Promise<Record<string, Last
     for (const [id, list] of state.athletes) {
       if (!want.has(id) || !list.some((r) => r.status === "done")) continue;
       const s = summarize(state.reps, list);
-      out[id] = { workoutId: w._id, date: w.date, approximateDistances: w.approximateDistances, repMs: list.map((r) => (r.status === "done" ? r.elapsedMs : null)), avgPaceMsPerKm: s.avgPaceMsPerKm, avgDeltaMs: s.avgDeltaMs };
+      out[id] = { workoutId: w._id, date: w.date, surface: surfaceOf(w), conditions: w.conditions ?? [], repMs: list.map((r) => (r.status === "done" ? r.elapsedMs : null)), avgPaceMsPerKm: s.avgPaceMsPerKm, avgDeltaMs: s.avgDeltaMs };
       want.delete(id);
     }
   }

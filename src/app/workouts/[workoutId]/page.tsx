@@ -7,7 +7,7 @@ import { SessionMenu } from "@/components/session-menu";
 import { WorkoutBoard } from "@/components/workout-board";
 import { WorkoutFinishButton } from "@/components/workout-finish-button";
 import { getProgram, listRoster } from "@/lib/data";
-import { describePlan, describeRest, describeTotal, EFFORT_LABEL } from "@/lib/workout-plan";
+import { conditionsText, describePlan, describeRest, describeTotal, EFFORT_LABEL, surfaceOf, surfaceText } from "@/lib/workout-plan";
 import { flattenPlan } from "@/lib/workout-replay";
 import { getWorkout, lastTimeRan } from "@/lib/workouts";
 import { formatLocalDateLong } from "@/lib/time";
@@ -33,7 +33,7 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
       <Page wide>
         <PageTitle
           title={workout.name}
-          description={[formatLocalDateLong(workout.date), workout.place, workout.approximateDistances ? "on grass" : null, EFFORT_LABEL[workout.effort]].filter(Boolean).join(" · ")}
+          description={[formatLocalDateLong(workout.date), workout.place, surfaceText(surfaceOf(workout)), workout.conditions.length ? conditionsText(workout.conditions) : null, EFFORT_LABEL[workout.effort]].filter(Boolean).join(" · ")}
           action={
             coach && (
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -84,7 +84,7 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
             initialPlan={{ sets: workout.sets, groups: workout.groups, athletes: workout.athletes, finishedAt: workout.finishedAt?.toISOString() ?? null }}
             people={people}
             lastTimes={lastTimes}
-            onGrass={workout.approximateDistances}
+            surface={surfaceOf(workout)}
           />
 
           {workout.notes && (
