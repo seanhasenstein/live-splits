@@ -27,8 +27,12 @@ export async function canTimeWorkout(workout: Workout) {
   return canUseWorkouts(session) && session!.schoolId === workout.schoolId ? session! : null;
 }
 
-/** Once a coach ends a workout only fixes go in: a typed time, an edit, an undo, a note. Reopen it to run more. */
-const allowedWhenEnded = (e: WorkoutEventInput) => e.type === "edit" || e.type === "void" || e.type === "note" || e.type === "time" || (e.type === "finish" && e.timeMs !== null);
+/**
+ * Once a coach ends a workout only fixes go in: a typed time, an edit, an undo, a note, and marking
+ * runners (done for today, skipped, back in) after the fact. Reopen it to run more reps.
+ */
+const allowedWhenEnded = (e: WorkoutEventInput) =>
+  ["edit", "void", "note", "time", "stop", "skip", "rejoin"].includes(e.type) || (e.type === "finish" && e.timeMs !== null);
 
 /** A typed rep time names a runner and a rep, and is a believable rep (under two hours). */
 const typedTimeOk = (e: WorkoutEventInput) => e.type !== "time" || (e.athleteId !== null && e.repId !== null && e.timeMs !== null && e.timeMs < 2 * 3_600_000);

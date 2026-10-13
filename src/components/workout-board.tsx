@@ -147,7 +147,7 @@ export function WorkoutBoard({
             </thead>
             <tbody>
               {rows.map(({ id, list, summary, goalMs }, rowIndex) => (
-                <tr key={id} className="border-b border-line last:border-0">
+                <tr key={id} data-row={rowIndex} className="border-b border-line last:border-0">
                   <td className="sticky left-0 z-10 bg-surface p-0">
                     <button type="button" onClick={() => setOpenId(id)} className="block w-full px-3 py-1.5 text-left hover:bg-surface-2">
                       <span className="block max-w-36 truncate font-medium text-ink">{byId.get(id)?.name ?? "?"}</span>
@@ -160,7 +160,14 @@ export function WorkoutBoard({
                   {list.map((r, i) => (
                     <td key={r.repId} className={`px-1 py-1 text-right ${reps[i].number === 1 && i > 0 ? "border-l border-line" : ""}`}>
                       {entering && r.status !== "running" ? (
-                        <TimeInput key={`${r.elapsedMs ?? ""}`} cell={`${rowIndex}:${i}`} valueMs={r.status === "done" ? r.elapsedMs : null} ft={ft} onSave={(ms) => setRepTime(send, id, r, ms)} onClear={r.typedEventId ? () => send({ type: "void", targetEventId: r.typedEventId! }) : null} />
+                        <TimeInput
+                          cell={`${rowIndex}:${i}`}
+                          label={`${byId.get(id)?.name ?? "Runner"}, rep ${i + 1}`}
+                          valueMs={r.status === "done" ? r.elapsedMs : null}
+                          ft={ft}
+                          onSave={(ms) => setRepTime(send, id, r, ms)}
+                          onClear={r.typedEventId ? () => send({ type: "void", targetEventId: r.typedEventId! }) : null}
+                        />
                       ) : r.status === "done" && r.elapsedMs !== null ? (
                         <RepCell time={ft(r.elapsedMs)} delta={showDeltas && r.deltaMs !== null ? signed(r.deltaMs, digits) : null} tone={repCellTone(r.deltaMs)} typed={!!r.typedEventId} />
                       ) : r.status === "skipped" ? (
@@ -237,7 +244,8 @@ export function WorkoutBoard({
         <MarkRunnersSheet
           reps={reps}
           runners={rows.map(({ id, list }) => ({ id, name: byId.get(id)?.name ?? "?", list })).sort((a, b) => a.name.localeCompare(b.name))}
-          initialRepIndex={Math.max(0, ...rows.flatMap(({ list }) => list.map((r, i) => (r.status === "pending" || r.status === "not_run" ? 0 : i))))}
+          // The latest rep anyone has actually run (a done-for-today mark covers every later rep, so it doesn't count).
+          initialRepIndex={Math.max(0, ...rows.flatMap(({ list }) => list.map((r, i) => (r.status === "done" || r.status === "running" || r.status === "unfinished" ? i : 0))))}
           onApply={(evs) => evs.forEach((e) => send(e))}
           onClose={() => setMarking(false)}
         />
@@ -341,37 +349,51 @@ function Clock({ label, value, tone = "text-ink", note = null, noteTone = "text-
 
 /**
  * One cell of the grid in Enter times mode: type a time, Enter (or leaving the box) saves it and
- * Enter moves down to the next runner on the same rep, the way a paper sheet is read.
- * Clearing a typed time takes it back out.
+ * Enter moves down to the next runner on the same rep, the way a paper sheet is read. Clearing a
+ * typed time takes it back out; a tapped time can't be cleared here (the box puts it back).
+ * While the box has focus it keeps what's being typed, whatever the other phones send meanwhile.
  */
-function TimeInput({ cell, valueMs, ft, onSave, onClear }: { cell: string; valueMs: number | null; ft: (ms: number) => string; onSave: (ms: number) => void; onClear: (() => void) | null }) {
-  const [draft, setDraft] = useState(valueMs !== null ? ft(valueMs) : "");
-  const parsed = draft.trim() ? parseDuration(draft) : null;
-  const bad = draft.trim() !== "" && parsed === null;
+function TimeInput({ cell, label, valueMs, ft, onSave, onClear }: { cell: string; label: string; valueMs: number | null; ft: (ms: number) => string; onSave: (ms: number) => void; onClear: (() => void) | null }) {
+  const shown = valueMs !== null ? ft(valueMs) : "";
+  const [draft, setDraft] = useState<string | null>(null); // null: not editing, show the saved time
+  const text = draft ?? shown;
+  const parsed = text.trim() ? parseDuration(text) : null;
+  const bad = text.trim() !== "" && parsed === null;
   const commit = () => {
+    if (draft === null) return;
+    setDraft(null);
     if (!draft.trim()) {
       if (valueMs !== null && onClear) onClear();
       return;
     }
-    if (parsed !== null && parsed !== valueMs && (valueMs === null || ft(parsed) !== ft(valueMs))) onSave(parsed);
+    if (parsed !== null && (valueMs === null || ft(parsed) !== ft(valueMs))) onSave(parsed);
   };
   return (
     <input
       data-cell={cell}
-      value={draft}
+      value={text}
       onChange={(e) => setDraft(e.target.value)}
-      onFocus={(e) => e.target.select()}
+      onFocus={(e) => {
+        setDraft(shown);
+        e.target.select();
+      }}
       onBlur={commit}
       onKeyDown={(e) => {
         if (e.key !== "Enter") return;
         e.preventDefault();
+        // The next box down on this rep, skipping rows with none (a runner still running it).
         const [row, col] = cell.split(":").map(Number);
-        const next = document.querySelector<HTMLInputElement>(`[data-cell="${row + 1}:${col}"]`);
+        let next: HTMLInputElement | null = null;
+        for (let r = row + 1; r < row + 200 && !next; r++) {
+          next = document.querySelector<HTMLInputElement>(`[data-cell="${r}:${col}"]`);
+          if (!next && !document.querySelector(`[data-row="${r}"]`)) break;
+        }
         if (next) next.focus();
         else e.currentTarget.blur();
       }}
       inputMode="decimal"
-      aria-label="Rep time"
+      aria-label={`${label} time`}
+      aria-invalid={bad}
       className={`h-8 w-16 rounded border bg-surface px-1.5 text-right font-mono text-[13px] text-ink outline-none focus:border-brand ${bad ? "border-danger" : "border-line-strong"}`}
     />
   );

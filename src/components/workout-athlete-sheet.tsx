@@ -242,11 +242,10 @@ function RepChart({ points, goalMs, reps, ft, baseLabel }: { points: { i: number
 type SendEvent = (e: { type: "edit" | "time"; targetEventId?: string; athleteId?: string; groupId?: string; repId?: string; timeMs?: number }) => unknown;
 
 /**
- * Set a rep's time to `elapsedMs`: edit the typed time if there is one, move a tapped finish if it
- * has a start to measure from, else add a typed time (a rep never started in the app still gets it).
+ * Set a rep's time to `elapsedMs`: a typed time, which wins over any tap (and is shown as typed).
+ * Edits the typed time already there, if any; works on a rep never started in the app too.
  */
 export function setRepTime(send: SendEvent, athleteId: string, r: AthleteRep, elapsedMs: number) {
   if (r.typedEventId) send({ type: "edit", targetEventId: r.typedEventId, timeMs: elapsedMs });
-  else if (r.finishEventId && r.startMs !== null) send({ type: "edit", targetEventId: r.finishEventId, timeMs: r.startMs + elapsedMs });
   else send({ type: "time", athleteId, groupId: r.groupId, repId: r.repId, timeMs: elapsedMs });
 }
