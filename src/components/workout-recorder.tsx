@@ -117,7 +117,7 @@ export function WorkoutRecorder({
   const sink = sinkPref !== "off";
   const [frozen, setFrozen] = useState<{ key: string; ids: string[] } | null>(null);
   const [tapSeq, setTapSeq] = useState(0);
-  const [lastTap, setLastTap] = useState<{ eventId: string; name: string; ms: number } | null>(null);
+  const [lastTap, setLastTap] = useState<{ eventId: string; name: string; ms: number; lapText: string | null } | null>(null);
   // A second after the last tap the tiles settle; the undo offer lasts a little longer.
   useEffect(() => {
     if (tapSeq === 0) return;
@@ -241,6 +241,11 @@ export function WorkoutRecorder({
           .filter((e) => e.type === "lap" && e.groupId === group.id && e.repId === reps[lapRepIndex].id && !voidedIds.has(e.clientEventId) && !namedLaps.has(e.clientEventId))
           .sort((a, b) => lapAt(a) - lapAt(b));
   const takeLap = () => send({ type: "lap", groupId: group.id, repId: reps[lapRepIndex].id, at: tapTime() });
+  // The time a runner would get from the oldest waiting finish (from their own start, for a late starter).
+  const nextLapFor = (r: AthleteRep) => {
+    const start = r.startMs ?? lapStartMs;
+    return pendingLaps[0] && start !== null ? ft(Math.max(0, lapAt(pendingLaps[0]) - start)) : "";
+  };
   // More laps than runners left to name: a tap too many, most likely the last one(s).
   const leftToName = lapRepIndex < 0 ? 0 : rowsAt(lapRepIndex).filter(({ r }) => r.status === "running" && !r.makeUp).length;
   const extraLaps = Math.max(0, pendingLaps.length - leftToName);
@@ -254,7 +259,8 @@ export function WorkoutRecorder({
     // Hold the tiles where they are until tapping pauses; offer to undo this tap for a few seconds.
     if (sink) setFrozen((f) => (f && f.key === tileKey ? f : { key: tileKey, ids: tiles.map((t) => t.id) }));
     setTapSeq((n) => n + 1);
-    setLastTap({ eventId, name: (nameOf.get(athleteId) ?? "?").split(" ")[0], ms: at });
+    const r = state.athletes.get(athleteId)?.[reps.findIndex((x) => x.id === repId)];
+    setLastTap({ eventId, name: (nameOf.get(athleteId) ?? "?").split(" ")[0], ms: at, lapText: lap && r ? nextLapFor(r) : null });
   };
   // Starting the rest early takes two taps: the first arms it for a few seconds, so a stray tap mid-rep does nothing.
   const [restArmedKey, setRestArmedKey] = useState<string | null>(null);
@@ -511,11 +517,14 @@ export function WorkoutRecorder({
         <div className={`rounded-lg border px-3 py-2.5 ${extraLaps > 0 ? "border-danger/40 bg-danger-soft/50" : "border-brand/30 bg-brand-soft/40"}`}>
           <div className="text-[13px] font-medium text-ink">
             {extraLaps > 0 && leftToName === 0
-              ? `Everyone's in: ${extraLaps === 1 ? "this lap is" : `these ${extraLaps} laps are`} extra.`
+              ? `Everyone's in: ${extraLaps === 1 ? "this finish is" : `these ${extraLaps} finishes are`} extra.`
               : extraLaps > 0
-                ? `${pendingLaps.length} laps but only ${leftToName} runner${leftToName === 1 ? "" : "s"} left: ${extraLaps} ${extraLaps === 1 ? "is" : "are"} extra.`
-                : `${pendingLaps.length} lap${pendingLaps.length === 1 ? "" : "s"} to name: tap runners in the order they finished.`}
+                ? `${pendingLaps.length} finishes but only ${leftToName} runner${leftToName === 1 ? "" : "s"} left: ${extraLaps} ${extraLaps === 1 ? "is" : "are"} extra.`
+                : `${pendingLaps.length} finish${pendingLaps.length === 1 ? "" : "es"} to name: tap runners in the order they crossed.`}
           </div>
+          {extraLaps === 0 && leftToName > pendingLaps.length && (
+            <div className="mt-0.5 text-[12px] text-ink-2">Still coming in? Keep tapping Finish, and name them when it&rsquo;s quiet.</div>
+          )}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {pendingLaps.map((e, i) => (
               <span
@@ -525,7 +534,7 @@ export function WorkoutRecorder({
                 }`}
               >
                 <Time className={`text-[13px] ${i === 0 ? "font-semibold text-ink" : "text-ink-2"}`}>{lapStartMs !== null ? formatElapsed(Math.max(0, lapAt(e) - lapStartMs)) : "—"}</Time>
-                <button type="button" onClick={() => send({ type: "void", targetEventId: e.clientEventId })} className="rounded-full px-1 text-[12px] text-ink-3 hover:text-ink" aria-label="Throw away this lap">
+                <button type="button" onClick={() => send({ type: "void", targetEventId: e.clientEventId })} className="rounded-full px-1 text-[12px] text-ink-3 hover:text-ink" aria-label="Throw away this finish">
                   ✕
                 </button>
               </span>
@@ -578,9 +587,13 @@ export function WorkoutRecorder({
                         <Time className="text-sm font-semibold text-ink">{formatElapsed(Math.max(0, now - r.startMs))}</Time>
                       </span>
                     )}
-                    {/* No room for both on a phone tile: the late clock wins. */}
-                    {r.goalMs !== null && !(phase.kind === "running" && r.startMs !== null && r.startMs !== phase.startMs) && (
-                      <Time className={`${large ? "text-sm" : "text-xs"} text-ink-3`}>goal {formatElapsed(r.goalMs, "seconds")}</Time>
+                    {/* With finishes waiting, a tap names the oldest: say which time it gives. Else the goal
+                        (no room for that and a late clock on a phone tile: the late clock wins). */}
+                    {pendingLaps.length > 0 && r.status === "running" ? (
+                      <Time className={`${large ? "text-base" : "text-sm"} font-semibold text-brand-text`}>→ {nextLapFor(r)}</Time>
+                    ) : (
+                      r.goalMs !== null &&
+                      !(phase.kind === "running" && r.startMs !== null && r.startMs !== phase.startMs) && <Time className={`${large ? "text-sm" : "text-xs"} text-ink-3`}>goal {formatElapsed(r.goalMs, "seconds")}</Time>
                     )}
                   </span>
                 )}
@@ -640,7 +653,11 @@ export function WorkoutRecorder({
                 className="flex h-16 flex-col items-start justify-between rounded-lg border border-gold/50 bg-surface px-3 py-2 text-left active:bg-brand-soft"
               >
                 <span className="line-clamp-1 text-[15px] font-semibold text-ink">{nameOf.get(id) ?? "?"}</span>
-                {r.goalMs !== null && <Time className="text-xs text-ink-3">goal {formatElapsed(r.goalMs, "seconds")}</Time>}
+                {pendingLaps.length > 0 ? (
+                  <Time className="text-sm font-semibold text-brand-text">→ {nextLapFor(r)}</Time>
+                ) : (
+                  r.goalMs !== null && <Time className="text-xs text-ink-3">goal {formatElapsed(r.goalMs, "seconds")}</Time>
+                )}
               </button>
             ))}
           </div>
@@ -810,13 +827,21 @@ export function WorkoutRecorder({
       )}
 
       {/* The thumb's corner of the screen: Undo for the last tap (wrong-runner taps happen in packs), and,
-          while a rep is on, a big Lap button to hit without looking as a pack comes across. */}
+          while a rep is on, a big Finish button to hit without looking as a pack comes across. (Stored as "lap" events.) */}
       {(lastTap || (lapOpen && !plan.finishedAt)) && (
         <div className="fixed inset-x-0 bottom-0 z-20 mx-auto flex max-w-2xl flex-col items-center gap-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {lastTap && (
           <div className="flex items-center gap-3 rounded-full border border-line-strong bg-surface py-1.5 pr-1.5 pl-4 shadow-sheet">
             <span className="text-sm text-ink">
-              Tapped <span className="font-semibold">{lastTap.name}</span>
+              {lastTap.lapText ? (
+                <>
+                  <span className="font-semibold">{lastTap.name}</span> gets <span className="font-semibold">{lastTap.lapText}</span>
+                </>
+              ) : (
+                <>
+                  Tapped <span className="font-semibold">{lastTap.name}</span>
+                </>
+              )}
             </span>
             <Button
               variant="secondary"
@@ -838,7 +863,7 @@ export function WorkoutRecorder({
               onClick={takeLap}
               className="flex h-16 w-full items-center justify-center gap-3 rounded-xl bg-ink text-bg shadow-sheet select-none active:bg-ink/80"
             >
-              <span className="text-xl font-semibold">Lap</span>
+              <span className="text-xl font-semibold">Finish</span>
               {pendingLaps.length > 0 && <span className="rounded-full bg-bg/20 px-2.5 py-0.5 text-sm font-medium">{pendingLaps.length} to name</span>}
             </button>
           )}
