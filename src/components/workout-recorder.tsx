@@ -132,7 +132,7 @@ export function WorkoutRecorder({
   const [frozen, setFrozen] = useState<{ key: string; ids: string[] } | null>(null);
   const [tapSeq, setTapSeq] = useState(0);
   /** The last runner tapped in, for the quick Undo beside Finish (a few seconds, on the clock). */
-  const [lastTap, setLastTap] = useState<{ eventId: string; athleteId: string; at: number } | null>(null);
+  const [lastTap, setLastTap] = useState<{ eventId: string; athleteId: string; at: number; undoId?: string } | null>(null);
   /** The rep's finished list (from the "n/m in" count): undo, nudge or fix any runner's time. */
   const [listOpen, setListOpen] = useState(false);
   // A moment after the last tap the tiles settle.
@@ -284,7 +284,7 @@ export function WorkoutRecorder({
     lastTap && now - lastTap.at < QUICK_UNDO_MS && events.some((e) => e.clientEventId === lastTap.eventId) && !voidedIds.has(lastTap.eventId) ? lastTap : null;
 
   // The quick controls' runner and rep, to nudge; a nudge keeps them up a little longer.
-  const quickRep = quickUndo ? (state.athletes.get(quickUndo.athleteId)?.find((r) => r.finishEventId === quickUndo.eventId) ?? null) : null;
+  const quickRep = quickUndo ? (state.athletes.get(quickUndo.athleteId)?.find((r) => r.finishEventId === quickUndo.eventId || r.typedEventId === quickUndo.eventId) ?? null) : null;
   const quickNudge = (deltaMs: number) => {
     if (!quickUndo || !quickRep) return;
     nudge(quickRep, deltaMs);
@@ -859,7 +859,9 @@ export function WorkoutRecorder({
             const ri = phase.kind === "running" ? repIndex : Math.max(0, lastIndex);
             return allIds
               .filter((id) => id !== sheetFor && state.athletes.get(id)![ri]?.status === "running" && state.athletes.get(id)![ri].groupId === group.id)
-              .map((id) => ({ id, name: nameOf.get(id) ?? "?" }));
+              // Fastest goal first, like the tiles, so a runner is where you'd look for them.
+              .sort((a, b) => (state.athletes.get(a)![ri].goalMs ?? Infinity) - (state.athletes.get(b)![ri].goalMs ?? Infinity) || shortOf(a).localeCompare(shortOf(b)))
+              .map((id) => ({ id, name: shortOf(id) }));
           })()}
           finishedWith={(() => {
             // Runners already in on the rep on screen: "who'd you finish with?"
@@ -875,11 +877,19 @@ export function WorkoutRecorder({
             const theirs = state.athletes.get(otherId)![ri];
             if (theirs.finishMs === null) return;
             // The same moment as theirs: an edit to my typed time or tap, else a finish of my own at that moment.
+            // A changed time's Undo takes back the change (the time they had); a new one's, the finish.
+            let eventId = "";
+            let undoId: string | undefined;
             if (mine.typedEventId) {
-              if (mine.startMs !== null) send({ type: "edit", targetEventId: mine.typedEventId, timeMs: theirs.finishMs - mine.startMs });
-            } else if (mine.finishEventId) send({ type: "edit", targetEventId: mine.finishEventId, timeMs: theirs.finishMs });
-            else send({ type: "finish", groupId: group.id, athleteId: sheetFor, repId: mine.repId, timeMs: theirs.finishMs });
+              if (mine.startMs !== null) undoId = send({ type: "edit", targetEventId: mine.typedEventId, timeMs: theirs.finishMs - mine.startMs });
+              eventId = mine.typedEventId;
+            } else if (mine.finishEventId) {
+              undoId = send({ type: "edit", targetEventId: mine.finishEventId, timeMs: theirs.finishMs });
+              eventId = mine.finishEventId;
+            } else eventId = send({ type: "finish", groupId: group.id, athleteId: sheetFor, repId: mine.repId, timeMs: theirs.finishMs });
             setSheetFor(null);
+            // The quick −1s · Undo · +1s box, so "just behind" is one more tap.
+            setLastTap({ eventId, athleteId: sheetFor, at: now, undoId });
           }}
           onGiveTo={(otherId) => {
             const ri = phase.kind === "running" ? repIndex : Math.max(0, lastIndex);
@@ -887,9 +897,11 @@ export function WorkoutRecorder({
             if (!r.finishEventId || r.finishMs === null) return;
             // The same moment, for the right runner (still tied to its Finish, if it came from one); the wrong one goes back to running.
             const lapId = events.find((e) => e.clientEventId === r.finishEventId)?.targetEventId ?? undefined;
-            send({ type: "finish", groupId: group.id, athleteId: otherId, repId: r.repId, timeMs: r.finishMs, targetEventId: lapId });
+            const given = send({ type: "finish", groupId: group.id, athleteId: otherId, repId: r.repId, timeMs: r.finishMs, targetEventId: lapId });
             send({ type: "void", targetEventId: r.finishEventId });
             setSheetFor(null);
+            // The quick −1s · Undo · +1s box for the runner who now has the time.
+            setLastTap({ eventId: given, athleteId: otherId, at: now });
           }}
           onAddTime={(r, ms) => setRepTime(send, sheetFor, r, ms)}
           ft={ft}
@@ -899,7 +911,7 @@ export function WorkoutRecorder({
       {/* The thumb's corner of the screen, fixed so nothing above the tiles moves while tapping: finishes
           waiting for names, Undo for the last tap (wrong-runner taps happen in packs), and while a rep is
           on, a big Finish button to hit without looking as a pack comes across. */}
-      {(pendingLaps.length > 0 || (lapOpen && !plan.finishedAt)) && (
+      {(pendingLaps.length > 0 || (lapOpen && !plan.finishedAt) || quickRep) && (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 mx-auto flex max-w-2xl flex-col items-center gap-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {pendingLaps.length > 0 && (
             <div className={`pointer-events-auto w-full rounded-xl border px-3 py-2.5 shadow-sheet ${extraLaps > 0 ? "border-danger/40 bg-danger-soft" : "border-brand/30 bg-surface"}`}>
@@ -943,8 +955,8 @@ export function WorkoutRecorder({
       )}
 
 
-          {lapOpen && !plan.finishedAt && (
-            // The quick Undo for the last tap shares Finish's row, so it covers nothing new; Finish keeps its place on the right.
+          {((lapOpen && !plan.finishedAt) || quickRep) && (
+            // The quick controls for the last tap share Finish's row, so they cover nothing new; Finish keeps its place on the right.
             <div className="flex w-full items-end gap-2">
               {quickUndo && quickRep && (
                 // The last runner tapped: whose time, and a second either way or undo, without opening anything.
@@ -959,7 +971,7 @@ export function WorkoutRecorder({
                     <button
                       type="button"
                       onClick={() => {
-                        send({ type: "void", targetEventId: quickUndo.eventId });
+                        send({ type: "void", targetEventId: quickUndo.undoId ?? quickUndo.eventId });
                         setLastTap(null);
                       }}
                       className="h-11 rounded-md border border-line-strong text-sm font-semibold text-ink active:bg-surface-2"
@@ -973,6 +985,7 @@ export function WorkoutRecorder({
                   </div>
                 </div>
               )}
+              {lapOpen && !plan.finishedAt && (
               <button
                 type="button"
                 onPointerDown={notePointerDown}
@@ -982,6 +995,7 @@ export function WorkoutRecorder({
                 <span className="text-xl font-semibold">Finish</span>
                 {pendingLaps.length > 0 && <span className="rounded-full bg-bg/20 px-2.5 py-0.5 text-sm font-medium">{pendingLaps.length} to name</span>}
               </button>
+              )}
             </div>
           )}
         </div>
@@ -1226,6 +1240,25 @@ function ChoiceRow({ active, label, hint, onClick }: { active: boolean; label: s
   );
 }
 
+/** Runners to pick from in a sheet: two even columns, in the order given, scrolling if there are many. */
+function RunnerPicker({ options, onPick }: { options: { id: string; name: string; detail?: string }[]; onPick: (id: string) => void }) {
+  return (
+    <div className="mt-2 grid max-h-64 grid-cols-2 gap-1.5 overflow-y-auto">
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          onClick={() => onPick(o.id)}
+          className="flex h-11 min-w-0 items-center justify-between gap-2 rounded-md border border-line-strong bg-surface px-3 text-left text-sm text-ink hover:bg-surface-2 active:bg-surface-2"
+        >
+          <span className="truncate font-medium">{o.name}</span>
+          {o.detail && <Time className="shrink-0 text-[13px] text-ink-2">{o.detail}</Time>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** "Ajani", "Ajani and Joe", "Ajani, Joe and Will". */
 const listNames = (names: string[]) => (names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
 
@@ -1302,29 +1335,17 @@ function AthleteActions({
           <div className="rounded-md border border-line px-3 py-3">
             <div className="text-sm text-ink">Finished with…</div>
             <div className="mt-0.5 text-[13px] text-ink-2">
-              {rep.status === "done" ? `Time look wrong? ${first} gets the same time as the runner they came in with.` : `Missed? ${first} gets the same time as the runner they came in with.`} Just behind? Nudge +1s in the finished list after.
+              {rep.status === "done" ? `Time look wrong? ${first} gets the same time as the runner they came in with.` : `Missed? ${first} gets the same time as the runner they came in with.`} Just behind? Tap +1s at the bottom of the screen right after.
             </div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {finishedWith.map((f) => (
-                <button key={f.id} type="button" onClick={() => onFinishedWith(f.id)} className="h-9 rounded-md border border-line-strong bg-surface px-3 text-sm text-ink hover:bg-surface-2">
-                  {f.name} <span className="text-ink-2">{f.time}</span>
-                </button>
-              ))}
-            </div>
+            <RunnerPicker options={finishedWith.map((f) => ({ id: f.id, name: f.name, detail: f.time }))} onPick={onFinishedWith} />
           </div>
         )}
         {/* Tapped the wrong runner in a pack: give the time to the right one, at the same moment. */}
         {rep.status === "done" && rep.finishEventId && !rep.typedEventId && giveTo.length > 0 && (
           <div className="rounded-md border border-line px-3 py-3">
             <div className="text-sm text-ink">Give this time to…</div>
-            <div className="mt-0.5 text-[13px] text-ink-2">Wrong runner? The right one gets {rep.elapsedMs !== null ? ft(rep.elapsedMs) : "this time"}; {first} goes back to running.</div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {giveTo.map((g) => (
-                <button key={g.id} type="button" onClick={() => onGiveTo(g.id)} className="h-9 rounded-md border border-line-strong bg-surface px-3 text-sm text-ink hover:bg-surface-2">
-                  {g.name}
-                </button>
-              ))}
-            </div>
+            <div className="mt-0.5 text-[13px] text-ink-2">Wrong runner? The right one gets {rep.elapsedMs !== null ? ft(rep.elapsedMs) : "this time"}; {first} goes back to running. Nudge it at the bottom of the screen right after, if needed.</div>
+            <RunnerPicker options={giveTo} onPick={onGiveTo} />
           </div>
         )}
         {running && rep.status === "running" && !rep.ownStartEventId && (

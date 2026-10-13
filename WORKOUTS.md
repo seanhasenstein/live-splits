@@ -86,6 +86,10 @@ last time they ran this workout.
 
 ## Later
 
+A rep's activity log on Overview: the event log in plain words, per rep
+("4:12:03 Sean tapped Emma K. (1:12) · 4:12:20 Sean undid Ajani · Mike: Joe
++1s"), for "why does Emma have 1:12?" after practice and when phones disagree.
+
 A detailed CSV (one row per runner per rep: time, +/- vs goal, own rest, typed
 or tapped) for pivot tables across a season; the sheet-shaped CSV is built.
 
