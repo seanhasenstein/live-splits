@@ -110,6 +110,7 @@ export const WorkoutEventType = z.enum([
   "hold", // the group's rest after repId has no countdown: a water break, a weather delay; the next rep starts when the coach says
   "group_end", // the group stops after repId: the reps after it aren't run
   "time", // athleteId ran repId in timeMs (a rep time, not a clock time): typed in from a watch or the paper sheet
+  "lap", // a finish time on repId with no name yet (a pack coming in); a finish naming it points back with targetEventId
 ]);
 export type WorkoutEventType = z.infer<typeof WorkoutEventType>;
 

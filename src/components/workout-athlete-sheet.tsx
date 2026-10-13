@@ -5,7 +5,7 @@ import { Button, Input, SectionLabel, Sheet, Time } from "@/components/ui";
 import { ON_GOAL_MS } from "@/components/workout-tint";
 import { useTimeFormat } from "@/lib/client/time-format";
 import { type AthleteRep, type FlatRep, summarize } from "@/lib/workout-replay";
-import { formatDateWithYear, formatElapsed, parseTypedTime } from "@/lib/time";
+import { formatDateWithYear, formatElapsed, parseDuration } from "@/lib/time";
 import type { LastTime } from "@/lib/workouts";
 
 
@@ -82,7 +82,7 @@ export function AthleteBreakdown({
   const sets = reps.some((r) => r.setIndex > 0);
   const [editing, setEditing] = useState<number | null>(null);
   const [typed, setTyped] = useState("");
-  const typedMs = parseTypedTime(typed);
+  const typedMs = parseDuration(typed);
   // Reps not run yet fold into one line at the end.
   const shown = list.findLastIndex((r) => r.status !== "pending" && r.status !== "not_run") + 1;
   const endedEarly = list.slice(shown).some((r) => r.status === "not_run");
@@ -155,7 +155,7 @@ export function AthleteBreakdown({
               {editing === i && canType && (
                 <div className="space-y-2 pb-3">
                   <Input autoFocus onFocus={(e) => e.target.select()} value={typed} onChange={(e) => setTyped(e.target.value)} inputMode="decimal" className="h-11! font-mono text-lg!" aria-label={`Rep ${i + 1} time`} />
-                  <p className="text-[13px] text-ink-2">{typed.trim() ? (typedMs !== null ? `= ${formatElapsed(typedMs)}` : "Not a time yet") : "Digits are enough: 116 is 1:16, 116.4 is 1:16.4."}</p>
+                  <p className="text-[13px] text-ink-2">{typed.trim() ? (typedMs !== null ? `= ${formatElapsed(typedMs)}` : "Not a time yet") : "Digits are enough: 45 is 45 s, 116 is 1:16, 116.4 is 1:16.4."}</p>
                   <Button
                     className="w-full"
                     disabled={typedMs === null}

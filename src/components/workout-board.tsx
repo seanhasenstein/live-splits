@@ -13,7 +13,7 @@ import { useWorkoutEvents } from "@/lib/client/use-workout-events";
 import type { Workout } from "@/lib/db/schema";
 import type { LastTime } from "@/lib/workouts";
 import { type GroupPhase, type GroupRepLog, replayWorkout, summarize } from "@/lib/workout-replay";
-import { formatElapsed, parseTypedTime } from "@/lib/time";
+import { formatElapsed, parseDuration } from "@/lib/time";
 
 type Plan = Pick<Workout, "sets" | "groups" | "athletes"> & { finishedAt: string | null };
 type Person = { id: string; name: string; gender: "M" | "F" | "X"; level: string };
@@ -76,8 +76,13 @@ export function WorkoutBoard({
   const rows = [...state.athletes.entries()]
     .filter(([id, list]) => filter === "all" || (filter.startsWith("g:") ? list.some((r) => r.groupId === filter.slice(2)) : byId.get(id)?.gender === filter))
     .map(([id, list]) => ({ id, list, summary: summarize(reps, list), goalMs: list.find((r) => r.goalMs !== null)?.goalMs ?? null }))
-    // Fastest on average first; nobody-timed-yet by goal.
-    .sort((a, b) => (a.summary.avgPaceMsPerKm ?? Infinity) - (b.summary.avgPaceMsPerKm ?? Infinity) || (a.goalMs ?? Infinity) - (b.goalMs ?? Infinity));
+    // Fastest on average first; nobody-timed-yet by goal. While typing times in, a fixed order (by goal,
+    // then name) instead: re-sorting as each time saved would move "the next runner down" under the cursor.
+    .sort((a, b) =>
+      entering
+        ? (a.goalMs ?? Infinity) - (b.goalMs ?? Infinity) || (byId.get(a.id)?.name ?? "").localeCompare(byId.get(b.id)?.name ?? "")
+        : (a.summary.avgPaceMsPerKm ?? Infinity) - (b.summary.avgPaceMsPerKm ?? Infinity) || (a.goalMs ?? Infinity) - (b.goalMs ?? Infinity),
+    );
 
   const paceFor = (msPerKm: number | null) => (msPerKm === null ? "—" : ft((msPerKm * reps[0].meters) / 1000));
   const shownGroups = plan.groups.filter((g) => !filter.startsWith("g:") || filter === `g:${g.id}`);
@@ -106,7 +111,7 @@ export function WorkoutBoard({
       )}
       {/* Typing times in from the paper sheet (or a watch): every cell becomes a box. */}
       <div className="flex items-center justify-end gap-2">
-        {entering && <span className="mr-auto text-[13px] text-ink-2">Type each time (116 is 1:16); Enter goes down the column. Typed times win over taps.</span>}
+        {entering && <span className="mr-auto text-[13px] text-ink-2">Type each time: 45 is 45 s, 116 is 1:16. Enter goes down the column. Typed times win over taps.</span>}
         {!entering && (
           <Button variant="secondary" size="sm" onClick={() => setMarking(true)}>
             Mark runners
@@ -341,7 +346,7 @@ function Clock({ label, value, tone = "text-ink", note = null, noteTone = "text-
  */
 function TimeInput({ cell, valueMs, ft, onSave, onClear }: { cell: string; valueMs: number | null; ft: (ms: number) => string; onSave: (ms: number) => void; onClear: (() => void) | null }) {
   const [draft, setDraft] = useState(valueMs !== null ? ft(valueMs) : "");
-  const parsed = draft.trim() ? parseTypedTime(draft) : null;
+  const parsed = draft.trim() ? parseDuration(draft) : null;
   const bad = draft.trim() !== "" && parsed === null;
   const commit = () => {
     if (!draft.trim()) {

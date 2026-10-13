@@ -224,9 +224,27 @@ export function WorkoutRecorder({
     setStartArmedKey(null);
     send({ type: "rep_start", groupId: group.id, repId: rep.id, at: tapTime() });
   };
+  // Laps: times taken with no name (a pack coming in), named after by tapping runners in finish order.
+  // A lap is named by a finish that points back to it, so undoing that finish puts the lap back in line.
+  const voidedIds = new Set(events.filter((e) => e.type === "void").map((e) => e.targetEventId));
+  const namedLaps = new Set(events.filter((e) => e.type === "finish" && e.targetEventId && !voidedIds.has(e.clientEventId)).map((e) => e.targetEventId));
+  const lapRepIndex = phase.kind === "running" ? phase.repIndex : phase.kind === "rest" && stillOut.length > 0 ? phase.afterRepIndex : -1;
+  const lapStartMs = phase.kind === "running" ? phase.startMs : (state.groupLog.get(group.id)?.find((l) => l.repIndex === lapRepIndex)?.startMs ?? null);
+  const lapAt = (e: (typeof events)[number]) => e.timeMs ?? e.serverTimeMs;
+  const pendingLaps =
+    lapRepIndex < 0
+      ? []
+      : events
+          .filter((e) => e.type === "lap" && e.groupId === group.id && e.repId === reps[lapRepIndex].id && !voidedIds.has(e.clientEventId) && !namedLaps.has(e.clientEventId))
+          .sort((a, b) => lapAt(a) - lapAt(b));
+  const takeLap = () => send({ type: "lap", groupId: group.id, repId: reps[lapRepIndex].id, at: tapTime() });
   const finish = (athleteId: string, repId = rep.id) => {
     const at = tapTime();
-    const eventId = send({ type: "finish", groupId: group.id, athleteId, repId, at });
+    // With laps waiting, a tap names the oldest one instead of taking the time now.
+    const lap = pendingLaps.find((e) => e.repId === repId);
+    const eventId = lap
+      ? send({ type: "finish", groupId: group.id, athleteId, repId, targetEventId: lap.clientEventId, timeMs: lapAt(lap), at })
+      : send({ type: "finish", groupId: group.id, athleteId, repId, at });
     // Hold the tiles where they are until tapping pauses; offer to undo this tap for a few seconds.
     if (sink) setFrozen((f) => (f && f.key === tileKey ? f : { key: tileKey, ids: tiles.map((t) => t.id) }));
     setTapSeq((n) => n + 1);
@@ -434,9 +452,13 @@ export function WorkoutRecorder({
           </Button>
         ) : null}
         {phase.kind === "running" && !plan.finishedAt && (
-          <div className={`mt-4 grid gap-2 ${repIndex < reps.length - 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+          <div className={`mt-4 grid gap-2 ${repIndex < reps.length - 1 ? "grid-cols-3" : "grid-cols-2"}`}>
             <Button variant="tint" size="touch" disabled={!startEventId} onClick={() => setAdjustingKey(adjusting ? null : armKey)} aria-pressed={adjusting}>
               Fix the clock
+            </Button>
+            {/* A pack coming in: one tap per runner crossing, names after. */}
+            <Button variant="tint" size="touch" onPointerDown={notePointerDown} onClick={takeLap}>
+              Lap{pendingLaps.length > 0 ? ` (${pendingLaps.length})` : ""}
             </Button>
             {/* No rest after the last rep: it's over when everyone's in. */}
             {repIndex < reps.length - 1 && (
@@ -482,6 +504,24 @@ export function WorkoutRecorder({
           </Button>
         )}
       </div>
+
+      {pendingLaps.length > 0 && (
+        <div className="rounded-lg border border-brand/30 bg-brand-soft/40 px-3 py-2.5">
+          <div className="text-[13px] font-medium text-ink">
+            {pendingLaps.length} lap{pendingLaps.length === 1 ? "" : "s"} to name: tap runners in the order they finished.
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {pendingLaps.map((e, i) => (
+              <span key={e.clientEventId} className={`inline-flex items-center gap-1 rounded-full border py-0.5 pr-1 pl-2.5 ${i === 0 ? "border-brand bg-surface" : "border-line bg-surface/60"}`}>
+                <Time className={`text-[13px] ${i === 0 ? "font-semibold text-ink" : "text-ink-2"}`}>{lapStartMs !== null ? formatElapsed(Math.max(0, lapAt(e) - lapStartMs)) : "—"}</Time>
+                <button type="button" onClick={() => send({ type: "void", targetEventId: e.clientEventId })} className="rounded-full px-1 text-[12px] text-ink-3 hover:text-ink" aria-label="Throw away this lap">
+                  ✕
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Tap as they finish. A finished tile shows the time and stays put; tap it again for fixes. */}
       {tiles.length > 0 && (

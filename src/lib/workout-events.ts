@@ -33,6 +33,9 @@ const allowedWhenEnded = (e: WorkoutEventInput) => e.type === "edit" || e.type =
 /** A typed rep time names a runner and a rep, and is a believable rep (under two hours). */
 const typedTimeOk = (e: WorkoutEventInput) => e.type !== "time" || (e.athleteId !== null && e.repId !== null && e.timeMs !== null && e.timeMs < 2 * 3_600_000);
 
+/** A lap is a group's time on a rep, not yet anyone's. */
+const lapOk = (e: WorkoutEventInput) => e.type !== "lap" || (e.groupId !== null && e.repId !== null && e.athleteId === null);
+
 /**
  * Store events; retries are safe (clientEventId is unique). Returns the ids now stored, and the
  * ids refused (they can never be stored, so the phone drops them rather than resending forever).
@@ -64,6 +67,7 @@ export async function recordWorkoutEvents(workout: Workout, inputs: WorkoutEvent
       (e.athleteId === null || athletes.has(e.athleteId)) &&
       (e.targetEventId === null || targets.has(e.targetEventId)) &&
       typedTimeOk(e) &&
+      lapOk(e) &&
       (!workout.finishedAt || allowedWhenEnded(e));
     if (!fits) {
       rejected.push(e.clientEventId);
