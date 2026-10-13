@@ -331,6 +331,21 @@ describe("rest from the first runner in", () => {
   });
 });
 
+describe("rest from the middle runner in", () => {
+  it("starts once half the runners are in", () => {
+    const mid = { ...workout, athletes: [...workout.athletes, { athleteId: "ella", groupId: "g1", goalPaceMsPerKm: 205_000 }], sets: [{ ...workout.sets[0], reps: workout.sets[0].reps.map((r) => ({ ...r, rest: { kind: "time" as const, ms: 60_000, from: "middle" as const } })) }, workout.sets[1]] };
+    const start = ev("rep_start", 0, { groupId: "g1", repId: "a1" });
+    // Three running: half is the 2nd one in.
+    const one = replayWorkout(mid, [start, ev("finish", 70_000, { athleteId: "eddy", repId: "a1" })]);
+    expect(one.groups.get("g1")).toMatchObject({ kind: "running" });
+    const two = replayWorkout(mid, [start, ev("finish", 70_000, { athleteId: "eddy", repId: "a1" }), ev("finish", 74_000, { athleteId: "titus", repId: "a1" })]);
+    expect(two.groups.get("g1")).toMatchObject({ kind: "rest", restStartedMs: T0 + 74_000, nextStartMs: T0 + 134_000, stillOut: 1 });
+    // A runner skipping the rep doesn't count toward half.
+    const skip = replayWorkout(mid, [ev("skip", 0, { athleteId: "ella", repId: "a1" }), start, ev("finish", 70_000, { athleteId: "eddy", repId: "a1" })]);
+    expect(skip.groups.get("g1")).toMatchObject({ kind: "rest", restStartedMs: T0 + 70_000 });
+  });
+});
+
 describe("summarize", () => {
   it("average pace, average vs goal, spread and fade across reps of any distance", () => {
     const reps = flattenPlan(workout);

@@ -10,14 +10,15 @@ import { Actor, DistanceValue, EpochMs, Id, LocalDate, SchemaVersion, tenantDoc 
 
 /**
  * What follows a rep or a set.
- * - time: a fixed rest ("60 s"), from when the group's last runner came in, or (from: "first") from the
- *   first: the leaders get the full rest and anyone slower gets less.
+ * - time: a fixed rest ("60 s"), from when the group's last runner came in; or from the first runner in
+ *   (from: "first": the leaders get the full rest); or from the middle one in (from: "middle": once half
+ *   the runners are in, so the typical runner gets about the planned rest).
  * - interval: on the clock ("every 3:00"): the next rep starts that long after this one started.
  * - jog: a recovery jog of a distance; nothing to time.
  * - open: until the coach starts the next rep.
  */
 export const Rest = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("time"), ms: z.int().positive(), from: z.enum(["last", "first"]).optional() }),
+  z.object({ kind: z.literal("time"), ms: z.int().positive(), from: z.enum(["last", "first", "middle"]).optional() }),
   z.object({ kind: z.literal("interval"), everyMs: z.int().positive() }),
   z.object({ kind: z.literal("jog"), meters: z.number().positive() }),
   z.object({ kind: z.literal("open") }),

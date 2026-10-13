@@ -324,11 +324,17 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
   return { reps, athletes, groups, groupAt, groupLog };
 }
 
-/** A rest counted from the first runner in starts at the first finish, as if the coach had tapped Start rest then. */
+/**
+ * A rest counted from the first runner in starts at the first finish; from the middle one, once half
+ * of those running the rep are in. Either way, as if the coach had tapped Start rest then.
+ */
 function firstInRest(rep: FlatRep, members: AthleteRep[]): number | undefined {
-  if (rep.restAfter?.kind !== "time" || rep.restAfter.from !== "first") return undefined;
-  const first = Math.min(...members.map((m) => m.finishMs ?? Infinity));
-  return Number.isFinite(first) ? first : undefined;
+  const from = rep.restAfter?.kind === "time" ? rep.restAfter.from : undefined;
+  if (from !== "first" && from !== "middle") return undefined;
+  const finishes = members.map((m) => m.finishMs).filter((v): v is number => v !== null).sort((a, b) => a - b);
+  const running = members.filter((m) => m.status !== "skipped" && m.status !== "stopped" && m.status !== "not_run").length;
+  const nth = from === "first" ? 1 : Math.max(1, Math.ceil(running / 2));
+  return finishes.length >= nth ? finishes[nth - 1] : undefined;
 }
 
 /** The rest begins when the last runner comes in (the group's rep is over then), else at the start when nobody ran. */

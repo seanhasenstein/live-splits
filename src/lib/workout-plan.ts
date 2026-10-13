@@ -90,7 +90,7 @@ export function describeRest(rest: Rest): string {
     if (s % 60 === 0) return `${s / 60} min`;
     return s < 120 ? `${s} s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   };
-  if (rest.kind === "time") return rest.from === "first" ? `${t(rest.ms)} rest from the first in` : `${t(rest.ms)} rest`;
+  if (rest.kind === "time") return rest.from === "first" ? `${t(rest.ms)} rest from the first in` : rest.from === "middle" ? `${t(rest.ms)} rest from the middle in` : `${t(rest.ms)} rest`;
   if (rest.kind === "interval") return `on the ${t(rest.everyMs)}`;
   if (rest.kind === "jog") return `${rest.meters}m jog`;
   return "rest until go";

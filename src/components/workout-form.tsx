@@ -15,12 +15,12 @@ export type RosterRow = { id: string; name: string; gender: "M" | "F" | "X"; lev
 /** What the form starts from: an existing workout, or blanks. */
 export type WorkoutFormValues = Omit<WorkoutPayload, "sets"> & { sets: PlanSetInput[] };
 
-/** "timeFirst" is a fixed rest counted from the first runner in (stored as kind "time", from "first"). */
-type RestDraft = { kind: Rest["kind"] | "timeFirst"; text: string };
+/** "timeFirst" / "timeMiddle": a fixed rest counted from the first or the middle runner in (stored as kind "time" with from). */
+type RestDraft = { kind: Rest["kind"] | "timeFirst" | "timeMiddle"; text: string };
 type SetDraft = { key: string; id?: string; count: string; value: string; unit: DistanceUnit; rest: RestDraft; restAfter: RestDraft };
 
 const restToDraft = (r: Rest | null): RestDraft =>
-  !r ? { kind: "time", text: "" } : r.kind === "time" ? { kind: r.from === "first" ? "timeFirst" : "time", text: formatDuration(r.ms) } : r.kind === "interval" ? { kind: "interval", text: formatDuration(r.everyMs) } : r.kind === "jog" ? { kind: "jog", text: String(r.meters) } : { kind: "open", text: "" };
+  !r ? { kind: "time", text: "" } : r.kind === "time" ? { kind: r.from === "first" ? "timeFirst" : r.from === "middle" ? "timeMiddle" : "time", text: formatDuration(r.ms) } : r.kind === "interval" ? { kind: "interval", text: formatDuration(r.everyMs) } : r.kind === "jog" ? { kind: "jog", text: String(r.meters) } : { kind: "open", text: "" };
 
 /** A draft rest back to the model; null when it can't be read. */
 function draftToRest(d: RestDraft): Rest | null {
@@ -31,7 +31,7 @@ function draftToRest(d: RestDraft): Rest | null {
   }
   const ms = parseDuration(d.text);
   if (ms === null) return null;
-  return d.kind === "time" ? { kind: "time", ms } : d.kind === "timeFirst" ? { kind: "time", ms, from: "first" } : { kind: "interval", everyMs: ms };
+  return d.kind === "time" ? { kind: "time", ms } : d.kind === "timeFirst" ? { kind: "time", ms, from: "first" } : d.kind === "timeMiddle" ? { kind: "time", ms, from: "middle" } : { kind: "interval", everyMs: ms };
 }
 
 /** The form's sets in the stored shape, for describePlan. */
@@ -382,6 +382,7 @@ function RestField({ label, value, onChange }: { label: string; value: RestDraft
           <Select value={value.kind} onChange={(e) => onChange({ kind: e.target.value as RestDraft["kind"], text: value.text })}>
             <option value="time">Rest for</option>
             <option value="timeFirst">Rest from the first one in</option>
+            <option value="timeMiddle">Rest from the middle runner in</option>
             <option value="interval">On the clock, every</option>
             <option value="jog">Jog</option>
             <option value="open">Until the coach says go</option>

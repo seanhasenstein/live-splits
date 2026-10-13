@@ -19,7 +19,8 @@ syncs through `/api/workout-events` and `/api/workouts/[id]/events`.
   each set has a rest after it. "12 × 400, 60 s rest" is one set of twelve.
   Ladders and mixed sets are just more reps.
 - **Rest kinds**: fixed time ("60 s", counted from when the group's last
-  runner came in, or from the first runner in: leaders get the full rest), on the clock ("every 3:00", counted from the rep's start),
+  runner came in, from the first runner in (leaders get the full rest), or
+  from the middle runner in (once half are in)), on the clock ("every 3:00", counted from the rep's start),
   a jog distance (nothing timed), or open (until the coach starts the next).
 - **Effort**: VO₂, threshold, tempo, race pace or custom. It proposes each
   athlete's goal pace from their 5K season best (else PR): VO₂ 4% faster than
@@ -84,6 +85,10 @@ half vs first); filters by group, gender and level.
 last time they ran this workout.
 
 ## Later
+
+Rests: rest equal to the rep (1:1, 2:1: each group's rest scales with how long
+the rep took); a different rest after each rep of a ladder (400-800-1200 with
+1, 2, 3 min) without making each step its own set.
 
 Goals as a % of 5K pace per group; "last time you ran this" for the whole
 team; time-based reps and fartleks (record distance, not
