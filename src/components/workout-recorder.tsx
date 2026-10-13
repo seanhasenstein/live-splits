@@ -65,6 +65,8 @@ function beep(go: boolean) {
 /** The beep is opt-in ("1"); the buzz and the flash are always on. */
 const BEEP_KEY = "ls_workout_beep";
 const SINK_KEY = "ls_workout_sink";
+/** How long a tapped runner's tile offers Undo. */
+const UNDO_MS = 10_000;
 const SETTLE_KEY = "ls_workout_settle_ms";
 const tapTime = () => {
   const now = Date.now();
@@ -125,17 +127,16 @@ export function WorkoutRecorder({
   const settleMs = settlePref === "600" ? 600 : settlePref === "2000" ? 2000 : 1200;
   const [frozen, setFrozen] = useState<{ key: string; ids: string[] } | null>(null);
   const [tapSeq, setTapSeq] = useState(0);
-  /** The last tap, to undo: a runner tapped in (name) or a Finish with no name yet (name null). */
-  const [lastTap, setLastTap] = useState<{ eventId: string; name: string | null; ms: number; lapText: string | null } | null>(null);
-  // A moment after the last tap the tiles settle; the undo offer lasts a little longer.
+  /**
+   * Runners tapped in lately (`${athleteId}:${repId}` -> the finish and when, on the clock): each one's tile
+   * offers Undo for a few seconds, so any of a pack can be taken back, not just the last.
+   */
+  const [recent, setRecent] = useState<Record<string, { eventId: string; at: number }>>({});
+  // A moment after the last tap the tiles settle.
   useEffect(() => {
     if (tapSeq === 0) return;
     const settle = setTimeout(() => setFrozen(null), settleMs);
-    const forget = setTimeout(() => setLastTap(null), 6000);
-    return () => {
-      clearTimeout(settle);
-      clearTimeout(forget);
-    };
+    return () => clearTimeout(settle);
   }, [tapSeq, settleMs]);
   const [beepPref, setBeepPref] = useLocalValue(BEEP_KEY);
   const beepOn = beepPref === "1";
@@ -253,10 +254,9 @@ export function WorkoutRecorder({
           .sort((a, b) => lapAt(a) - lapAt(b));
   const takeLap = () => {
     const at = tapTime();
-    const eventId = send({ type: "lap", groupId: group.id, repId: reps[lapRepIndex].id, at });
-    // Undo now takes back this Finish (not the name before it).
+    send({ type: "lap", groupId: group.id, repId: reps[lapRepIndex].id, at });
+    // (A stray Finish is undone with its chip's ✕.) Holds the tiles still like any tap.
     setTapSeq((n) => n + 1);
-    setLastTap({ eventId, name: null, ms: at, lapText: lapStartMs !== null ? ft(Math.max(0, at + offsetForTap() - lapStartMs)) : null });
   };
   // The time a runner would get from the oldest waiting finish (from their own start, for a late starter).
   const nextLapFor = (r: AthleteRep) => {
@@ -273,11 +273,25 @@ export function WorkoutRecorder({
     const eventId = lap
       ? send({ type: "finish", groupId: group.id, athleteId, repId, targetEventId: lap.clientEventId, timeMs: lapAt(lap), at })
       : send({ type: "finish", groupId: group.id, athleteId, repId, at });
-    // Hold the tiles where they are until tapping pauses; offer to undo this tap for a few seconds.
+    // Hold the tiles where they are until tapping pauses; their own Undo shows for a few seconds.
     if (sink) setFrozen((f) => (f && f.key === tileKey ? f : { key: tileKey, ids: tiles.map((t) => t.id) }));
     setTapSeq((n) => n + 1);
-    const r = state.athletes.get(athleteId)?.[reps.findIndex((x) => x.id === repId)];
-    setLastTap({ eventId, name: (nameOf.get(athleteId) ?? "?").split(" ")[0], ms: at, lapText: lap && r ? nextLapFor(r) : null });
+    setRecent((m) => ({ ...m, [`${athleteId}:${repId}`]: { eventId, at: now } }));
+  };
+  // The Undo a tapped runner's tile (or results row) offers for a few seconds after the tap.
+  const undoFor = (athleteId: string, r: AthleteRep) => {
+    const t = recent[`${athleteId}:${r.repId}`];
+    return t && r.status === "done" && r.finishEventId === t.eventId && now - t.at < UNDO_MS ? t : null;
+  };
+  const undoTap = (athleteId: string, r: AthleteRep) => {
+    const t = undoFor(athleteId, r);
+    if (!t) return;
+    send({ type: "void", targetEventId: t.eventId });
+    setRecent((m) => {
+      const next = { ...m };
+      delete next[`${athleteId}:${r.repId}`];
+      return next;
+    });
   };
   // Starting the rest early takes two taps: the first arms it for a few seconds, so a stray tap mid-rep does nothing.
   const [restArmedKey, setRestArmedKey] = useState<string | null>(null);
@@ -551,7 +565,8 @@ export function WorkoutRecorder({
                 onClick={() => {
                   if (r.status === "running") return finish(id);
                   // A quick second tap on a runner just tapped in is a double tap, not a request for their sheet.
-                  if (lastTap && lastTap.eventId === r.finishEventId && Date.now() - lastTap.ms < 800) return;
+                  const t = undoFor(id, r);
+                  if (t && now - t.at < 800) return;
                   setSheetFor(id);
                 }}
                 className={`flex w-full rounded-lg border text-left ${large ? "min-h-16 items-center justify-between gap-3 py-2 pr-11 pl-4" : "h-20 flex-col items-start justify-between px-3 py-2"} ${
@@ -594,9 +609,21 @@ export function WorkoutRecorder({
                   </span>
                 )}
               </button>
-              <button type="button" onClick={() => setSheetFor(id)} className={`absolute right-1 rounded p-1.5 text-ink-3 ${large ? "top-1/2 -translate-y-1/2" : "top-1"} hover:bg-surface-2 hover:text-ink`} aria-label={`More for ${nameOf.get(id)}`}>
-                <MoreHorizontal className="size-4" />
-              </button>
+              {/* For a few seconds after the tap the corner is Undo (any of a pack can be taken back); then the ⋯ menu. */}
+              {undoFor(id, r) ? (
+                <button
+                  type="button"
+                  onClick={() => undoTap(id, r)}
+                  className={`absolute right-1.5 rounded-md border border-line-strong bg-surface px-2 py-1 text-xs font-medium text-ink shadow-card hover:bg-surface-2 ${large ? "top-1/2 -translate-y-1/2" : "top-1.5"}`}
+                  aria-label={`Undo ${nameOf.get(id)}'s finish`}
+                >
+                  Undo
+                </button>
+              ) : (
+                <button type="button" onClick={() => setSheetFor(id)} className={`absolute right-1 rounded p-1.5 text-ink-3 ${large ? "top-1/2 -translate-y-1/2" : "top-1"} hover:bg-surface-2 hover:text-ink`} aria-label={`More for ${nameOf.get(id)}`}>
+                  <MoreHorizontal className="size-4" />
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -697,12 +724,21 @@ export function WorkoutRecorder({
               <span className="w-12 text-right">+/−</span>
             </div>
             {finishedRows.map(({ id, r }) => (
-              <button key={id} type="button" onClick={() => setSheetFor(id)} className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm hover:bg-surface-2">
-                <span className="min-w-0 flex-1 truncate text-ink">{nameOf.get(id) ?? "?"}</span>
-                <Time className="w-10 text-right text-[13px] text-ink-3">{r.goalMs !== null ? ft(r.goalMs, "seconds") : ""}</Time>
-                <Time className="w-12 text-right font-semibold text-ink">{r.elapsedMs !== null ? ft(r.elapsedMs) : "—"}</Time>
-                <Time className={`w-12 text-right text-[13px] ${r.deltaMs !== null ? deltaTone(r.deltaMs) : "text-ink-3"}`}>{r.deltaMs !== null ? deltaText(r.deltaMs, tenths) : ""}</Time>
-              </button>
+              <div key={id} className="flex items-center hover:bg-surface-2">
+                <button type="button" onClick={() => setSheetFor(id)} className="flex min-w-0 flex-1 items-center gap-3 py-2 pl-4 text-left text-sm">
+                  <span className="min-w-0 flex-1 truncate text-ink">{nameOf.get(id) ?? "?"}</span>
+                  <Time className="w-10 text-right text-[13px] text-ink-3">{r.goalMs !== null ? ft(r.goalMs, "seconds") : ""}</Time>
+                  <Time className="w-12 text-right font-semibold text-ink">{r.elapsedMs !== null ? ft(r.elapsedMs) : "—"}</Time>
+                </button>
+                {/* Just tapped in (often from a still-out tile, which then goes away): Undo here for a few seconds. */}
+                {undoFor(id, r) ? (
+                  <button type="button" onClick={() => undoTap(id, r)} className="mr-2 ml-1 w-14 rounded-md border border-line-strong bg-surface py-1 text-xs font-medium text-ink hover:bg-surface-2" aria-label={`Undo ${nameOf.get(id)}'s finish`}>
+                    Undo
+                  </button>
+                ) : (
+                  <Time className={`w-12 pr-4 text-right text-[13px] ${r.deltaMs !== null ? deltaTone(r.deltaMs) : "text-ink-3"}`}>{r.deltaMs !== null ? deltaText(r.deltaMs, tenths) : ""}</Time>
+                )}
+              </div>
             ))}
             {notRunning.map(({ id, r }) => (
               <button key={id} type="button" onClick={() => setSheetFor(id)} className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-ink-3 hover:bg-surface-2">
@@ -817,6 +853,23 @@ export function WorkoutRecorder({
           reps={reps}
           soFar={sheetRep.slice(0, Math.max(phase.kind === "running" ? repIndex : lastIndex + 1, 0))}
           list={sheetRep}
+          giveTo={(() => {
+            // Runners still out on the rep on screen: who the time could really belong to.
+            const ri = phase.kind === "running" ? repIndex : Math.max(0, lastIndex);
+            return allIds
+              .filter((id) => id !== sheetFor && state.athletes.get(id)![ri]?.status === "running" && state.athletes.get(id)![ri].groupId === group.id)
+              .map((id) => ({ id, name: nameOf.get(id) ?? "?" }));
+          })()}
+          onGiveTo={(otherId) => {
+            const ri = phase.kind === "running" ? repIndex : Math.max(0, lastIndex);
+            const r = sheetRep[ri];
+            if (!r.finishEventId || r.finishMs === null) return;
+            // The same moment, for the right runner (still tied to its Finish, if it came from one); the wrong one goes back to running.
+            const lapId = events.find((e) => e.clientEventId === r.finishEventId)?.targetEventId ?? undefined;
+            send({ type: "finish", groupId: group.id, athleteId: otherId, repId: r.repId, timeMs: r.finishMs, targetEventId: lapId });
+            send({ type: "void", targetEventId: r.finishEventId });
+            setSheetFor(null);
+          }}
           onAddTime={(r, ms) => setRepTime(send, sheetFor, r, ms)}
           ft={ft}
         />
@@ -825,7 +878,7 @@ export function WorkoutRecorder({
       {/* The thumb's corner of the screen, fixed so nothing above the tiles moves while tapping: finishes
           waiting for names, Undo for the last tap (wrong-runner taps happen in packs), and while a rep is
           on, a big Finish button to hit without looking as a pack comes across. */}
-      {(lastTap || pendingLaps.length > 0 || (lapOpen && !plan.finishedAt)) && (
+      {(pendingLaps.length > 0 || (lapOpen && !plan.finishedAt)) && (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 mx-auto flex max-w-2xl flex-col items-center gap-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {pendingLaps.length > 0 && (
             <div className={`pointer-events-auto w-full rounded-xl border px-3 py-2.5 shadow-sheet ${extraLaps > 0 ? "border-danger/40 bg-danger-soft" : "border-brand/30 bg-surface"}`}>
@@ -869,36 +922,6 @@ export function WorkoutRecorder({
       )}
 
 
-          {lastTap && (
-          <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-line-strong bg-surface py-1.5 pr-1.5 pl-4 shadow-sheet">
-            <span className="text-sm text-ink">
-              {lastTap.name === null ? (
-                <>
-                  Finish at <span className="font-semibold">{lastTap.lapText}</span>
-                </>
-              ) : lastTap.lapText ? (
-                <>
-                  <span className="font-semibold">{lastTap.name}</span> gets <span className="font-semibold">{lastTap.lapText}</span>
-                </>
-              ) : (
-                <>
-                  Tapped <span className="font-semibold">{lastTap.name}</span>
-                </>
-              )}
-            </span>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="rounded-full"
-              onClick={() => {
-                send({ type: "void", targetEventId: lastTap.eventId });
-                setLastTap(null);
-              }}
-            >
-              Undo
-            </Button>
-          </div>
-          )}
           {lapOpen && !plan.finishedAt && (
             <button
               type="button"
@@ -1128,6 +1151,8 @@ function AthleteActions({
   reps,
   soFar,
   list,
+  giveTo,
+  onGiveTo,
   onAddTime,
   ft,
 }: {
@@ -1148,6 +1173,9 @@ function AthleteActions({
   soFar: AthleteRep[];
   /** Every rep of theirs, for the breakdown under the actions. */
   list: AthleteRep[];
+  /** Runners still out on this rep: a time tapped on the wrong runner can go to one of them instead. */
+  giveTo: { id: string; name: string }[];
+  onGiveTo: (athleteId: string) => void;
   /** A typed time for any rep: fix one, or add one that has none. The sheet stays open for the next. */
   onAddTime: (rep: AthleteRep, elapsedMs: number) => void;
   ft: (ms: number) => string;
@@ -1162,8 +1190,22 @@ function AthleteActions({
         {rep.status === "done" && rep.finishEventId && (
           <button type="button" className={btn} onClick={() => act("void", { targetEventId: rep.finishEventId! })}>
             Undo the finish (still running)
-            <span className="mt-0.5 block text-[13px] text-ink-2">Tapped the wrong runner? This puts them back on the course.</span>
+            <span className="mt-0.5 block text-[13px] text-ink-2">Tapped by mistake? This puts them back on the course.</span>
           </button>
+        )}
+        {/* Tapped the wrong runner in a pack: give the time to the right one, at the same moment. */}
+        {rep.status === "done" && rep.finishEventId && !rep.typedEventId && giveTo.length > 0 && (
+          <div className="rounded-md border border-line px-3 py-3">
+            <div className="text-sm text-ink">Give this time to…</div>
+            <div className="mt-0.5 text-[13px] text-ink-2">Wrong runner? The right one gets {rep.elapsedMs !== null ? ft(rep.elapsedMs) : "this time"}; {first} goes back to running.</div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {giveTo.map((g) => (
+                <button key={g.id} type="button" onClick={() => onGiveTo(g.id)} className="h-9 rounded-md border border-line-strong bg-surface px-3 text-sm text-ink hover:bg-surface-2">
+                  {g.name}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         {running && rep.status === "running" && !rep.ownStartEventId && (
           <button type="button" className={btn} onClick={() => act("rep_start", { repId: rep.repId })}>
