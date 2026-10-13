@@ -56,3 +56,18 @@ export function Switch({ checked, onChange, label, className = "" }: { checked: 
     </button>
   );
 }
+
+/** A yes/no setting as its own bordered row: checkbox, title and a line of explanation; tinted when on. */
+export function CheckboxCard({ title, description, checked, onChange, className = "" }: { title: ReactNode; description?: ReactNode; checked: boolean; onChange: (checked: boolean) => void; className?: string }) {
+  return (
+    <label
+      className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3.5 py-3 transition-colors ${checked ? "border-brand/50 bg-brand-soft/50" : "border-line bg-surface hover:bg-surface-2"} ${className}`}
+    >
+      <input type="checkbox" className="checkbox mt-0.5 shrink-0" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-ink">{title}</span>
+        {description && <span className="mt-0.5 block text-[13px] text-ink-2">{description}</span>}
+      </span>
+    </label>
+  );
+}

@@ -3,7 +3,7 @@
 import { Plus, Trash2, X } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { saveWorkoutAction } from "@/app/actions/workouts";
-import { Alert, Button, Card, CardBody, CardHeader, Checkbox, Field, Input, LinkButton, SectionLabel, Select } from "@/components/ui";
+import { Alert, Button, Card, CardBody, CardHeader, Checkbox, CheckboxCard, Field, Input, LinkButton, SectionLabel, Select } from "@/components/ui";
 import type { DistanceUnit, Rest, WorkoutEffort } from "@/lib/db/schema";
 import { toMeters } from "@/lib/distance";
 import { describePlan, describeTotal, EFFORT_LABEL, type PlanSetInput, type WorkoutPayload } from "@/lib/workout-plan";
@@ -172,7 +172,7 @@ export function WorkoutForm({
           <Field label="Where">
             <Input value={place} onChange={(e) => setPlace(e.target.value)} placeholder="School grounds" maxLength={120} />
           </Field>
-          <Checkbox label="On grass (distances are rough, so times compare best with other grass days)" checked={approx} onChange={(e) => setApprox(e.target.checked)} />
+          <CheckboxCard title="On grass" description="Distances are rough there, so times compare best with other grass days." checked={approx} onChange={setApprox} />
         </CardBody>
       </Card>
 
