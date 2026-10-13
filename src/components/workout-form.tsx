@@ -380,9 +380,9 @@ function RestField({ label, value, onChange }: { label: string; value: RestDraft
       <div className="min-w-0 flex-1">
         <Field label={label}>
           <Select value={value.kind} onChange={(e) => onChange({ kind: e.target.value as RestDraft["kind"], text: value.text })}>
-            <option value="time">Rest for</option>
+            <option value="time">Rest from the last one in</option>
+            <option value="timeMiddle">Rest from the middle one in</option>
             <option value="timeFirst">Rest from the first one in</option>
-            <option value="timeMiddle">Rest from the middle runner in</option>
             <option value="interval">On the clock, every</option>
             <option value="jog">Jog</option>
             <option value="open">Until the coach says go</option>
