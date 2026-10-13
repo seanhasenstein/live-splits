@@ -346,6 +346,20 @@ describe("rest from the middle runner in", () => {
   });
 });
 
+describe("typed times and rests", () => {
+  it("a missed tap typed in later still holds the rest until that runner came in; rest-from-first starts from a typed time", () => {
+    const evs = [
+      ev("rep_start", 0, { groupId: "g1", repId: "a1" }),
+      ev("finish", 70_000, { athleteId: "eddy", repId: "a1" }),
+      ev("time", 200_000, { athleteId: "titus", repId: "a1", timeMs: 90_000 }),
+    ];
+    expect(replayWorkout(workout, evs).groups.get("g1")).toMatchObject({ kind: "rest", restStartedMs: T0 + 90_000, nextStartMs: T0 + 150_000 });
+    const firstIn = { ...workout, sets: [{ ...workout.sets[0], reps: workout.sets[0].reps.map((r) => ({ ...r, rest: { kind: "time" as const, ms: 60_000, from: "first" as const } })) }, workout.sets[1]] };
+    const typedFirst = replayWorkout(firstIn, [evs[0], ev("time", 80_000, { athleteId: "eddy", repId: "a1", timeMs: 68_000 })]);
+    expect(typedFirst.groups.get("g1")).toMatchObject({ kind: "rest", restStartedMs: T0 + 68_000, stillOut: 1 });
+  });
+});
+
 describe("summarize", () => {
   it("average pace, average vs goal, spread and fade across reps of any distance", () => {
     const reps = flattenPlan(workout);

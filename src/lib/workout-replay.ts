@@ -64,8 +64,9 @@ export type AthleteRep = {
   status: AthleteRepStatus;
   groupId: string;
   startMs: number | null;
+  /** When they came in: start + a typed time if there is one, else the tapped finish. Rests count from it. */
   finishMs: number | null;
-  /** finish − start, when both are known and in order. */
+  /** finish − start, when both are known and in order (or the typed time). */
   elapsedMs: number | null;
   goalMs: number | null;
   /** elapsed − goal: negative is faster. */
@@ -214,11 +215,14 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
       const groupId = groupAt(id, rep.index);
       const startMs = ownStart.get(`${id}:${rep.index}`) ?? groupStart.get(`${groupId}:${rep.index}`) ?? null;
       const fin = finishes.get(`${id}:${rep.index}`);
-      const finishMs = fin ? at(fin) : null;
+      const tappedMs = fin ? at(fin) : null;
       const typedEvent = typedTimes.get(`${id}:${rep.index}`);
       // A typed time is a deliberate correction: it beats a tap (an edit to it changes the time itself).
       const typedMs = typedEvent ? (editedTime.get(typedEvent.clientEventId) ?? typedEvent.timeMs!) : null;
-      const elapsedMs = typedMs ?? (startMs !== null && finishMs !== null && finishMs > startMs ? finishMs - startMs : null);
+      const elapsedMs = typedMs ?? (startMs !== null && tappedMs !== null && tappedMs > startMs ? tappedMs - startMs : null);
+      // When they came in: from a typed time when there is one (it wins, and rests count from it: a
+      // missed tap typed in later still holds the rest back), else the tap.
+      const finishMs = typedMs !== null && startMs !== null ? startMs + typedMs : tappedMs;
       const pace = goalPace.get(id) ?? null;
       const goalMs = pace !== null ? Math.round((pace * rep.meters) / 1000) : null;
       const notYetIn = (joinedAt.get(id) ?? 0) > rep.index;
@@ -226,7 +230,7 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
       // A make-up: they skipped the rep with the group and ran it later on their own clock.
       const makeUp = wasSkipped && ownStart.has(`${id}:${rep.index}`);
       const status: AthleteRepStatus =
-        typedMs !== null || (fin && finishMs !== null)
+        typedMs !== null || (fin && tappedMs !== null)
           ? "done"
           : notYetIn || stoppedAt(id, rep.index)
             ? "stopped"

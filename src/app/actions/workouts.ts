@@ -211,7 +211,9 @@ export async function changeRepsAction(workoutId: string, change: "add" | "drop"
       const events = await collection(db, "workoutEvents").find({ workoutId: workout._id, repId: lastId }, { projection: { clientEventId: 1, type: 1 } }).toArray();
       const voids = await collection(db, "workoutEvents").find({ workoutId: workout._id, type: "void" }, { projection: { targetEventId: 1 } }).toArray();
       const voided = new Set(voids.map((e) => e.targetEventId));
-      if (events.some((e) => (e.type === "rep_start" || e.type === "finish") && !voided.has(e.clientEventId))) return { error: "A group has already started that rep" };
+      // Anything recorded on it (a start, a time typed in, a skip or done-for-today, a note) keeps it:
+      // dropped, those would vanish, and come back on whatever rep is added next under the same id.
+      if (events.some((e) => !voided.has(e.clientEventId))) return { error: "That rep already has times or marks on it" };
       const fewer = dropLastRep(sets);
       if (!fewer) return { error: "It's the only rep" };
       sets = fewer;

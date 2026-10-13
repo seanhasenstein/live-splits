@@ -55,12 +55,31 @@ export async function recordWorkoutEvents(workout: Workout, inputs: WorkoutEvent
   if (inputs.some((e) => e.athleteId !== null && !athletes.has(e.athleteId))) {
     for (const r of await collection(db, "seasonRosters").find({ seasonId: workout.seasonId, deletedAt: null }, { projection: { athleteId: 1 } }).toArray()) athletes.add(r.athleteId);
   }
-  const inBatch = new Set(inputs.map((e) => e.clientEventId));
-  const wanted = [...new Set(inputs.map((e) => e.targetEventId).filter((t): t is string => t !== null && !inBatch.has(t)))];
-  const targets = new Set([
-    ...inBatch,
-    ...(wanted.length ? (await events.find({ workoutId: workout._id, clientEventId: { $in: wanted } }, { projection: { clientEventId: 1 } }).toArray()).map((e) => e.clientEventId) : []),
-  ]);
+  // The events these correct or name, from this batch or already stored: an edit or void must point into
+  // this workout; an edit to a typed time is a rep time too; a finish naming a Finish needs one on its group and rep.
+  type Target = { type: string; groupId: string | null; repId: string | null };
+  const targets = new Map<string, Target>(inputs.map((e) => [e.clientEventId, { type: e.type, groupId: e.groupId, repId: e.repId }]));
+  const wanted = [...new Set(inputs.map((e) => e.targetEventId).filter((t): t is string => t !== null && !targets.has(t)))];
+  if (wanted.length) {
+    for (const e of await events.find({ workoutId: workout._id, clientEventId: { $in: wanted } }, { projection: { clientEventId: 1, type: 1, groupId: 1, repId: 1 } }).toArray()) {
+      targets.set(e.clientEventId, { type: e.type, groupId: e.groupId, repId: e.repId });
+    }
+  }
+  const targetOk = (e: WorkoutEventInput) => {
+    if (e.targetEventId === null) return true;
+    const t = targets.get(e.targetEventId);
+    if (!t) return false;
+    if (e.type === "edit" && t.type === "time") return e.timeMs !== null && e.timeMs < 2 * 3_600_000;
+    if (e.type === "finish") return t.type === "lap" && t.groupId === e.groupId && t.repId === e.repId;
+    return true;
+  };
+  // A typed time is for a runner in the workout: planned, or moved in during it (a late arrival).
+  const inWorkout = new Set(workout.athletes.map((a) => a.athleteId));
+  const typedFor = [...new Set(inputs.filter((e) => e.type === "time" && e.athleteId && !inWorkout.has(e.athleteId)).map((e) => e.athleteId!))];
+  if (typedFor.length) {
+    for (const e of inputs) if (e.type === "move" && e.athleteId) inWorkout.add(e.athleteId);
+    for (const e of await events.find({ workoutId: workout._id, type: "move", athleteId: { $in: typedFor } }, { projection: { athleteId: 1 } }).toArray()) inWorkout.add(e.athleteId!);
+  }
   const accepted: string[] = [];
   const rejected: string[] = [];
   for (const e of inputs) {
@@ -69,7 +88,8 @@ export async function recordWorkoutEvents(workout: Workout, inputs: WorkoutEvent
       (e.repId === null || reps.has(e.repId)) &&
       (e.groupId === null || groups.has(e.groupId)) &&
       (e.athleteId === null || athletes.has(e.athleteId)) &&
-      (e.targetEventId === null || targets.has(e.targetEventId)) &&
+      targetOk(e) &&
+      (e.type !== "time" || inWorkout.has(e.athleteId!)) &&
       typedTimeOk(e) &&
       lapOk(e) &&
       (!workout.finishedAt || allowedWhenEnded(e));
