@@ -62,6 +62,7 @@ function beep(go: boolean) {
 }
 const ALERT_KEY = "ls_workout_alerts";
 const SINK_KEY = "ls_workout_sink";
+const SETTLE_KEY = "ls_workout_settle_ms";
 const tapTime = () => {
   const now = Date.now();
   return lastPointerDownMs && now - lastPointerDownMs < 1500 ? lastPointerDownMs : now;
@@ -115,20 +116,24 @@ export function WorkoutRecorder({
   const large = largePref === "1";
   const [sinkPref, setSinkPref] = useLocalValue(SINK_KEY);
   const sink = sinkPref !== "off";
+  // How long tapping has to pause before finished runners move down. A per-phone choice while we find the
+  // right number at practice; once settled, it becomes the one default and the choice goes.
+  const [settlePref, setSettlePref] = useLocalValue(SETTLE_KEY);
+  const settleMs = settlePref === "600" ? 600 : settlePref === "2000" ? 2000 : 1200;
   const [frozen, setFrozen] = useState<{ key: string; ids: string[] } | null>(null);
   const [tapSeq, setTapSeq] = useState(0);
   /** The last tap, to undo: a runner tapped in (name) or a Finish with no name yet (name null). */
   const [lastTap, setLastTap] = useState<{ eventId: string; name: string | null; ms: number; lapText: string | null } | null>(null);
-  // A second after the last tap the tiles settle; the undo offer lasts a little longer.
+  // A moment after the last tap the tiles settle; the undo offer lasts a little longer.
   useEffect(() => {
     if (tapSeq === 0) return;
-    const settle = setTimeout(() => setFrozen(null), 1200);
+    const settle = setTimeout(() => setFrozen(null), settleMs);
     const forget = setTimeout(() => setLastTap(null), 6000);
     return () => {
       clearTimeout(settle);
       clearTimeout(forget);
     };
-  }, [tapSeq]);
+  }, [tapSeq, settleMs]);
   const [alertPref, setAlertPref] = useLocalValue(ALERT_KEY);
   const alerts = alertPref !== "off";
 
@@ -960,9 +965,26 @@ export function WorkoutRecorder({
             <ChoiceRow
               active={sink}
               label="Finished runners move down"
-              hint="A second after your last tap, so nothing moves while you're tapping a pack. Ends fastest to slowest."
+              hint="After a pause in tapping, so nothing moves while you're tapping a pack. Ends fastest to slowest."
               onClick={() => setSinkPref(sink ? "off" : null)}
             />
+            {sink && (
+              <div className="flex items-center justify-between gap-3 px-1 pt-1">
+                <span className="text-[13px] text-ink-2">Move down after</span>
+                <Segmented
+                  size="sm"
+                  joined
+                  className="w-48"
+                  value={String(settleMs)}
+                  onChange={(v) => setSettlePref(v === "1200" ? null : v)}
+                  options={[
+                    { value: "600", label: "0.6 s" },
+                    { value: "1200", label: "1.2 s" },
+                    { value: "2000", label: "2 s" },
+                  ]}
+                />
+              </div>
+            )}
           </div>
           <SectionLabel className="mt-5 mb-1.5">Countdown</SectionLabel>
           <ChoiceRow
