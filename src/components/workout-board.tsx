@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Card, Segmented, Switch, Time } from "@/components/ui";
-import { WorkoutAthleteSheet } from "@/components/workout-athlete-sheet";
+import { Button, Card, Segmented, Switch, Time } from "@/components/ui";
+import { setRepTime, WorkoutAthleteSheet } from "@/components/workout-athlete-sheet";
 import { RepCell, SHOW_DELTAS_KEY } from "@/components/workout-rep-cell";
 import { useLocalValue } from "@/lib/client/use-local-value";
 import { groupTint, ON_GOAL_MS, repCellTone } from "@/components/workout-tint";
@@ -12,7 +12,7 @@ import { useWorkoutEvents } from "@/lib/client/use-workout-events";
 import type { Workout } from "@/lib/db/schema";
 import type { LastTime } from "@/lib/workouts";
 import { type GroupPhase, type GroupRepLog, replayWorkout, summarize } from "@/lib/workout-replay";
-import { formatElapsed } from "@/lib/time";
+import { formatElapsed, parseTypedTime } from "@/lib/time";
 
 type Plan = Pick<Workout, "sets" | "groups" | "athletes"> & { finishedAt: string | null };
 type Person = { id: string; name: string; gender: "M" | "F" | "X"; level: string };
@@ -58,6 +58,7 @@ export function WorkoutBoard({
   // One filter: everyone, a group ("g:<id>"), or girls or boys.
   const [filter, setFilter] = useState<string>("all");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [entering, setEntering] = useState(false);
   const [deltasPref, setDeltasPref] = useLocalValue(SHOW_DELTAS_KEY);
   const showDeltas = deltasPref !== "off";
 
@@ -101,6 +102,13 @@ export function WorkoutBoard({
         ))}
       </div>
       )}
+      {/* Typing times in from the paper sheet (or a watch): every cell becomes a box. */}
+      <div className="flex items-center justify-end gap-2">
+        {entering && <span className="mr-auto text-[13px] text-ink-2">Type each time (116 is 1:16); Enter goes down the column. Typed times win over taps.</span>}
+        <Button variant={entering ? "primary" : "secondary"} size="sm" onClick={() => setEntering((e) => !e)}>
+          {entering ? "Done entering" : "Enter times"}
+        </Button>
+      </div>
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -126,7 +134,7 @@ export function WorkoutBoard({
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ id, list, summary, goalMs }) => (
+              {rows.map(({ id, list, summary, goalMs }, rowIndex) => (
                 <tr key={id} className="border-b border-line last:border-0">
                   <td className="sticky left-0 z-10 bg-surface p-0">
                     <button type="button" onClick={() => setOpenId(id)} className="block w-full px-3 py-1.5 text-left hover:bg-surface-2">
@@ -139,8 +147,10 @@ export function WorkoutBoard({
                   </td>
                   {list.map((r, i) => (
                     <td key={r.repId} className={`px-1 py-1 text-right ${reps[i].number === 1 && i > 0 ? "border-l border-line" : ""}`}>
-                      {r.status === "done" && r.elapsedMs !== null ? (
-                        <RepCell time={ft(r.elapsedMs)} delta={showDeltas && r.deltaMs !== null ? signed(r.deltaMs, digits) : null} tone={repCellTone(r.deltaMs)} />
+                      {entering && r.status !== "running" ? (
+                        <TimeInput key={`${r.elapsedMs ?? ""}`} cell={`${rowIndex}:${i}`} valueMs={r.status === "done" ? r.elapsedMs : null} ft={ft} onSave={(ms) => setRepTime(send, id, r, ms)} onClear={r.typedEventId ? () => send({ type: "void", targetEventId: r.typedEventId! }) : null} />
+                      ) : r.status === "done" && r.elapsedMs !== null ? (
+                        <RepCell time={ft(r.elapsedMs)} delta={showDeltas && r.deltaMs !== null ? signed(r.deltaMs, digits) : null} tone={repCellTone(r.deltaMs)} typed={!!r.typedEventId} />
                       ) : r.status === "skipped" ? (
                         <span className="px-1.5 text-xs whitespace-nowrap text-ink-3">skipped</span>
                       ) : r.status === "stopped" ? (
@@ -219,15 +229,13 @@ export function WorkoutBoard({
           list={state.athletes.get(openId)!}
           last={lastTimes[openId] ?? null}
           onGrass={onGrass}
-          onAddTime={(repId, groupId, timeMs, finishEventId) =>
-            finishEventId ? send({ type: "edit", targetEventId: finishEventId, timeMs }) : send({ type: "finish", athleteId: openId, groupId, repId, timeMs })
-          }
+          onAddTime={(r, ms) => setRepTime(send, openId, r, ms)}
           onClose={() => setOpenId(null)}
         />
       )}
       <p className="text-xs leading-relaxed text-ink-3">
         {anyTimed
-          ? `Green is faster than goal, red slower; within a second is on goal. The small number under each time is how far off goal it was (the +/− switch at the top of the grid turns it off). "Skipped": didn't run that rep. "No time": started it but the group went on before they finished. "Done": done for today. "—": the group ended before that rep. Avg, spread and fade are per ${reps[0].label}, so reps of other distances compare fairly. Spread: slowest minus fastest. Fade: the second half against the first. "Rest after" is the rest each group took, from its last runner in to the next start, with how far off the plan it was; amber is more than 10 s long. Tap a name for that runner's reps.`
+          ? `Green is faster than goal, red slower; within a second is on goal. A dotted underline marks a typed time. The small number under each time is how far off goal it was (the +/− switch at the top of the grid turns it off). "Skipped": didn't run that rep. "No time": started it but the group went on before they finished. "Done": done for today. "—": the group ended before that rep. Avg, spread and fade are per ${reps[0].label}, so reps of other distances compare fairly. Spread: slowest minus fastest. Fade: the second half against the first. "Rest after" is the rest each group took, from its last runner in to the next start, with how far off the plan it was; amber is more than 10 s long. Tap a name for that runner's reps.`
           : "Times appear here as the reps are timed."}
       </p>
     </div>
@@ -307,5 +315,43 @@ function Clock({ label, value, tone = "text-ink", note = null, noteTone = "text-
       <Time className={`block text-2xl leading-tight font-semibold tracking-tight ${tone}`}>{value}</Time>
       {note && <span className={`block text-[11px] ${noteTone}`}>{note}</span>}
     </div>
+  );
+}
+
+/**
+ * One cell of the grid in Enter times mode: type a time, Enter (or leaving the box) saves it and
+ * Enter moves down to the next runner on the same rep, the way a paper sheet is read.
+ * Clearing a typed time takes it back out.
+ */
+function TimeInput({ cell, valueMs, ft, onSave, onClear }: { cell: string; valueMs: number | null; ft: (ms: number) => string; onSave: (ms: number) => void; onClear: (() => void) | null }) {
+  const [draft, setDraft] = useState(valueMs !== null ? ft(valueMs) : "");
+  const parsed = draft.trim() ? parseTypedTime(draft) : null;
+  const bad = draft.trim() !== "" && parsed === null;
+  const commit = () => {
+    if (!draft.trim()) {
+      if (valueMs !== null && onClear) onClear();
+      return;
+    }
+    if (parsed !== null && parsed !== valueMs && (valueMs === null || ft(parsed) !== ft(valueMs))) onSave(parsed);
+  };
+  return (
+    <input
+      data-cell={cell}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onFocus={(e) => e.target.select()}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        const [row, col] = cell.split(":").map(Number);
+        const next = document.querySelector<HTMLInputElement>(`[data-cell="${row + 1}:${col}"]`);
+        if (next) next.focus();
+        else e.currentTarget.blur();
+      }}
+      inputMode="decimal"
+      aria-label="Rep time"
+      className={`h-8 w-16 rounded border bg-surface px-1.5 text-right font-mono text-[13px] text-ink outline-none focus:border-brand ${bad ? "border-danger" : "border-line-strong"}`}
+    />
   );
 }

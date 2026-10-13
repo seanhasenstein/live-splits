@@ -28,7 +28,10 @@ export async function canTimeWorkout(workout: Workout) {
 }
 
 /** Once a coach ends a workout only fixes go in: a typed time, an edit, an undo, a note. Reopen it to run more. */
-const allowedWhenEnded = (e: WorkoutEventInput) => e.type === "edit" || e.type === "void" || e.type === "note" || (e.type === "finish" && e.timeMs !== null);
+const allowedWhenEnded = (e: WorkoutEventInput) => e.type === "edit" || e.type === "void" || e.type === "note" || e.type === "time" || (e.type === "finish" && e.timeMs !== null);
+
+/** A typed rep time names a runner and a rep, and is a believable rep (under two hours). */
+const typedTimeOk = (e: WorkoutEventInput) => e.type !== "time" || (e.athleteId !== null && e.repId !== null && e.timeMs !== null && e.timeMs < 2 * 3_600_000);
 
 /**
  * Store events; retries are safe (clientEventId is unique). Returns the ids now stored, and the
@@ -60,6 +63,7 @@ export async function recordWorkoutEvents(workout: Workout, inputs: WorkoutEvent
       (e.groupId === null || groups.has(e.groupId)) &&
       (e.athleteId === null || athletes.has(e.athleteId)) &&
       (e.targetEventId === null || targets.has(e.targetEventId)) &&
+      typedTimeOk(e) &&
       (!workout.finishedAt || allowedWhenEnded(e));
     if (!fits) {
       rejected.push(e.clientEventId);

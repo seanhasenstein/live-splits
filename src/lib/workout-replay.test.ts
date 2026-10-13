@@ -284,6 +284,23 @@ describe("edge cases from review", () => {
   });
 });
 
+describe("typed rep times", () => {
+  it("a typed time needs no start or finish, beats a tap, and can be edited or undone", () => {
+    const typed = ev("time", 500_000, { athleteId: "titus", repId: "a2", timeMs: 79_000, clientEventId: "ty1" });
+    // Rep 2 was never started in the app: the paper time still goes in.
+    const s = replayWorkout(workout, [typed]);
+    expect(s.athletes.get("titus")![1]).toMatchObject({ status: "done", elapsedMs: 79_000, deltaMs: -1_000, typedEventId: "ty1" });
+    // It beats a tapped finish on the same rep.
+    const tapped = [ev("rep_start", 0, { groupId: "g1", repId: "a1" }), ev("finish", 85_000, { athleteId: "eddy", repId: "a1" })];
+    expect(replayWorkout(workout, [...tapped, ev("time", 600_000, { athleteId: "eddy", repId: "a1", timeMs: 77_000 })]).athletes.get("eddy")![0].elapsedMs).toBe(77_000);
+    // An edit changes the time itself; a void takes it back out.
+    expect(replayWorkout(workout, [typed, ev("edit", 510_000, { targetEventId: "ty1", timeMs: 81_000 })]).athletes.get("titus")![1].elapsedMs).toBe(81_000);
+    expect(replayWorkout(workout, [typed, ev("void", 520_000, { targetEventId: "ty1" })]).athletes.get("titus")![1].status).toBe("pending");
+    // A skipped rep with a typed time ran after all.
+    expect(replayWorkout(workout, [ev("skip", 0, { athleteId: "titus", repId: "a2" }), typed]).athletes.get("titus")![1].status).toBe("done");
+  });
+});
+
 describe("summarize", () => {
   it("average pace, average vs goal, spread and fade across reps of any distance", () => {
     const reps = flattenPlan(workout);

@@ -36,7 +36,7 @@ export function WorkoutAthleteSheet({
   /** Today's workout is on grass. */
   onGrass: boolean;
   /** A typed time for a rep: a new finish, or an edit to the one there. */
-  onAddTime: (repId: string, groupId: string, timeMs: number, finishEventId: string | null) => void;
+  onAddTime: (rep: AthleteRep, elapsedMs: number) => void;
   onClose: () => void;
 }) {
   const { ft } = useTimeFormat();
@@ -66,7 +66,7 @@ export function AthleteBreakdown({
   list: AthleteRep[];
   last: LastTime | null;
   onGrass: boolean;
-  onAddTime: (repId: string, groupId: string, timeMs: number, finishEventId: string | null) => void;
+  onAddTime: (rep: AthleteRep, elapsedMs: number) => void;
 }) {
   const { ft, team } = useTimeFormat();
   const tenths = team === "tenths";
@@ -119,7 +119,8 @@ export function AthleteBreakdown({
           const next = list[i + 1];
           // Their own rest: in from this rep to the start of their next one.
           const restMs = r.status === "done" && r.finishMs !== null && next?.startMs != null && next.startMs > r.finishMs ? next.startMs - r.finishMs : null;
-          const canType = (r.status === "done" || r.status === "unfinished") && r.startMs !== null;
+          // Any rep can take a typed time (from a watch or the paper sheet) except one still being run.
+          const canType = r.status !== "running";
           return (
             <div key={r.repId}>
               <button
@@ -137,10 +138,13 @@ export function AthleteBreakdown({
                 </span>
                 <span className="flex-1">
                   {r.status === "done" && r.elapsedMs !== null ? (
-                    <Time className="font-semibold text-ink">{ft(r.elapsedMs)}</Time>
+                    <>
+                      <Time className="font-semibold text-ink">{ft(r.elapsedMs)}</Time>
+                      {r.typedEventId && <span className="ml-1.5 text-[11px] text-ink-3">typed</span>}
+                    </>
                   ) : (
                     <span className="text-ink-3">
-                      {r.status === "unfinished" ? "no time · tap to add" : r.status === "skipped" ? "skipped" : r.status === "stopped" ? "done for today" : r.status === "running" ? "running" : "·"}
+                      {r.status === "unfinished" ? "no time · tap to add" : r.status === "skipped" ? "skipped" : r.status === "stopped" ? "done for today" : r.status === "running" ? "running" : r.status === "not_run" ? "not run" : "·"}
                     </span>
                   )}
                   {last?.repMs[i] != null && <Time className="block text-[11px] text-ink-3">last time {ft(last.repMs[i]!)}</Time>}
@@ -156,7 +160,7 @@ export function AthleteBreakdown({
                     className="w-full"
                     disabled={typedMs === null}
                     onClick={() => {
-                      onAddTime(r.repId, r.groupId, r.startMs! + typedMs!, r.finishEventId);
+                      onAddTime(r, typedMs!);
                       setEditing(null);
                     }}
                   >
@@ -174,7 +178,7 @@ export function AthleteBreakdown({
         )}
       </div>
       <p className="mt-3 text-xs leading-relaxed text-ink-3">
-        Rest is theirs: from when they came in to when they started the next rep. Tap a time to fix it, or a &ldquo;no time&rdquo; to add one from a watch.
+        Rest is theirs: from when they came in to when they started the next rep. Tap any rep to type its time (from a watch or the paper sheet); a typed time wins over a tap.
       </p>
     </>
   );
@@ -230,4 +234,16 @@ function RepChart({ points, goalMs, reps, ft, baseLabel }: { points: { i: number
       </svg>
     </div>
   );
+}
+
+type SendEvent = (e: { type: "edit" | "time"; targetEventId?: string; athleteId?: string; groupId?: string; repId?: string; timeMs?: number }) => unknown;
+
+/**
+ * Set a rep's time to `elapsedMs`: edit the typed time if there is one, move a tapped finish if it
+ * has a start to measure from, else add a typed time (a rep never started in the app still gets it).
+ */
+export function setRepTime(send: SendEvent, athleteId: string, r: AthleteRep, elapsedMs: number) {
+  if (r.typedEventId) send({ type: "edit", targetEventId: r.typedEventId, timeMs: elapsedMs });
+  else if (r.finishEventId && r.startMs !== null) send({ type: "edit", targetEventId: r.finishEventId, timeMs: r.startMs + elapsedMs });
+  else send({ type: "time", athleteId, groupId: r.groupId, repId: r.repId, timeMs: elapsedMs });
 }

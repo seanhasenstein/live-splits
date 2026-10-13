@@ -72,6 +72,8 @@ export type AthleteRep = {
   deltaMs: number | null;
   /** The finish event, for edits and undo. */
   finishEventId: string | null;
+  /** A typed rep time, when there is one (it wins over a tap): to edit or undo it. */
+  typedEventId: string | null;
   /** Their own start (a late start), when they have one: undo it to go back to the group's clock. */
   ownStartEventId: string | null;
   /** Skipped with the group, then run later on their own ("make-up"). */
@@ -191,6 +193,9 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
   }
   const finishes = new Map<string, WorkoutEvent>(); // `${athleteId}:${ri}`, latest
   for (const e of ordered.filter((e) => e.type === "finish" && e.athleteId)) finishes.set(`${e.athleteId}:${repOf(e)}`, e);
+  // Typed rep times (from a watch or the paper sheet): the time itself, no start or finish needed. Latest wins.
+  const typedTimes = new Map<string, WorkoutEvent>(); // `${athleteId}:${ri}`
+  for (const e of ordered.filter((e) => e.type === "time" && e.athleteId && e.timeMs !== null)) typedTimes.set(`${e.athleteId}:${repOf(e)}`, e);
   const skipped = new Map<string, string>(); // `${athleteId}:${ri}` or `group:${groupId}:${ri}` -> the skip event
   for (const e of ordered.filter((e) => e.type === "skip")) {
     if (e.athleteId) skipped.set(`${e.athleteId}:${repOf(e)}`, e.clientEventId);
@@ -210,7 +215,10 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
       const startMs = ownStart.get(`${id}:${rep.index}`) ?? groupStart.get(`${groupId}:${rep.index}`) ?? null;
       const fin = finishes.get(`${id}:${rep.index}`);
       const finishMs = fin ? at(fin) : null;
-      const elapsedMs = startMs !== null && finishMs !== null && finishMs > startMs ? finishMs - startMs : null;
+      const typedEvent = typedTimes.get(`${id}:${rep.index}`);
+      // A typed time is a deliberate correction: it beats a tap (an edit to it changes the time itself).
+      const typedMs = typedEvent ? (editedTime.get(typedEvent.clientEventId) ?? typedEvent.timeMs!) : null;
+      const elapsedMs = typedMs ?? (startMs !== null && finishMs !== null && finishMs > startMs ? finishMs - startMs : null);
       const pace = goalPace.get(id) ?? null;
       const goalMs = pace !== null ? Math.round((pace * rep.meters) / 1000) : null;
       const notYetIn = (joinedAt.get(id) ?? 0) > rep.index;
@@ -218,7 +226,7 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
       // A make-up: they skipped the rep with the group and ran it later on their own clock.
       const makeUp = wasSkipped && ownStart.has(`${id}:${rep.index}`);
       const status: AthleteRepStatus =
-        fin && finishMs !== null
+        typedMs !== null || (fin && finishMs !== null)
           ? "done"
           : notYetIn || stoppedAt(id, rep.index)
             ? "stopped"
@@ -243,6 +251,7 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
         goalMs,
         deltaMs: elapsedMs !== null && goalMs !== null ? elapsedMs - goalMs : null,
         finishEventId: fin?.clientEventId ?? null,
+        typedEventId: typedEvent?.clientEventId ?? null,
         ownStartEventId: ownStartEvent.get(`${id}:${rep.index}`) ?? null,
         makeUp,
         skipEventId: skipped.get(`${id}:${rep.index}`) ?? null,

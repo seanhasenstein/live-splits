@@ -3,7 +3,7 @@
 import { Check, MoreHorizontal, Play, Plus, SlidersHorizontal, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { changeRepsAction } from "@/app/actions/workouts";
-import { AthleteBreakdown } from "@/components/workout-athlete-sheet";
+import { AthleteBreakdown, setRepTime } from "@/components/workout-athlete-sheet";
 import { RepCell, SHOW_DELTAS_KEY } from "@/components/workout-rep-cell";
 import { groupTint, ON_GOAL_MS, repCellTone } from "@/components/workout-tint";
 import { Alert, Button, Card, SectionLabel, Segmented, Sheet, Switch, Time } from "@/components/ui";
@@ -696,9 +696,7 @@ export function WorkoutRecorder({
           reps={reps}
           soFar={sheetRep.slice(0, Math.max(phase.kind === "running" ? repIndex : lastIndex + 1, 0))}
           list={sheetRep}
-          onAddTime={(repId, gid, timeMs, finishEventId) =>
-            finishEventId ? send({ type: "edit", targetEventId: finishEventId, timeMs }) : send({ type: "finish", athleteId: sheetFor, groupId: gid, repId, timeMs })
-          }
+          onAddTime={(r, ms) => setRepTime(send, sheetFor, r, ms)}
           ft={ft}
         />
       )}
@@ -818,7 +816,7 @@ function GroupRepsGrid({
                 {list.map((r) => (
                   <td key={r.repId} className="px-0.5 py-1 text-right">
                     {r.status === "done" && r.elapsedMs !== null ? (
-                      <RepCell time={ft(r.elapsedMs)} delta={showDeltas && r.deltaMs !== null ? deltaText(r.deltaMs, tenths) : null} tone={repCellTone(r.deltaMs)} />
+                      <RepCell time={ft(r.elapsedMs)} delta={showDeltas && r.deltaMs !== null ? deltaText(r.deltaMs, tenths) : null} tone={repCellTone(r.deltaMs)} typed={!!r.typedEventId} />
                     ) : (
                       <span className="px-1 text-xs text-ink-3">{r.status === "skipped" ? "skip" : r.status === "unfinished" ? "no time" : r.status === "stopped" ? "done" : r.status === "running" ? "now" : "·"}</span>
                     )}
@@ -899,7 +897,7 @@ function AthleteActions({
   /** Every rep of theirs, for the breakdown under the actions. */
   list: AthleteRep[];
   /** A typed time for any rep: fix one, or add one that has none. The sheet stays open for the next. */
-  onAddTime: (repId: string, groupId: string, timeMs: number, finishEventId: string | null) => void;
+  onAddTime: (rep: AthleteRep, elapsedMs: number) => void;
   ft: (ms: number) => string;
 }) {
   const btn = "w-full rounded-md border border-line px-3 py-3 text-left text-sm text-ink hover:bg-surface-2";
