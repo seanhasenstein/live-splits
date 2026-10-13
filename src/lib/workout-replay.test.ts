@@ -316,6 +316,21 @@ describe("marking runners after the fact", () => {
   });
 });
 
+describe("rest from the first runner in", () => {
+  it("starts the countdown at the first finish, with the others still out and still tappable", () => {
+    const firstIn = { ...workout, sets: [{ ...workout.sets[0], reps: workout.sets[0].reps.map((r) => ({ ...r, rest: { kind: "time" as const, ms: 60_000, from: "first" as const } })) }, workout.sets[1]] };
+    const evs = [ev("rep_start", 0, { groupId: "g1", repId: "a1" }), ev("finish", 70_000, { athleteId: "eddy", repId: "a1" })];
+    const s = replayWorkout(firstIn, evs);
+    expect(s.groups.get("g1")).toMatchObject({ kind: "rest", afterRepIndex: 0, restStartedMs: T0 + 70_000, nextStartMs: T0 + 130_000, stillOut: 1 });
+    expect(s.athletes.get("titus")![0].status).toBe("running");
+    // Before anyone's in, it's still the rep.
+    expect(replayWorkout(firstIn, [evs[0]]).groups.get("g1")).toMatchObject({ kind: "running" });
+    // The log counts the rest from the first in, against the plan.
+    const after = replayWorkout(firstIn, [...evs, ev("finish", 90_000, { athleteId: "titus", repId: "a1" }), ev("rep_start", 131_000, { groupId: "g1", repId: "a2" })]);
+    expect(after.groupLog.get("g1")![0]).toMatchObject({ restStartMs: T0 + 70_000, restMs: 61_000, plannedRestMs: 60_000 });
+  });
+});
+
 describe("summarize", () => {
   it("average pace, average vs goal, spread and fade across reps of any distance", () => {
     const reps = flattenPlan(workout);

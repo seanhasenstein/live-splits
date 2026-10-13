@@ -276,7 +276,7 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
     const startEventId = groupStartEvent.get(`${g.id}:${current.index}`) ?? null;
     // A make-up of this rep runs on its own: the group's rest goes on around it.
     const stillOut = members.filter((m) => (m.status === "running" && !m.makeUp) || m.status === "pending").length;
-    const earlyRest = restStart.get(`${g.id}:${current.index}`);
+    const earlyRest = restStart.get(`${g.id}:${current.index}`) ?? firstInRest(current, members);
     const lastRep = current.index === reps.length - 1 || endsHere;
     // The last rep (planned, or the coach ended the group here) has no rest after it: it runs until everyone's in.
     if (stillOut > 0 && (earlyRest === undefined || lastRep)) {
@@ -303,7 +303,7 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
       if (startMs === undefined) continue;
       const members = athleteIds.filter((id) => groupAt(id, r.index) === g.id).map((id) => athletes.get(id)![r.index]);
       const allIn = members.every((m) => (m.status !== "running" || m.makeUp) && m.status !== "pending");
-      const early = restStart.get(`${g.id}:${r.index}`);
+      const early = restStart.get(`${g.id}:${r.index}`) ?? firstInRest(r, members);
       const restStartMs = early ?? (allIn || (lastStarted.get(g.id) ?? -1) > r.index ? restBegan(members, startMs) : null);
       const next = reps[r.index + 1] ? groupStart.get(`${g.id}:${r.index + 1}`) : undefined;
       const rest = r.restAfter;
@@ -322,6 +322,13 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
   }
 
   return { reps, athletes, groups, groupAt, groupLog };
+}
+
+/** A rest counted from the first runner in starts at the first finish, as if the coach had tapped Start rest then. */
+function firstInRest(rep: FlatRep, members: AthleteRep[]): number | undefined {
+  if (rep.restAfter?.kind !== "time" || rep.restAfter.from !== "first") return undefined;
+  const first = Math.min(...members.map((m) => m.finishMs ?? Infinity));
+  return Number.isFinite(first) ? first : undefined;
 }
 
 /** The rest begins when the last runner comes in (the group's rep is over then), else at the start when nobody ran. */
