@@ -408,6 +408,7 @@ export function WorkoutRecorder({
   const [guestName, setGuestName] = useState("");
   const [guestGender, setGuestGender] = useState<"F" | "M" | "X">("X");
   const [guestGoal, setGuestGoal] = useState("");
+  const guestGoalBad = guestGoal.trim() !== "" && parseDuration(guestGoal) === null;
   const [guestError, setGuestError] = useState<string | null>(null);
   const [addingGuest, startGuest] = useTransition();
   const [repsError, setRepsError] = useState<string | null>(null);
@@ -1122,6 +1123,7 @@ export function WorkoutRecorder({
               e.preventDefault();
               const name = guestName.trim();
               if (!name) return;
+              if (guestGoalBad) return setGuestError("Type the goal as a time, like 1:30 or 90, or leave it empty.");
               setGuestError(null);
               startGuest(async () => {
                 try {
@@ -1165,7 +1167,7 @@ export function WorkoutRecorder({
                 onChange={(e) => setGuestGoal(e.target.value)}
                 placeholder={`goal / ${reps[0].label}`}
                 inputMode="decimal"
-                className={`w-32! text-right font-mono ${guestGoal.trim() && parseDuration(guestGoal) === null ? "border-danger!" : ""}`}
+                className={`w-32! text-right font-mono ${guestGoalBad ? "border-danger!" : ""}`}
                 aria-label={`Guest's goal per ${reps[0].label} (optional)`}
               />
             </div>
