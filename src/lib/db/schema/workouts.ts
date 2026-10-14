@@ -90,6 +90,12 @@ export const Workout = tenantDoc({
   sets: z.array(RepSet).min(1),
   groups: z.array(WorkoutGroup).min(1),
   athletes: z.array(WorkoutAthlete),
+  /**
+   * Guest runners (visiting middle schoolers, a tryout): a name for this workout only, never an athlete
+   * record, so they stay out of the roster, meets, records and history. Their ids start "guest_"; they're
+   * in `athletes` like anyone (or join mid-workout with a move event, like a late arrival).
+   */
+  guests: z.array(z.object({ id: z.string().regex(/^guest_[A-Za-z0-9]+$/), name: z.string().min(1).max(40) })).default([]),
   visibility: WorkoutVisibility,
   notes: z.string().nullable(),
   /** Set when the coach ends the workout. */

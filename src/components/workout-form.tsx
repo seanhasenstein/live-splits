@@ -71,11 +71,28 @@ export function WorkoutForm({
   const [athletes, setAthletes] = useState(() => {
     const byId = new Map(initial.athletes.map((a) => [a.athleteId, a]));
     const fresh = initial.athletes.length === 0;
-    return roster.map((r) => {
+    const rows = roster.map((r) => {
       const a = byId.get(r.id);
       return { athleteId: r.id, in: fresh || !!a, groupId: a?.groupId ?? initial.groups[0].id, goal: a?.goalPaceMsPerKm ?? null };
     });
+    // Guests run with everyone else (group, goal); their names live in `guests`.
+    const guestRows = initial.guests.map((g) => {
+      const a = byId.get(g.id);
+      return { athleteId: g.id, in: true, groupId: a?.groupId ?? initial.groups[0].id, goal: a?.goalPaceMsPerKm ?? null };
+    });
+    return [...rows, ...guestRows];
   });
+  /** Guest runners (visiting middle schoolers…): a name for this workout only, never an athlete record. */
+  const [guests, setGuests] = useState(initial.guests);
+  const addGuest = () => {
+    const id = `guest_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    setGuests((g) => [...g, { id, name: "" }]);
+    setAthletes((list) => [...list, { athleteId: id, in: true, groupId: groups[0].id, goal: null }]);
+  };
+  const removeGuest = (id: string) => {
+    setGuests((g) => g.filter((x) => x.id !== id));
+    setAthletes((list) => list.filter((a) => a.athleteId !== id));
+  };
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -133,6 +150,7 @@ export function WorkoutForm({
       effort,
       sets: plan,
       groups,
+      guests: guests.map((g) => ({ id: g.id, name: g.name.trim() })),
       athletes: included.map((a) => ({ athleteId: a.athleteId, groupId: groups.some((g) => g.id === a.groupId) ? a.groupId : groups[0].id, goalPaceMsPerKm: a.goal })),
       notes: notes.trim() || null,
       templateId: initial.templateId ?? null,
@@ -372,6 +390,61 @@ export function WorkoutForm({
             </CardBody>
           );
         })}
+        <CardBody flush>
+          <div className="flex items-center justify-between bg-surface-2 px-4 py-1.5">
+            <SectionLabel>Guests</SectionLabel>
+            <button type="button" onClick={addGuest} className="flex items-center gap-1 text-[13px] font-medium text-brand-text hover:underline">
+              <Plus className="size-3.5" />
+              Add a guest
+            </button>
+          </div>
+          {guests.length === 0 ? (
+            <p className="px-4 py-2.5 text-[13px] text-ink-3">Visiting runners (middle schoolers, a tryout): timed like everyone, kept off the roster, meets and records.</p>
+          ) : (
+            <div className="divide-y divide-line">
+              {guests.map((g) => {
+                const a = athletes.find((x) => x.athleteId === g.id);
+                if (!a) return null;
+                const draft = goalDraft(g.id, a.goal);
+                const parsed = parseDuration(draft);
+                return (
+                  <div key={g.id} className="flex items-center gap-3 px-4 py-2">
+                    <Input
+                      value={g.name}
+                      onChange={(e) => setGuests((list) => list.map((x) => (x.id === g.id ? { ...x, name: e.target.value } : x)))}
+                      placeholder="Name, e.g. Ava R. (MS)"
+                      maxLength={40}
+                      className="min-w-0 flex-1"
+                      aria-label="Guest's name"
+                    />
+                    {groups.length > 1 && (
+                      <Select value={a.groupId} onChange={(e) => setAthletes((list) => list.map((x) => (x.athleteId === g.id ? { ...x, groupId: e.target.value } : x)))} className="w-28" aria-label={`${g.name || "Guest"}'s group`}>
+                        {groups.map((gr) => (
+                          <option key={gr.id} value={gr.id}>
+                            {gr.name}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                    <div className="w-20 shrink-0">
+                      <Input
+                        value={draft}
+                        onChange={(e) => setGoalFromText(g.id, e.target.value)}
+                        placeholder="goal"
+                        inputMode="decimal"
+                        className={`text-right font-mono ${draft && parsed === null ? "border-danger!" : ""}`}
+                        aria-label={`${g.name || "Guest"}'s goal per ${mainLabel}`}
+                      />
+                    </div>
+                    <button type="button" onClick={() => removeGuest(g.id)} className="rounded p-1.5 text-ink-3 hover:bg-surface-2 hover:text-ink" aria-label={`Remove ${g.name || "this guest"}`}>
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardBody>
       </Card>
 
       <Card>

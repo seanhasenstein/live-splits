@@ -85,7 +85,7 @@ export default async function WorkoutPage({ params }: PageProps<"/workouts/[work
 
           <WorkoutBoard
             workoutId={workout._id}
-            initialPlan={{ sets: workout.sets, groups: workout.groups, athletes: workout.athletes, finishedAt: workout.finishedAt?.toISOString() ?? null }}
+            initialPlan={{ sets: workout.sets, groups: workout.groups, athletes: workout.athletes, guests: workout.guests, finishedAt: workout.finishedAt?.toISOString() ?? null }}
             people={people}
             lastTimes={lastTimes}
             surface={surfaceOf(workout)}

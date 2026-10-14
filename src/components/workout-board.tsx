@@ -15,7 +15,7 @@ import type { LastTime } from "@/lib/workouts";
 import { type GroupPhase, type GroupRepLog, replayWorkout, summarize } from "@/lib/workout-replay";
 import { formatElapsed, parseDuration } from "@/lib/time";
 
-type Plan = Pick<Workout, "sets" | "groups" | "athletes"> & { finishedAt: string | null };
+type Plan = Pick<Workout, "sets" | "groups" | "athletes" | "guests"> & { finishedAt: string | null };
 type Person = { id: string; name: string; gender: "M" | "F" | "X"; level: string };
 
 const signed = (ms: number, digits: 0 | 1) => {
@@ -55,7 +55,11 @@ export function WorkoutBoard({
     return () => clearInterval(t);
   }, [offsetMs]);
   const state = useMemo(() => replayWorkout(plan, events), [plan, events]);
-  const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
+  // The roster plus this workout's guests (a guest added mid-practice shows up with the next poll).
+  const byId = useMemo(
+    () => new Map([...people.map((p) => [p.id, p] as const), ...(plan.guests ?? []).map((g) => [g.id, { id: g.id, name: g.name, gender: "X" as const, level: "Guest" }] as const)]),
+    [people, plan.guests],
+  );
   // One filter: everyone, a group ("g:<id>"), or girls or boys.
   const [filter, setFilter] = useState<string>("all");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -220,7 +224,7 @@ export function WorkoutBoard({
                       ) : r.status === "unfinished" ? (
                         <span className="px-1.5 text-xs whitespace-nowrap text-ink-3">no time</span>
                       ) : r.status === "not_run" ? (
-                        <span className="px-1.5 text-ink-3" title="The group ended before this rep">—</span>
+                        <span className="px-1.5 text-ink-3" title="Not run: the group ended before it, or they joined after">—</span>
                       ) : r.status === "running" ? (
                         <span className="px-1.5 text-xs text-gold-text">running</span>
                       ) : (
@@ -308,7 +312,7 @@ export function WorkoutBoard({
       )}
       <p className="text-xs leading-relaxed text-ink-3">
         {anyTimed
-          ? `Green is faster than goal, red slower; within a second is on goal. A dotted underline marks a typed time. The small number under each time is how far off goal it was (the +/− switch at the top of the grid turns it off). "Skipped": didn't run that rep. "No time": started it but the group went on before they finished. "Done": done for today. "—": the group ended before that rep. Avg, spread and fade are per ${reps[0].label}, so reps of other distances compare fairly. Spread: slowest minus fastest. Fade: the second half against the first. "Rest after" is the rest each group took, from its last runner in to the next start, with how far off the plan it was; amber is more than 10 s long. Tap a name for that runner's reps.`
+          ? `Green is faster than goal, red slower; within a second is on goal. A dotted underline marks a typed time. The small number under each time is how far off goal it was (the +/− switch at the top of the grid turns it off). "Skipped": didn't run that rep. "No time": started it but the group went on before they finished. "Done": done for today. "—": not run (the group ended before it, or they joined after). Avg, spread and fade are per ${reps[0].label}, so reps of other distances compare fairly. Spread: slowest minus fastest. Fade: the second half against the first. "Rest after" is the rest each group took, from its last runner in to the next start, with how far off the plan it was; amber is more than 10 s long. Tap a name for that runner's reps.`
           : "Times appear here as the reps are timed."}
       </p>
     </div>

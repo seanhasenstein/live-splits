@@ -34,7 +34,7 @@ export default async function RecordWorkoutPage({ params, searchParams }: PagePr
       <Page>
         <WorkoutRecorder
           workoutId={workout._id}
-          initialPlan={{ sets: workout.sets, groups: workout.groups, athletes: workout.athletes, finishedAt: workout.finishedAt?.toISOString() ?? null }}
+          initialPlan={{ sets: workout.sets, groups: workout.groups, athletes: workout.athletes, guests: workout.guests, finishedAt: workout.finishedAt?.toISOString() ?? null }}
           people={roster.map((a) => ({ id: a._id, name: a.displayName }))}
           initialGroupId={typeof group === "string" ? group : null}
         />

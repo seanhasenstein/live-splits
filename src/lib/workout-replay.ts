@@ -55,7 +55,7 @@ export function flattenPlan(workout: Pick<Workout, "sets">): FlatRep[] {
 
 /**
  * "unfinished": they started it but the group went on to the next rep with no finish for them.
- * "not_run": their group ended before this rep.
+ * "not_run": their group ended before this rep, or they joined the workout after it.
  */
 export type AthleteRepStatus = "pending" | "running" | "done" | "skipped" | "stopped" | "unfinished" | "not_run";
 
@@ -243,7 +243,9 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
       const status: AthleteRepStatus =
         typedMs !== null || (fin && tappedMs !== null)
           ? "done"
-          : notYetIn || stoppedAt(id, rep.index)
+          : notYetIn
+            ? "not_run" // a late arrival (or a guest added mid-workout) wasn't there yet
+            : stoppedAt(id, rep.index)
             ? "stopped"
             : makeUp
               ? "running"

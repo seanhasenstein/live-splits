@@ -2,12 +2,12 @@
 
 import { Check, ChevronRight, ListChecks, MoreHorizontal, Play, Plus, SlidersHorizontal, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { changeRepsAction } from "@/app/actions/workouts";
+import { addGuestAction, changeRepsAction } from "@/app/actions/workouts";
 import { AthleteBreakdown, setRepTime } from "@/components/workout-athlete-sheet";
 import { MarkRunnersSheet } from "@/components/workout-mark-sheet";
 import { differsFromTap, RepCell, repCellTitle, SHOW_DELTAS_KEY } from "@/components/workout-rep-cell";
 import { countdownFlash, groupTint, ON_GOAL_MS, repCellTone } from "@/components/workout-tint";
-import { Alert, Button, Card, SectionLabel, Segmented, Sheet, Switch, Time } from "@/components/ui";
+import { Alert, Button, Card, Input, SectionLabel, Segmented, Sheet, Switch, Time } from "@/components/ui";
 import { offsetForTap, useClock } from "@/lib/client/clock";
 import { useLocalValue } from "@/lib/client/use-local-value";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
@@ -19,7 +19,7 @@ import { type AthleteRep, type FlatRep, replayWorkout, summarize } from "@/lib/w
 import { shortNames as shortNamesOf } from "@/lib/names";
 import { formatElapsed } from "@/lib/time";
 
-type Plan = Pick<Workout, "sets" | "groups" | "athletes"> & { finishedAt: string | null };
+type Plan = Pick<Workout, "sets" | "groups" | "athletes" | "guests"> & { finishedAt: string | null };
 
 /**
  * When a tap happened: the finger landing, not the lift (see the race tap
@@ -110,7 +110,8 @@ export function WorkoutRecorder({
   const { events, plan, send, online, loaded, unsent, refresh, signedOut } = useWorkoutEvents(workoutId, initialPlan, groupId);
   const group = plan.groups.find((g) => g.id === groupId) ?? plan.groups[0];
   const state = useMemo(() => replayWorkout(plan, events), [plan, events]);
-  const nameOf = useMemo(() => new Map(people.map((p) => [p.id, p.name])), [people]);
+  // Names: the roster, plus this workout's guests (including any added on another phone since).
+  const nameOf = useMemo(() => new Map([...people.map((p) => [p.id, p.name] as const), ...(plan.guests ?? []).map((g) => [g.id, g.name] as const)]), [people, plan.guests]);
   // Short names for tight spots, told apart within this workout ("Emma K." / "Emma W.").
   const short = useMemo(() => shortNamesOf([...state.athletes.keys()].map((id) => ({ id, name: nameOf.get(id) ?? "?" }))), [state.athletes, nameOf]);
   const shortOf = (id: string) => short.get(id) ?? (nameOf.get(id) ?? "?").split(" ")[0];
@@ -404,6 +405,9 @@ export function WorkoutRecorder({
   // Changing the plan mid-workout: one more rep at the end, or drop the last one.
   const [repsOpen, setRepsOpen] = useState(false);
   const [marking, setMarking] = useState(false);
+  const [guestName, setGuestName] = useState("");
+  const [guestError, setGuestError] = useState<string | null>(null);
+  const [addingGuest, startGuest] = useTransition();
   const [repsError, setRepsError] = useState<string | null>(null);
   const [changingReps, startChange] = useTransition();
   const lastRep = reps[reps.length - 1];
@@ -813,7 +817,7 @@ export function WorkoutRecorder({
               <ListChecks className="size-4 text-ink-2" />
               Mark runners: done for today, skipped…
             </button>
-            {phase.kind !== "done" && notInWorkout.length > 0 && (
+            {phase.kind !== "done" && !plan.finishedAt && (
               <button
                 type="button"
                 onClick={() => {
@@ -1109,7 +1113,37 @@ export function WorkoutRecorder({
 
       {adding && (
         <Sheet title="Add a runner" subtitle={`Joins ${group.name} from rep ${joinIndex + 1}`} onClose={() => setAdding(false)}>
-          <div className="max-h-[60dvh] divide-y divide-line overflow-y-auto">
+          {/* A visitor (a middle schooler…): a name for this workout only, never an athlete record. */}
+          <form
+            className="mb-3 flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const name = guestName.trim();
+              if (!name) return;
+              setGuestError(null);
+              startGuest(async () => {
+                try {
+                  const r = await addGuestAction(workoutId, name);
+                  if (r.error || !r.id) return setGuestError(r.error ?? "Couldn't add the guest");
+                  // Joins this group from the rep up, like a late arrival.
+                  send({ type: "move", athleteId: r.id, groupId: group.id, repId: reps[joinIndex].id });
+                  await refresh();
+                  setGuestName("");
+                  setAdding(false);
+                } catch {
+                  setGuestError("Couldn't reach the server to add a guest. Try again when you have a connection.");
+                }
+              });
+            }}
+          >
+            <Input value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Add a guest, e.g. Ava R. (MS)" maxLength={40} className="min-w-0 flex-1" aria-label="Guest's name" />
+            <Button type="submit" variant="secondary" disabled={addingGuest || !guestName.trim()}>
+              Add guest
+            </Button>
+          </form>
+          {guestError && <p className="mb-2 text-[13px] text-danger">{guestError}</p>}
+          <p className="mb-1 text-[13px] text-ink-2">Guests are timed like everyone but kept off the roster, meets and records.{notInWorkout.length > 0 ? " Or pick someone from the roster:" : ""}</p>
+          <div className="max-h-[50dvh] divide-y divide-line overflow-y-auto">
             {notInWorkout.map((p) => (
               <button
                 key={p.id}

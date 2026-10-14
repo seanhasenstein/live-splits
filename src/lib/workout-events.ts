@@ -54,7 +54,7 @@ export async function recordWorkoutEvents(workout: Workout, inputs: WorkoutEvent
   const events = collection(db, "workoutEvents");
   const reps = new Set(workout.sets.flatMap((s) => s.reps.map((r) => r.id)));
   const groups = new Set(workout.groups.map((g) => g.id));
-  const athletes = new Set(workout.athletes.map((a) => a.athleteId));
+  const athletes = new Set([...workout.athletes.map((a) => a.athleteId), ...workout.guests.map((g) => g.id)]);
   if (inputs.some((e) => e.athleteId !== null && !athletes.has(e.athleteId))) {
     for (const r of await collection(db, "seasonRosters").find({ seasonId: workout.seasonId, deletedAt: null }, { projection: { athleteId: 1 } }).toArray()) athletes.add(r.athleteId);
   }
@@ -78,6 +78,7 @@ export async function recordWorkoutEvents(workout: Workout, inputs: WorkoutEvent
   };
   // A typed time or a flag is for a runner in the workout: planned, or moved in during it (a late arrival).
   const inWorkout = new Set(workout.athletes.map((a) => a.athleteId));
+  // (A guest added mid-workout is in once their move arrives, checked below like any late arrival.)
   const typedFor = [...new Set(inputs.filter((e) => (e.type === "time" || e.type === "flag") && e.athleteId && !inWorkout.has(e.athleteId)).map((e) => e.athleteId!))];
   if (typedFor.length) {
     for (const e of inputs) if (e.type === "move" && e.athleteId) inWorkout.add(e.athleteId);

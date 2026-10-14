@@ -62,7 +62,11 @@ export async function saveWorkoutAction(workoutId: string | null, payloadJson: s
   if (!input.athletes.every((a) => groupIds.has(a.groupId))) return { error: "An athlete is in a group that doesn't exist" };
   const ids = input.athletes.map((a) => a.athleteId);
   if (new Set(ids).size !== ids.length) return { error: "An athlete is listed twice" };
-  if ((await listAthletes(schoolId, ids)).length !== ids.length) return { error: "Unknown athlete" };
+  // Guests are checked against the workout's own guest list; everyone else must be a real athlete.
+  const guestIds = new Set(input.guests.map((g) => g.id));
+  if (guestIds.size !== input.guests.length) return { error: "A guest is listed twice" };
+  const athleteIds = ids.filter((id) => !guestIds.has(id));
+  if ((await listAthletes(schoolId, athleteIds)).length !== athleteIds.length) return { error: "Unknown athlete" };
 
   const db = await getDb();
   const now = new Date();
@@ -102,6 +106,7 @@ export async function saveWorkoutAction(workoutId: string | null, payloadJson: s
     sets: expandSets(input.sets, newId),
     groups: input.groups,
     athletes: input.athletes,
+    guests: input.guests,
     notes: input.notes || null,
   };
 
@@ -234,4 +239,23 @@ export async function flagCountAction(workoutId: string): Promise<number> {
   const workout = await getWorkout(workoutId);
   if (!workout || workout.schoolId !== session!.schoolId) return 0;
   return (await flagCounts([workout._id])).get(workout._id) ?? 0;
+}
+
+/**
+ * Add a guest runner mid-practice (a visiting middle schooler): a name on this workout only. Whoever is
+ * timing can; the phone then joins them to its group from the current rep, like a late arrival.
+ */
+export async function addGuestAction(workoutId: string, name: string): Promise<{ error?: string; id?: string }> {
+  const workout = await getWorkout(workoutId);
+  if (!workout) return { error: "Workout not found" };
+  const session = await canTimeWorkout(workout);
+  if (!session) return { error: "Not allowed" };
+  const clean = name.trim().slice(0, 40);
+  if (!clean) return { error: "Give the guest a name" };
+  const id = `guest_${newId()}`;
+  await collection(await getDb(), "workouts").updateOne(
+    { _id: workout._id },
+    { $push: { guests: { id, name: clean } }, $set: { updatedAt: new Date(), updatedBy: sessionActor(session) } },
+  );
+  return { id };
 }

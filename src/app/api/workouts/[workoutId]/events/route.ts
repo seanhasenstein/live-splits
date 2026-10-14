@@ -47,6 +47,6 @@ export async function GET(request: Request, { params }: RouteContext<"/api/worko
     events,
     serverTimeMs,
     recording,
-    workout: { sets: workout.sets, groups: workout.groups, athletes: workout.athletes, finishedAt: workout.finishedAt },
+    workout: { sets: workout.sets, groups: workout.groups, athletes: workout.athletes, guests: workout.guests, finishedAt: workout.finishedAt },
   });
 }

@@ -5,7 +5,7 @@ import { offsetForTap } from "@/lib/client/clock";
 import type { Workout, WorkoutEvent } from "@/lib/db/schema";
 import type { WorkoutEventInput } from "@/lib/workout-events";
 
-type Plan = Pick<Workout, "sets" | "groups" | "athletes"> & { finishedAt: string | null };
+type Plan = Pick<Workout, "sets" | "groups" | "athletes" | "guests"> & { finishedAt: string | null };
 type Queued = WorkoutEventInput & { queuedAt: number };
 
 const POLL_MS = 2_000;

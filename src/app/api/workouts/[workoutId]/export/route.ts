@@ -23,7 +23,7 @@ export async function GET(_request: Request, { params }: RouteContext<"/api/work
   const rows = buildWorkoutCsvRows({
     workout,
     state: replayWorkout(workout, events),
-    names: new Map(roster.map((a) => [a._id, a.displayName])),
+    names: new Map([...roster.map((a) => [a._id, a.displayName] as const), ...workout.guests.map((g) => [g.id, `${g.name} (guest)`] as const)]),
     precision: program?.settings.timePrecision ?? "tenths",
   });
   const fileName = `${workout.date}-${workout.name}.csv`.replace(/[^\w.-]+/g, "-").toLowerCase();

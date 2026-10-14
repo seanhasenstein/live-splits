@@ -88,7 +88,8 @@ describe("replayWorkout", () => {
       ev("move", 80_000, { athleteId: "will", groupId: "g1", repId: "a3" }), // moved up
     ]);
     expect(s.athletes.get("titus")!.map((r) => r.status)).toEqual(["skipped", "stopped", "stopped", "pending", "pending"]);
-    expect(s.athletes.get("sam")!.map((r) => r.status)).toEqual(["stopped", "pending", "pending", "pending", "pending"]);
+    // A late arrival wasn't there for the reps before they joined: not run, not "done for today".
+    expect(s.athletes.get("sam")!.map((r) => r.status)).toEqual(["not_run", "pending", "pending", "pending", "pending"]);
     expect(s.athletes.get("sam")![1].goalMs).toBeNull(); // no goal set for a walk-on
     expect(s.athletes.get("will")!.map((r) => r.groupId)).toEqual(["g2", "g2", "g1", "g1", "g1"]);
     // Titus skipped and Eddy finished: group 1 is resting after rep 1.

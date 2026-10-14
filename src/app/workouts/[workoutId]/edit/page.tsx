@@ -34,6 +34,7 @@ export default async function EditWorkoutPage({ params }: PageProps<"/workouts/[
             sets: toSetInputs(workout.sets),
             groups: workout.groups,
             athletes: workout.athletes,
+            guests: workout.guests,
             notes: workout.notes,
             expectedUpdatedAt: workout.updatedAt.getTime(),
           }}

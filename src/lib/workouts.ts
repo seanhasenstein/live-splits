@@ -7,7 +7,7 @@ import { describePlan, surfaceOf } from "@/lib/workout-plan";
 import { replayWorkout, summarize } from "@/lib/workout-replay";
 
 /** Fields added after the first workouts were saved: reads fill them in, as the schema's defaults would. */
-const withDefaults = (w: Workout): Workout => ({ ...w, surface: w.surface ?? null, conditions: w.conditions ?? [] });
+const withDefaults = (w: Workout): Workout => ({ ...w, surface: w.surface ?? null, conditions: w.conditions ?? [], guests: w.guests ?? [] });
 
 export async function listWorkouts(schoolId: string): Promise<Workout[]> {
   return (await collection(await getDb(), "workouts").find({ schoolId, deletedAt: null }).sort({ date: -1, createdAt: -1 }).toArray()).map(withDefaults);

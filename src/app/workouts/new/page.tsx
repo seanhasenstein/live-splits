@@ -71,6 +71,7 @@ export default async function NewWorkoutPage({ searchParams }: PageProps<"/worko
               sets: template ? toSetInputs(template.sets).map((s) => ({ ...s, id: undefined })) : [{ count: 12, value: 400, unit: "m", rest: { kind: "time", ms: 60_000 }, restAfter: null }],
               groups: [{ id: "g1", name: "Group 1" }],
               athletes: [],
+              guests: [],
               notes: null,
               templateId: template?._id ?? null,
             }}
