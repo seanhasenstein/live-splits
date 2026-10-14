@@ -95,7 +95,18 @@ export const Workout = tenantDoc({
    * record, so they stay out of the roster, meets, records and history. Their ids start "guest_"; they're
    * in `athletes` like anyone (or join mid-workout with a move event, like a late arrival).
    */
-  guests: z.array(z.object({ id: z.string().regex(/^guest_[A-Za-z0-9]+$/), name: z.string().min(1).max(40) })).default([]),
+  guests: z
+    .array(
+      z.object({
+        id: z.string().regex(/^guest_[A-Za-z0-9]+$/),
+        name: z.string().min(1).max(40),
+        /** For the Girls / Boys filters; X (or missing, on early guests) when not said. */
+        gender: z.enum(["F", "M", "X"]).optional(),
+        /** A goal set when they were added mid-practice (planned guests' goals are in `athletes`). */
+        goalPaceMsPerKm: z.int().positive().nullable().optional(),
+      }),
+    )
+    .default([]),
   visibility: WorkoutVisibility,
   notes: z.string().nullable(),
   /** Set when the coach ends the workout. */

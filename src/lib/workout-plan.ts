@@ -33,7 +33,15 @@ export const WorkoutPayload = z.object({
   notes: z.string().trim().max(2000).nullable(),
   /** Guest runners for this workout only (no athlete record); ids made on the device, "guest_…". */
   guests: z
-    .array(z.object({ id: z.string().regex(/^guest_[A-Za-z0-9]+$/), name: z.string().trim().min(1, "Give each guest a name").max(40) }))
+    .array(
+      z.object({
+        id: z.string().regex(/^guest_[A-Za-z0-9]+$/),
+        name: z.string().trim().min(1, "Give each guest a name").max(40),
+gender: z.enum(["F", "M", "X"]).optional(),
+        // Only for a guest added mid-practice (not in `athletes`): their goal lives here.
+        goalPaceMsPerKm: z.int().positive().max(3_599_999).nullable().optional(),
+      }),
+    )
     .max(40)
     .default([]),
   /** The template this was started from, kept on a new workout. */

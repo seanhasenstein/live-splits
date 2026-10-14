@@ -75,10 +75,11 @@ export function WorkoutForm({
       const a = byId.get(r.id);
       return { athleteId: r.id, in: fresh || !!a, groupId: a?.groupId ?? initial.groups[0].id, goal: a?.goalPaceMsPerKm ?? null };
     });
-    // Guests run with everyone else (group, goal); their names live in `guests`.
+    // Guests run with everyone else (group, goal); their names live in `guests`. One added mid-practice
+    // stays out of the plan (they joined on a later rep) and keeps their goal on the guest.
     const guestRows = initial.guests.map((g) => {
       const a = byId.get(g.id);
-      return { athleteId: g.id, in: true, groupId: a?.groupId ?? initial.groups[0].id, goal: a?.goalPaceMsPerKm ?? null };
+      return { athleteId: g.id, in: !!a, groupId: a?.groupId ?? initial.groups[0].id, goal: a ? a.goalPaceMsPerKm : (g.goalPaceMsPerKm ?? null) };
     });
     return [...rows, ...guestRows];
   });
@@ -86,7 +87,7 @@ export function WorkoutForm({
   const [guests, setGuests] = useState(initial.guests);
   const addGuest = () => {
     const id = `guest_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-    setGuests((g) => [...g, { id, name: "" }]);
+    setGuests((g) => [...g, { id, name: "", gender: "X" as const }]);
     setAthletes((list) => [...list, { athleteId: id, in: true, groupId: groups[0].id, goal: null }]);
   };
   const removeGuest = (id: string) => {
@@ -150,7 +151,10 @@ export function WorkoutForm({
       effort,
       sets: plan,
       groups,
-      guests: guests.map((g) => ({ id: g.id, name: g.name.trim() })),
+      guests: guests.map((g) => {
+        const row = athletes.find((a) => a.athleteId === g.id);
+        return { id: g.id, name: g.name.trim(), gender: g.gender ?? "X", goalPaceMsPerKm: row && !row.in ? row.goal : null };
+      }),
       athletes: included.map((a) => ({ athleteId: a.athleteId, groupId: groups.some((g) => g.id === a.groupId) ? a.groupId : groups[0].id, goalPaceMsPerKm: a.goal })),
       notes: notes.trim() || null,
       templateId: initial.templateId ?? null,
@@ -408,16 +412,30 @@ export function WorkoutForm({
                 const draft = goalDraft(g.id, a.goal);
                 const parsed = parseDuration(draft);
                 return (
-                  <div key={g.id} className="flex items-center gap-3 px-4 py-2">
+                  // On a phone the name gets its own line; the rest sit under it.
+                  <div key={g.id} className="flex flex-wrap items-center gap-2 px-4 py-2 sm:flex-nowrap sm:gap-3">
                     <Input
                       value={g.name}
                       onChange={(e) => setGuests((list) => list.map((x) => (x.id === g.id ? { ...x, name: e.target.value } : x)))}
                       placeholder="Name, e.g. Ava R. (MS)"
                       maxLength={40}
-                      className="min-w-0 flex-1"
+                      className="min-w-0 basis-full sm:basis-0 sm:flex-1"
                       aria-label="Guest's name"
                     />
-                    {groups.length > 1 && (
+                    {/* Girl / boy, for the Girls and Boys filters; nothing else is kept about a guest. */}
+                    <Select
+                      value={g.gender ?? "X"}
+                      onChange={(e) => setGuests((list) => list.map((x) => (x.id === g.id ? { ...x, gender: e.target.value as "F" | "M" | "X" } : x)))}
+                      className="w-24"
+                      aria-label={`${g.name || "Guest"}: girl or boy`}
+                    >
+                      <option value="X">—</option>
+                      <option value="F">Girl</option>
+                      <option value="M">Boy</option>
+                    </Select>
+                    {!a.in ? (
+                      <span className="whitespace-nowrap text-[13px] text-ink-3" title="Added during practice; their group comes from the record screen">Joined late</span>
+                    ) : groups.length > 1 && (
                       <Select value={a.groupId} onChange={(e) => setAthletes((list) => list.map((x) => (x.athleteId === g.id ? { ...x, groupId: e.target.value } : x)))} className="w-28" aria-label={`${g.name || "Guest"}'s group`}>
                         {groups.map((gr) => (
                           <option key={gr.id} value={gr.id}>
@@ -436,7 +454,7 @@ export function WorkoutForm({
                         aria-label={`${g.name || "Guest"}'s goal per ${mainLabel}`}
                       />
                     </div>
-                    <button type="button" onClick={() => removeGuest(g.id)} className="rounded p-1.5 text-ink-3 hover:bg-surface-2 hover:text-ink" aria-label={`Remove ${g.name || "this guest"}`}>
+                    <button type="button" onClick={() => removeGuest(g.id)} className="ml-auto rounded p-1.5 text-ink-3 hover:bg-surface-2 hover:text-ink" aria-label={`Remove ${g.name || "this guest"}`}>
                       <X className="size-4" />
                     </button>
                   </div>

@@ -131,7 +131,7 @@ export type WorkoutState = {
 
 const timeOf = (e: Pick<WorkoutEvent, "timeMs" | "serverTimeMs">) => e.timeMs ?? e.serverTimeMs;
 
-export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athletes">, events: WorkoutEvent[]): WorkoutState {
+export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athletes"> & { guests?: Workout["guests"] }, events: WorkoutEvent[]): WorkoutState {
   const reps = flattenPlan(workout);
   const repIndex = new Map(reps.map((r) => [r.id, r.index]));
 
@@ -158,7 +158,11 @@ export function replayWorkout(workout: Pick<Workout, "sets" | "groups" | "athlet
   };
   // Everyone the log mentions (a late arrival moved in) counts, as well as the planned athletes.
   const athleteIds = [...new Set([...workout.athletes.map((a) => a.athleteId), ...moves.map((m) => m.athleteId!)])];
-  const goalPace = new Map(workout.athletes.map((a) => [a.athleteId, a.goalPaceMsPerKm]));
+  // Goals: the plan's, plus any set on a guest added mid-practice.
+  const goalPace = new Map<string, number | null>([
+    ...(workout.guests ?? []).filter((g) => g.goalPaceMsPerKm != null).map((g) => [g.id, g.goalPaceMsPerKm!] as const),
+    ...workout.athletes.map((a) => [a.athleteId, a.goalPaceMsPerKm] as const),
+  ]);
   // A late arrival is only "in" from the rep they were moved in at.
   const joinedAt = new Map<string, number>();
   for (const id of athleteIds) if (!planned.has(id)) joinedAt.set(id, Math.min(...moves.filter((m) => m.athleteId === id).map(repOf)));

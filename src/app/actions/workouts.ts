@@ -245,17 +245,19 @@ export async function flagCountAction(workoutId: string): Promise<number> {
  * Add a guest runner mid-practice (a visiting middle schooler): a name on this workout only. Whoever is
  * timing can; the phone then joins them to its group from the current rep, like a late arrival.
  */
-export async function addGuestAction(workoutId: string, name: string): Promise<{ error?: string; id?: string }> {
+export async function addGuestAction(workoutId: string, name: string, gender: "F" | "M" | "X" = "X", goalPaceMsPerKm: number | null = null): Promise<{ error?: string; id?: string }> {
   const workout = await getWorkout(workoutId);
   if (!workout) return { error: "Workout not found" };
   const session = await canTimeWorkout(workout);
   if (!session) return { error: "Not allowed" };
   const clean = name.trim().slice(0, 40);
   if (!clean) return { error: "Give the guest a name" };
+  if (!["F", "M", "X"].includes(gender)) return { error: "Unknown gender" };
+  const goal = goalPaceMsPerKm !== null && Number.isInteger(goalPaceMsPerKm) && goalPaceMsPerKm > 0 && goalPaceMsPerKm < 3_600_000 ? goalPaceMsPerKm : null;
   const id = `guest_${newId()}`;
   await collection(await getDb(), "workouts").updateOne(
     { _id: workout._id },
-    { $push: { guests: { id, name: clean } }, $set: { updatedAt: new Date(), updatedBy: sessionActor(session) } },
+    { $push: { guests: { id, name: clean, gender, goalPaceMsPerKm: goal } }, $set: { updatedAt: new Date(), updatedBy: sessionActor(session) } },
   );
   return { id };
 }

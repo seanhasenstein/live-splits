@@ -17,7 +17,7 @@ import type { Workout } from "@/lib/db/schema";
 import { describeRest } from "@/lib/workout-plan";
 import { type AthleteRep, type FlatRep, replayWorkout, summarize } from "@/lib/workout-replay";
 import { shortNames as shortNamesOf } from "@/lib/names";
-import { formatElapsed } from "@/lib/time";
+import { formatElapsed, parseDuration } from "@/lib/time";
 
 type Plan = Pick<Workout, "sets" | "groups" | "athletes" | "guests"> & { finishedAt: string | null };
 
@@ -406,6 +406,8 @@ export function WorkoutRecorder({
   const [repsOpen, setRepsOpen] = useState(false);
   const [marking, setMarking] = useState(false);
   const [guestName, setGuestName] = useState("");
+  const [guestGender, setGuestGender] = useState<"F" | "M" | "X">("X");
+  const [guestGoal, setGuestGoal] = useState("");
   const [guestError, setGuestError] = useState<string | null>(null);
   const [addingGuest, startGuest] = useTransition();
   const [repsError, setRepsError] = useState<string | null>(null);
@@ -1115,7 +1117,7 @@ export function WorkoutRecorder({
         <Sheet title="Add a runner" subtitle={`Joins ${group.name} from rep ${joinIndex + 1}`} onClose={() => setAdding(false)}>
           {/* A visitor (a middle schooler…): a name for this workout only, never an athlete record. */}
           <form
-            className="mb-3 flex gap-2"
+            className="mb-3 space-y-2"
             onSubmit={(e) => {
               e.preventDefault();
               const name = guestName.trim();
@@ -1123,12 +1125,15 @@ export function WorkoutRecorder({
               setGuestError(null);
               startGuest(async () => {
                 try {
-                  const r = await addGuestAction(workoutId, name);
+                  // An optional goal, typed as a time for the first rep's distance, like the plan's goals.
+                  const goalMs = guestGoal.trim() ? parseDuration(guestGoal) : null;
+                  const r = await addGuestAction(workoutId, name, guestGender, goalMs !== null ? Math.round((goalMs * 1000) / reps[0].meters) : null);
                   if (r.error || !r.id) return setGuestError(r.error ?? "Couldn't add the guest");
                   // Joins this group from the rep up, like a late arrival.
                   send({ type: "move", athleteId: r.id, groupId: group.id, repId: reps[joinIndex].id });
                   await refresh();
                   setGuestName("");
+                  setGuestGoal("");
                   setAdding(false);
                 } catch {
                   setGuestError("Couldn't reach the server to add a guest. Try again when you have a connection.");
@@ -1136,10 +1141,34 @@ export function WorkoutRecorder({
               });
             }}
           >
-            <Input value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Add a guest, e.g. Ava R. (MS)" maxLength={40} className="min-w-0 flex-1" aria-label="Guest's name" />
-            <Button type="submit" variant="secondary" disabled={addingGuest || !guestName.trim()}>
-              Add guest
-            </Button>
+            <div className="flex gap-2">
+              <Input value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Add a guest, e.g. Ava R. (MS)" maxLength={40} className="min-w-0 flex-1" aria-label="Guest's name" />
+              <Button type="submit" variant="secondary" disabled={addingGuest || !guestName.trim()}>
+                Add guest
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Segmented
+                size="sm"
+                joined
+                className="w-44"
+                value={guestGender}
+                onChange={setGuestGender}
+                options={[
+                  { value: "F", label: "Girl" },
+                  { value: "M", label: "Boy" },
+                  { value: "X", label: "—" },
+                ]}
+              />
+              <Input
+                value={guestGoal}
+                onChange={(e) => setGuestGoal(e.target.value)}
+                placeholder={`goal / ${reps[0].label}`}
+                inputMode="decimal"
+                className={`w-32! text-right font-mono ${guestGoal.trim() && parseDuration(guestGoal) === null ? "border-danger!" : ""}`}
+                aria-label={`Guest's goal per ${reps[0].label} (optional)`}
+              />
+            </div>
           </form>
           {guestError && <p className="mb-2 text-[13px] text-danger">{guestError}</p>}
           <p className="mb-1 text-[13px] text-ink-2">Guests are timed like everyone but kept off the roster, meets and records.{notInWorkout.length > 0 ? " Or pick someone from the roster:" : ""}</p>

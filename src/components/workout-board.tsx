@@ -57,7 +57,7 @@ export function WorkoutBoard({
   const state = useMemo(() => replayWorkout(plan, events), [plan, events]);
   // The roster plus this workout's guests (a guest added mid-practice shows up with the next poll).
   const byId = useMemo(
-    () => new Map([...people.map((p) => [p.id, p] as const), ...(plan.guests ?? []).map((g) => [g.id, { id: g.id, name: g.name, gender: "X" as const, level: "Guest" }] as const)]),
+    () => new Map([...people.map((p) => [p.id, p] as const), ...(plan.guests ?? []).map((g) => [g.id, { id: g.id, name: g.name, gender: (g.gender ?? "X") as "F" | "M" | "X", level: "Guest" }] as const)]),
     [people, plan.guests],
   );
   // One filter: everyone, a group ("g:<id>"), or girls or boys.

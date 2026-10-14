@@ -378,6 +378,21 @@ describe("flags and the paper cross-check", () => {
   });
 });
 
+describe("guests", () => {
+  it("a guest added mid-practice joins from their rep, with the goal they were given", () => {
+    const withGuest = { ...workout, guests: [{ id: "guest_ava", name: "Ava R.", gender: "F" as const, goalPaceMsPerKm: 225_000 }] };
+    const s = replayWorkout(withGuest, [
+      ev("rep_start", 0, { groupId: "g1", repId: "a1" }),
+      ev("move", 50_000, { athleteId: "guest_ava", groupId: "g1", repId: "a2" }),
+      ev("rep_start", 140_000, { groupId: "g1", repId: "a2" }),
+      ev("finish", 230_000, { athleteId: "guest_ava", repId: "a2" }),
+    ]);
+    const ava = s.athletes.get("guest_ava")!;
+    expect(ava[0].status).toBe("not_run");
+    expect(ava[1]).toMatchObject({ status: "done", elapsedMs: 90_000, goalMs: 90_000, deltaMs: 0 });
+  });
+});
+
 describe("summarize", () => {
   it("average pace, average vs goal, spread and fade across reps of any distance", () => {
     const reps = flattenPlan(workout);
