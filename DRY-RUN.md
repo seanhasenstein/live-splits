@@ -43,6 +43,27 @@
   the gun can be typed from the clock time or set later from official results.
 - After each race, the live results is the review screen; fix there, then export.
 
+## Places (added Oct 15 2026, first used at the Big East conference meet Oct 17)
+
+- Set up per race: meet page → race Options → Count places. Tracked teams
+  (up to 6; names suggested from past results, labels and colors kept for
+  next time), award lines (All-conference: 10 / 20 / 30), and "Show places to
+  everyone" (off: only coaches and managers see them).
+- At a checkpoint, the record screen has Names / Names + places / Places only:
+  - One phone: Names + places. Tap our names as now and a team button for
+    their runners; Other for everyone else (hold Other for a pack of 2–5).
+  - Two phones: the name tapper stays on Names; a helper on Places only taps
+    Us / teams / Other for every runner. The 1st Us is the 1st name tapped.
+  - Tapping Other means counting everyone: places become overall, the
+    award lines and the whole-meet estimate show. Without Other, places are
+    among our runners and the tracked teams only (marked *).
+  - Mistakes: tap a chip in the strip (who it was, swap with the one ahead,
+    someone missed before it, remove), or Undo. Done locks the buttons.
+- Live results: place and ▲/▼ under each time, the Places card (head to head,
+  estimate, award lines), and at the finish real team scores from the live
+  feed or imported results. Meets that score only declared runners (more than
+  7 entered) can differ by a few points below the top teams.
+
 ## After the meet (in order)
 
 1. ~~Athlete race status (DNS / DNR / DNF)~~ — done Oct 6: Live results → Fix times

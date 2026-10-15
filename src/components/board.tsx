@@ -677,6 +677,7 @@ function RaceBoard({
             const r = allRows.find((x) => x.athleteId === openAthlete);
             return r ? projectAt(r, i) : null;
           }}
+          placeAt={(i) => (race.places ? placeAt(openAthlete, i) : null)}
           overdue={staff ? overdue : () => false}
           teamRank={(() => {
             // Position within the runner's own group (same gender and level), in race order: `rows` is
@@ -749,6 +750,7 @@ function AthleteSheet({
   neighbors,
   onPick,
   projectAt,
+  placeAt,
   overdue,
   teamRank,
   raceClockMs,
@@ -768,6 +770,8 @@ function AthleteSheet({
   onPick: (id: string) => void;
   /** Projected elapsed time at checkpoint i while the race runs, else null. */
   projectAt: (i: number) => number | null;
+  /** Their place at checkpoint i when places were counted there (null otherwise). */
+  placeAt: (i: number) => { place: number; overall: boolean; gained: number | null } | null;
   overdue: (projected: number) => boolean;
   /** Position within the runner's gender + level group, e.g. { rank: 3, of: 7, team: "girls varsity team" }. */
   teamRank: { rank: number; of: number; team: string } | null;
@@ -994,6 +998,17 @@ function AthleteSheet({
                 {c.label}
                 {officialCount > 0 && officialCount < timedCount && cell?.official !== null && cell?.official !== undefined && <span className="ml-1.5 text-[10px] font-semibold tracking-wide text-brand-text uppercase">official</span>}
                 {cell?.mark?.estimate && cell.official === null && <span className="ml-1.5 text-xs text-ink-3">estimate</span>}
+                {(() => {
+                  const p = placeAt(i);
+                  if (!p) return null;
+                  return (
+                    <span className="tnum block text-xs font-normal text-ink-2">
+                      {placeText(p.place)}
+                      {p.overall ? " place" : " among tracked teams"}
+                      {p.gained !== null && p.gained !== 0 && <span className={p.gained > 0 ? "text-brand-text" : "text-danger"}>{p.gained > 0 ? ` · up ${p.gained}` : ` · down ${-p.gained}`}</span>}
+                    </span>
+                  );
+                })()}
               </span>
               {(() => {
                 const p = here === null && !cell?.missed ? projectAt(i) : null;

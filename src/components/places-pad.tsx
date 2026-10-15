@@ -138,25 +138,19 @@ export function PlacesPad({
 
   return (
     <div className="px-3 pt-2">
-      <div className="mb-1.5 flex items-center justify-between gap-2 text-xs text-ink-2">
-        <span>
+      {/* One row: the next place, the last few counted (tap to fix), and the lock. Nothing here changes height. */}
+      <div className="relative mb-2 flex h-8 items-center gap-2 text-xs text-ink-2">
+        <span className="shrink-0">
           {locked ? (
-            <span className="font-medium text-ink">Done counting · {counted} counted</span>
+            <span className="font-medium text-ink">Done · {counted}</span>
           ) : (
             <>
-              Next: <span className="tnum text-base font-semibold text-ink">{ordinal(counted + 1)}</span>
-              {places && !places.countingAll && <span className="text-ink-3"> among tracked teams</span>}
+              Next <span className="tnum text-base font-semibold text-ink">{ordinal(counted + 1)}</span>
+              {places && !places.countingAll && <span className="text-ink-3">*</span>}
             </>
           )}
         </span>
-        <button type="button" onClick={() => setLocked((v) => !v)} className="flex items-center gap-1 rounded-md px-2 py-1 font-medium text-ink-2 hover:bg-surface-2">
-          {locked ? <LockOpen className="size-3.5" /> : <Lock className="size-3.5" />}
-          {locked ? "Count again" : "Done counting"}
-        </button>
-      </div>
-
-      {shown.length > 0 && (
-        <div className="mb-2 flex gap-1 overflow-x-auto">
+        <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
           {shown.map((entry, i) => {
             const index = offset + i;
             const team = entry.kind === "us" ? "us" : entry.kind === "other" ? "other" : entry.teamId;
@@ -178,17 +172,26 @@ export function PlacesPad({
             );
           })}
         </div>
-      )}
-
-      {burst !== null && !locked && (
-        <div className="mb-2 grid grid-cols-4 gap-1.5">
-          {[2, 3, 4, 5].map((n) => (
-            <Button key={n} variant="secondary" onClick={(e) => pack(e, n)} className="h-12 text-base font-bold">
-              +{n} Other
-            </Button>
-          ))}
-        </div>
-      )}
+        <button
+          type="button"
+          onClick={() => setLocked((v) => !v)}
+          aria-label={locked ? "Count again" : "Done counting"}
+          className={`flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium ${locked ? "bg-brand-soft text-ink" : "text-ink-2 hover:bg-surface-2"}`}
+        >
+          {locked ? <LockOpen className="size-3.5" /> : <Lock className="size-3.5" />}
+          {locked ? "Count again" : "Done"}
+        </button>
+        {/* Over the row, not above the buttons, so the buttons never move under a thumb. */}
+        {burst !== null && !locked && (
+          <div className="absolute inset-x-0 bottom-0 z-10 grid grid-cols-4 gap-1.5 bg-bg">
+            {[2, 3, 4, 5].map((n) => (
+              <Button key={n} variant="secondary" onClick={(e) => pack(e, n)} className="h-12 text-base font-bold">
+                +{n} Other
+              </Button>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className={`grid gap-1.5 ${big ? "grid-cols-2" : teams.length + 1 <= 3 ? "grid-cols-3" : "grid-cols-4"}`}>
         {big && button("us", "Us", US, "col-span-2 h-24!")}
