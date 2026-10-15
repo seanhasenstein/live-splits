@@ -1,9 +1,11 @@
 "use client";
 
-import { ChevronRight, CircleCheck, Download, Flag, GitCompare, MoreHorizontal, Pencil, Radio, Timer } from "lucide-react";
+import { ChevronRight, CircleCheck, Download, Flag, GitCompare, ListOrdered, MoreHorizontal, Pencil, Radio, Timer } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { PlacesSetupSheet } from "@/components/places-setup";
 import { StartRaceControl } from "@/components/start-race";
+import type { RacePlaces } from "@/lib/db/schema";
 import { clearGunTimeAction, findLiveFeedsAction, gunFromOfficialPreviewAction, type LiveFeedOption, setGunFromOfficialAction, setGunTimeAction, setLiveFeedAction, setRaceFinishedAction } from "@/app/actions/races";
 import { Alert, Badge, Button, Field, Input, Sheet, Time, RaceStateBadge } from "@/components/ui";
 import { RunningClock } from "@/components/race-status";
@@ -32,6 +34,8 @@ type Props = {
   hasOfficial: boolean;
   /** The timing company's live feed, polled while the race runs. */
   liveFeed: { url: string; contestName: string | null } | null;
+  /** Place counting (tracked teams, award lines), if set up. */
+  places: RacePlaces | null;
   /** Record splits / Live results, rendered inside the card; one version per race state so it can match. */
   actions?: Record<RaceState, React.ReactNode>;
 };
@@ -41,7 +45,7 @@ type Props = {
  * Start race…), in progress (big elapsed time; changes live behind "Adjust"),
  * finished (frozen). Nothing destructive is a single tap.
  */
-export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref, compareHref, gunTimeMs: initialGun, finishedAt: initialFinished, firedBy, timeZone, canGun, hasOfficial, liveFeed, actions }: Props) {
+export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref, compareHref, gunTimeMs: initialGun, finishedAt: initialFinished, firedBy, timeZone, canGun, hasOfficial, liveFeed, places, actions }: Props) {
   const router = useRouter();
   const clock = useClock();
   const [gunTimeMs, setGunTimeMs] = useState(initialGun);
@@ -50,6 +54,7 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
   const [armed, setArmed] = useState(false);
   const [adjusting, setAdjusting] = useState(false);
   const [options, setOptions] = useState(false);
+  const [placesOpen, setPlacesOpen] = useState(false);
 
   // Server data changed underneath us (someone else set the gun): adopt it.
   if (initialGun !== seen.initialGun || initialFinished !== seen.initialFinished) {
@@ -148,11 +153,35 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
                 }}
               />
             )}
+            {canGun && (
+              <OptionRow
+                icon={<ListOrdered className="size-4" />}
+                label={places?.on ? `Places · ${places.teams.length ? places.teams.map((t) => t.short).join(", ") : "no teams yet"}` : "Count places…"}
+                hint={places?.on ? "Tracked teams, award lines, who sees places." : "Team buttons on Record splits: places, scores and award lines at each checkpoint."}
+                onClick={() => {
+                  setOptions(false);
+                  setPlacesOpen(true);
+                }}
+              />
+            )}
             {editHref && <OptionRow icon={<Pencil className="size-4" />} label="Edit race" hint="Name, checkpoints, lineup and running order." href={editHref} />}
             {csvHref && <OptionRow icon={<Download className="size-4" />} label="Download CSV" hint="Split-workbook layout, one row per athlete." href={csvHref} download />}
             {compareHref && <OptionRow icon={<GitCompare className="size-4" />} label="App vs official" hint="How close the taps were to the mats." href={compareHref} />}
           </div>
         </Sheet>
+      )}
+
+      {placesOpen && (
+        <PlacesSetupSheet
+          raceId={raceId}
+          raceName={name}
+          initial={places}
+          onClose={() => setPlacesOpen(false)}
+          onSaved={() => {
+            setPlacesOpen(false);
+            router.refresh();
+          }}
+        />
       )}
 
       {adjusting && (

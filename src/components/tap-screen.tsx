@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Check, ChevronDown, Pencil, SlidersHorizontal, Undo2, X } from "lucide-react";
 import { ClockWarning } from "@/components/race-card";
+import { PlacesPad, type PlacesMode } from "@/components/places-pad";
 import { CheckpointCounts, DeltaText, RaceStatusBar } from "@/components/race-status";
 import { StartRaceControl } from "@/components/start-race";
 import { SessionMenu } from "@/components/session-menu";
@@ -12,7 +13,9 @@ import { useClock } from "@/lib/client/clock";
 import { useLocalValue } from "@/lib/client/use-local-value";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
+import type { RacePlaces } from "@/lib/db/schema";
 import { type OrderMode, lastFinished, orderAthletes, orderKey, parseOrderMode } from "@/lib/order";
+import { awardStatus, ordinal, racePlaces, replayTicks } from "@/lib/race-places";
 import { paceMsPerMile, projectElapsed } from "@/lib/pace";
 import { type AthleteStatus, expectedAt, type Mark, replay, replayStatuses, type Slot, type SlotWithNames, STATUS_LABEL, STATUS_LONG, type TapLike } from "@/lib/replay";
 import type { LineupHistory, PriorResult } from "@/lib/results/history";
@@ -27,6 +30,8 @@ type RaceInfo = {
   /** The lineup in the coach's order. */
   athleteIds: string[];
   history: LineupHistory;
+  /** Place counting, when the race has it on. */
+  places: RacePlaces | null;
 };
 
 type Props = {
@@ -55,6 +60,8 @@ const INTRO_KEY = "ls_record_intro_seen";
 const ORDER_KEY = "ls_record_order_";
 const COMPARE_KEY = "ls_record_compare";
 const LARGE_KEY = "ls_record_large";
+/** This phone's part in counting places: "both" (names and teams), "places" (places only) or "names". */
+const PLACES_MODE_KEY = "ls_record_places_mode";
 /** How many of this device's latest taps the bottom strip shows. */
 const RECENT_N = 3;
 type CompareMode = "last" | "course" | "off";
@@ -265,6 +272,8 @@ function SwitchControl({
 
 type LastAction = {
   tapId: string;
+  /** Sent with it (a pack of Others): undone together. */
+  more?: string[];
   label: string;
   /** Set when the action replaced an earlier time, so undo can put it back. */
   restore?: { athleteId: string; timeMs: number; estimate: boolean };
@@ -312,6 +321,14 @@ function RaceTapper({
   const cp = state.get(checkpoint.id);
   const prev = cpIndex > 0 ? state.get(race.checkpoints[cpIndex - 1].id) : undefined;
   const statuses = useMemo(() => replayStatuses(taps), [taps]);
+  const ticks = useMemo(() => replayTicks(taps), [taps]);
+  const placesOn = !!race.places?.on;
+  const cpPlaces = useMemo(
+    () => (placesOn ? racePlaces([checkpoint.id], state, ticks, gunTimeMs).get(checkpoint.id) : undefined),
+    [placesOn, checkpoint.id, state, ticks, gunTimeMs],
+  );
+  const [placesModePref, setPlacesModePref] = useLocalValue(PLACES_MODE_KEY);
+  const placesMode: PlacesMode | "names" = !placesOn ? "names" : placesModePref === "places" || placesModePref === "names" ? placesModePref : "both";
   const counts = race.checkpoints.map((c, i) => {
     const has = (id: string) => {
       const o = official[id];
@@ -616,6 +633,7 @@ function RaceTapper({
     if (!lastAction) return;
     const t = eventTimeMs(e);
     send({ ...base, type: "void", targetTapId: lastAction.tapId, deviceTimeMs: t });
+    for (const id of lastAction.more ?? []) send({ ...base, type: "void", targetTapId: id, deviceTimeMs: t });
     if (lastAction.restore) {
       // The replaced time was voided; give it back as a typed time.
       const { athleteId, timeMs, estimate } = lastAction.restore;
@@ -705,8 +723,39 @@ function RaceTapper({
           </Button>
         </div>
       )}
+      {placesOn && (
+        <div className="px-3 pt-3">
+          <Segmented
+            size="sm"
+            value={placesMode}
+            onChange={(v) => setPlacesModePref(v === "both" ? null : v)}
+            options={[
+              { value: "names", label: "Names" },
+              { value: "both", label: "Names + places" },
+              { value: "places", label: "Places only" },
+            ]}
+          />
+        </div>
+      )}
+      {placesMode === "places" ? (
+        <div className="flex-1 pb-28">
+          <p className="px-3 pt-3 text-[13px] text-ink-2">Tap every runner as they pass: <b>Us</b> for ours (names come from the phone tapping names here), a team, or <b>Other</b>.</p>
+          <PlacesPad
+              mode={placesMode}
+              teams={race.places?.teams ?? []}
+              checkpointId={checkpoint.id}
+              places={cpPlaces}
+              athletes={athletes}
+              send={send}
+              eventTime={eventTimeMs}
+              onAction={({ tapIds, label }) => setLastAction({ tapId: tapIds[0], more: tapIds.slice(1), label })}
+              onToast={showToast}
+            />
+        </div>
+      ) : (
+      <>
       <div className="flex items-center justify-between gap-2 px-3 pt-3">
-        <span className="text-[13px] text-ink-2">Tap a runner as they pass.</span>
+        <span className="text-[13px] text-ink-2">{placesMode === "both" ? "Tap names as ours pass, teams for theirs." : "Tap a runner as they pass."}</span>
         <OrderControl
           mode={orderMode}
           picked={pickedOrder !== null}
@@ -721,7 +770,7 @@ function RaceTapper({
           onLarge={(v) => setLargePref(v ? "1" : null)}
         />
       </div>
-      <div className={`grid flex-1 content-start gap-2 p-3 ${hereDone ? "pb-72" : "pb-48"} ${large ? "grid-cols-1" : "grid-cols-2"}`}>
+      <div className={`grid flex-1 content-start gap-2 p-3 ${placesMode === "both" ? "pb-[26rem]" : hereDone ? "pb-72" : "pb-48"} ${large ? "grid-cols-1" : "grid-cols-2"}`}>
         {!loaded && <p className="col-span-full text-sm text-ink-3">Loading…</p>}
         {ordered.map((id) => {
           const mark = cp?.byAthlete.get(id);
@@ -850,12 +899,26 @@ function RaceTapper({
                       vs {compareLabel} <DeltaText ms={vsRef} />
                     </span>
                   )}
+                  {cpPlaces?.place.has(id) && (
+                    <span className={`block text-xs font-semibold ${flashing ? "" : "text-ink-2"}`}>
+                      {ordinal(cpPlaces.place.get(id)!)}
+                      {!cpPlaces.countingAll && <span className="font-normal"> of tracked</span>}
+                      {cpPlaces.countingAll &&
+                        (() => {
+                          // What to shout: how many places to the next award line.
+                          const { made, next } = awardStatus(cpPlaces.place.get(id)!, race.places?.awards ?? []);
+                          return next ? <span className="font-normal"> · {next.places} from {next.line.label.toLowerCase()}</span> : made ? <span className="font-normal"> · {made.label.toLowerCase()}</span> : null;
+                        })()}
+                    </span>
+                  )}
                 </>
               )}
             </button>
           );
         })}
       </div>
+      </>
+      )}
 
       {holdId && (
         <TileStatusSheet
@@ -900,7 +963,7 @@ function RaceTapper({
 
       {/* Read-only: taps go straight through it to the tiles beneath. Undo lives in the bar. */}
       {toast && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-36 z-20 flex justify-center px-3 [&>*]:pointer-events-none">
+        <div className={`pointer-events-none fixed inset-x-0 z-20 flex justify-center px-3 [&>*]:pointer-events-none ${placesMode === "names" ? "bottom-36" : "top-36"}`}>
           <Toast title={toast} />
         </div>
       )}
@@ -935,7 +998,18 @@ function RaceTapper({
           {!nextCp && gapsBehind.length === 0 && <p className="mt-1 text-xs text-ink-2">Need to change something? Switch checkpoints above, or use Fix times on Live results.</p>}
         </div>
       )}
-        {recent.length > 0 && (
+        {placesMode === "both" && <PlacesPad
+              mode={placesMode}
+              teams={race.places?.teams ?? []}
+              checkpointId={checkpoint.id}
+              places={cpPlaces}
+              athletes={athletes}
+              send={send}
+              eventTime={eventTimeMs}
+              onAction={({ tapIds, label }) => setLastAction({ tapId: tapIds[0], more: tapIds.slice(1), label })}
+              onToast={showToast}
+            />}
+        {placesMode === "names" && recent.length > 0 && (
           <p className="truncate px-3 pt-1.5 text-xs text-ink-2">
             <span className="text-ink-3">Last </span>
             {recent.map((r, i) => (
@@ -946,20 +1020,20 @@ function RaceTapper({
             ))}
           </p>
         )}
-        <CaptureChips
+        {placesMode !== "places" && <CaptureChips
           slots={shownSlots}
           selectedId={selectedSlot?.tapId ?? null}
           athletes={athletes}
           fmt={fmt}
           onSelect={(id) => setSelectedSlotId((cur) => (cur === id ? null : id))}
           onDelete={deleteSlot}
-        />
+        />}
         <div className="flex gap-2 px-3 pt-2">
-          <Button variant="secondary" size="lg" onClick={undo} disabled={!lastAction} className="h-16 w-20 flex-col gap-0.5 px-0">
+          <Button variant="secondary" size="lg" onClick={undo} disabled={!lastAction} className={`flex-col gap-0.5 px-0 ${placesMode === "places" ? "h-14 flex-1" : "h-16 w-20"}`}>
             <Undo2 className="size-6 shrink-0" />
-            <span className="text-xs">Undo</span>
+            <span className="text-xs">{placesMode === "places" && lastAction ? `Undo ${lastAction.label}` : "Undo"}</span>
           </Button>
-          <button
+          {placesMode !== "places" && <button
             type="button"
             onPointerDown={notePointerDown}
             onClick={capture}
@@ -971,7 +1045,7 @@ function RaceTapper({
               Capture time{cp && cp.pending.length > 0 ? ` · ${cp.pending.length} waiting` : ""}
             </span>
             <span className="text-xs opacity-70">{selectedSlot ? `names go to ${fmt(selectedSlot.timeMs)} · tap the chip to stop` : "then tap the names"}</span>
-          </button>
+          </button>}
         </div>
       </div>
     </main>

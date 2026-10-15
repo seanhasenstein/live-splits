@@ -122,6 +122,7 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
                   compareHref={race.officialImportId && can(session, "export", meet) ? `/meets/${meet._id}/compare?race=${race._id}` : null}
                   gunTimeMs={race.gunTimeMs}
                   liveFeed={race.liveFeed ?? null}
+                  places={race.places ?? null}
                   finishedAt={race.finishedAt?.toISOString() ?? null}
                   firedBy={firedBy[race._id] ?? null}
                   timeZone={meet.timeZone}

@@ -49,6 +49,8 @@ export default async function ResultsPage({ params, searchParams }: PageProps<"/
         bests: bests[i],
         distanceLabel: distances.find((d) => d._id === r.distanceId)?.label ?? "race",
         recordsExcluded: meet.recordsExclusion !== null && meet.recordsExclusion !== undefined,
+        // Coaches and managers always; everyone else once the coach shows places to all.
+        places: r.places?.on && (r.places.public || can(session, "tap", meet)) ? r.places : null,
       }))}
       grades={Object.fromEntries(athletes.map((a) => [a._id, a.graduationYear !== null && season ? gradeForSeason(a.graduationYear, season.endDate) : null]))}
       initialAthleteId={typeof athlete === "string" ? athlete : null}

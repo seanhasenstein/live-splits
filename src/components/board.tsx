@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Fragment, type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, History as HistoryIcon, Info, Pencil, Share } from "lucide-react";
+import { PlacesCard } from "@/components/places-card";
 import { CheckpointCounts, DeltaText, RaceStatusBar, RecordPill, RunningClock } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
 import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, LiveDot, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
@@ -10,7 +11,8 @@ import { useClock } from "@/lib/client/clock";
 import { useTimeFormat } from "@/lib/client/time-format";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type AthleteStatus, type CheckpointState, expectedAt, type Mark, replay, replayStatuses, type Slot, STATUS_LABEL, STATUS_LONG } from "@/lib/replay";
-import type { AthleteRaceStatus, Precision } from "@/lib/db/schema";
+import type { AthleteRaceStatus, Precision, RacePlaces } from "@/lib/db/schema";
+import { fieldScores, ordinal as placeText, racePlaces, replayTicks } from "@/lib/race-places";
 import { METERS_PER_MILE, paceMsPerMile, projectElapsed } from "@/lib/pace";
 import { RECORD_LABEL, recordBadge } from "@/lib/records";
 import type { LineupBests, PriorFinish } from "@/lib/results/bests";
@@ -33,6 +35,8 @@ type RaceInfo = {
   distanceLabel: string;
   /** The meet is marked as not counting for records (short course…): no badges. */
   recordsExcluded: boolean;
+  /** Place counting, when the race has it on and this viewer may see it. */
+  places: RacePlaces | null;
 };
 
 type Props = {
@@ -149,7 +153,7 @@ function RaceBoard({
   canTap: boolean;
 }) {
   const clock = useClock();
-  const { taps, gunTimeMs, official, officialLive, finished, longRunning, staleMinutes, send, online, loaded, recording, seenAt } = useRaceTaps(race.id, race.gunTimeMs);
+  const { taps, gunTimeMs, official, field, officialLive, finished, longRunning, staleMinutes, send, online, loaded, recording, seenAt } = useRaceTaps(race.id, race.gunTimeMs);
   const isFinished = race.finished || finished;
   const hasOfficial = Object.keys(official).length > 0;
   const state = useMemo(
@@ -157,6 +161,31 @@ function RaceBoard({
     [race, taps],
   );
   const statuses = useMemo(() => replayStatuses(taps), [taps]);
+  const placesByCp = useMemo(
+    () => (race.places ? racePlaces(race.checkpoints.map((c) => c.id), state, replayTicks(taps), gunTimeMs) : new Map()),
+    [race, state, taps, gunTimeMs],
+  );
+  const officialPlaces = useMemo(() => {
+    if (!race.places || field.length === 0) return null;
+    const place = new Map(Object.entries(official).flatMap(([id, o]) => (o.place !== null && o.status === "finished" ? [[id, o.place] as const] : [])));
+    return { ...fieldScores(field), place };
+  }, [race.places, field, official]);
+  /** A runner's place at checkpoint i, and the change since the last checkpoint counted the same way (+ = passed people). */
+  const placeAt = (athleteId: string, i: number): { place: number; overall: boolean; gained: number | null } | null => {
+    const c = race.checkpoints[i];
+    const here = placesByCp.get(c.id);
+    const official = c.kind === "finish" && officialPlaces?.place.has(athleteId) ? officialPlaces.place.get(athleteId)! : null;
+    const place = official ?? here?.place.get(athleteId) ?? null;
+    if (place === null) return null;
+    const overall = official !== null || !!here?.countingAll;
+    let gained: number | null = null;
+    for (let j = i - 1; j >= 0 && gained === null; j--) {
+      const before = placesByCp.get(race.checkpoints[j].id);
+      const p = before?.place.get(athleteId);
+      if (p !== undefined && before!.countingAll === overall) gained = p - place;
+    }
+    return { place, overall, gained };
+  };
   const [fix, setFix] = useState<{ athleteId: string; cpIndex: number } | null>(null);
   const [statusFor, setStatusFor] = useState<string | null>(null);
   // The open runner's sheet is in the URL (?athlete=) so it can be shared and reopened.
@@ -420,6 +449,16 @@ function RaceBoard({
         </div>
       )}
 
+      {race.places && (
+        <PlacesCard
+          config={race.places}
+          checkpoints={race.checkpoints}
+          places={placesByCp}
+          official={officialPlaces && !(combined && who === "all") ? officialPlaces : null}
+          athletes={athletes}
+        />
+      )}
+
       <Card className="overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -567,6 +606,17 @@ function RaceBoard({
                       ) : (
                         <span className={`block rounded-md px-1.5 py-1.5 transition-colors duration-1000 ${fresh ? "bg-brand-soft" : ""}`} title={cell.official !== null ? "Official time" : undefined}>
                           {cellNode}
+                          {(() => {
+                            const p = race.places ? placeAt(row.athleteId, i) : null;
+                            if (!p) return null;
+                            return (
+                              <span className="tnum block text-[11px] font-medium text-ink-2" title={p.overall ? "Place overall" : "Place among the tracked teams"}>
+                                {placeText(p.place)}
+                                {!p.overall && "*"}
+                                {p.gained !== null && p.gained !== 0 && <span className={p.gained > 0 ? "text-brand-text" : "text-danger"}>{p.gained > 0 ? ` ▲${p.gained}` : ` ▼${-p.gained}`}</span>}
+                              </span>
+                            );
+                          })()}
                         </span>
                       )}
                     </td>

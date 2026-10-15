@@ -2,8 +2,8 @@ import { can, getSession } from "@/lib/auth/session";
 import { getMeet, getRace } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
-import { getOfficialTimes } from "@/lib/results/import";
-import { getLiveOfficial, liveFeedActive } from "@/lib/results/live";
+import { type FieldEntry, getOfficialField, getOfficialTimes } from "@/lib/results/import";
+import { getLiveField, getLiveOfficial, liveFeedActive } from "@/lib/results/live";
 
 /** A record screen counts as "here" this long after its last poll. */
 const PRESENCE_MS = 2 * 60_000;
@@ -53,9 +53,12 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
   // change rarely); a live feed's on every poll while the race runs (throttled upstream).
   const live = liveFeedActive(race);
   const official = live ? await getLiveOfficial(meet, race) : since > 0 ? undefined : await getOfficialTimes(race);
+  // The whole field, for team scores: only when the race counts places and this viewer may see them.
+  const showPlaces = !!race.places?.on && (race.places.public || can(session, "tap", meet));
+  const field: FieldEntry[] | undefined = !showPlaces || official === undefined ? undefined : live ? await getLiveField(meet, race) : await getOfficialField(race);
 
   return Response.json(
-    { taps, gunTimeMs: race.gunTimeMs, serverTimeMs, official, officialLive: live, finished: !!race.finishedAt, recording },
+    { taps, gunTimeMs: race.gunTimeMs, serverTimeMs, official, field, officialLive: live, finished: !!race.finishedAt, recording },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
