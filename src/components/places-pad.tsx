@@ -15,6 +15,7 @@ export type PlacesMode = "both" | "places";
 /** A bounce, not two runners: taps on the same button closer than this are one. */
 const BOUNCE_MS = 120;
 const HOLD_MS = 500;
+const PACK_GAP_MS = 10;
 const US = { short: "US", bg: "var(--color-brand)", ink: "var(--color-brand-ink)" };
 
 /**
@@ -30,6 +31,7 @@ export function PlacesPad({
   athletes,
   send,
   eventTime,
+  onPointer,
   onAction,
   onToast,
 }: {
@@ -41,6 +43,8 @@ export function PlacesPad({
   send: Send;
   /** When the finger landed (the record screen's pointer-down clock). */
   eventTime: (e: SyntheticEvent) => number;
+  /** Notes when a finger lands, so the tap gets that moment rather than an earlier name tap's. */
+  onPointer: () => void;
   /** For Undo: the taps this action sent, newest action wins. */
   onAction: (a: { tapIds: string[]; label: string }) => void;
   onToast: (text: string) => void;
@@ -79,7 +83,8 @@ export function PlacesPad({
     }
   };
   const tick = (e: SyntheticEvent, team: string) => {
-    if (held.current) {
+    // The click that ends a hold on Other opened the pack buttons; it isn't a runner.
+    if (team === "other" && held.current) {
       held.current = false;
       return;
     }
@@ -90,17 +95,16 @@ export function PlacesPad({
     buzz();
     onAction({ tapIds: [tapId], label: `${label(team)} · ${ordinal(counted + 1)}` });
   };
-  // A clump of untracked runners: n Others at once, a millisecond apart so they keep their order.
+  // A clump of untracked runners: n Others at once, a few ms apart so they keep their order.
   const pack = (e: SyntheticEvent, n: number) => {
     const at = eventTime(e);
-    const tapIds = Array.from({ length: n }, (_, i) => send({ ...base, type: "tick", team: "other", deviceTimeMs: at + i }));
+    const tapIds = Array.from({ length: n }, (_, i) => send({ ...base, type: "tick", team: "other", deviceTimeMs: at + i * PACK_GAP_MS }));
     buzz();
     setBurst(null);
     onAction({ tapIds, label: `${n} Others` });
     onToast(`Counted ${n} Others · ${ordinal(counted + 1)}–${ordinal(counted + n)}`);
   };
   const holdStart = () => {
-    held.current = false;
     if (holdTimer.current) clearTimeout(holdTimer.current);
     holdTimer.current = setTimeout(() => {
       held.current = true;
@@ -119,7 +123,11 @@ export function PlacesPad({
       key={team}
       type="button"
       disabled={locked}
-      onPointerDown={team === "other" ? holdStart : undefined}
+      onPointerDown={() => {
+        onPointer();
+        held.current = false;
+        if (team === "other") holdStart();
+      }}
       onPointerUp={team === "other" ? holdEnd : undefined}
       onPointerLeave={team === "other" ? holdEnd : undefined}
       onPointerCancel={team === "other" ? holdEnd : undefined}
@@ -134,10 +142,13 @@ export function PlacesPad({
   );
 
   const shown = entries.slice(-6);
+  // Two people tapping teams here count those runners twice.
+  const tappers = [...new Set(entries.flatMap((e) => (e.kind !== "us" && e.by ? [e.by] : [])))];
   const offset = entries.length - shown.length;
 
   return (
     <div className="px-3 pt-2">
+      {tappers.length > 1 && <p className="mb-1 text-xs text-gold-text">{tappers.join(" and ")} are both counting here. If you&rsquo;re at the same spot, only one should tap teams.</p>}
       {/* One row: the next place, the last few counted (tap to fix), and the lock. Nothing here changes height. */}
       <div className="relative mb-2 flex h-8 items-center gap-2 text-xs text-ink-2">
         <span className="shrink-0">
@@ -185,7 +196,7 @@ export function PlacesPad({
         {burst !== null && !locked && (
           <div className="absolute inset-x-0 bottom-0 z-10 grid grid-cols-4 gap-1.5 bg-bg">
             {[2, 3, 4, 5].map((n) => (
-              <Button key={n} variant="secondary" onClick={(e) => pack(e, n)} className="h-12 text-base font-bold">
+              <Button key={n} variant="secondary" onPointerDown={onPointer} onClick={(e) => pack(e, n)} className="h-12 text-base font-bold">
                 +{n} Other
               </Button>
             ))}
@@ -204,6 +215,7 @@ export function PlacesPad({
           entry={fixing.entry}
           place={fixing.index + 1}
           before={fixing.index > 0 ? entries[fixing.index - 1] : null}
+          beforeThat={fixing.index > 1 ? entries[fixing.index - 2] : null}
           teams={teams}
           canUs={mode === "places" || fixing.entry.kind === "us"}
           label={label}
@@ -225,6 +237,7 @@ function FixPlaceSheet({
   entry,
   place,
   before,
+  beforeThat,
   teams,
   canUs,
   label,
@@ -234,6 +247,7 @@ function FixPlaceSheet({
   entry: PlaceEntry;
   place: number;
   before: PlaceEntry | null;
+  beforeThat: PlaceEntry | null;
   teams: TrackedTeam[];
   canUs: boolean;
   label: (team: string) => string;
@@ -244,6 +258,8 @@ function FixPlaceSheet({
   const current = entry.kind === "us" ? "us" : entry.kind === "other" ? "other" : entry.teamId;
   const choices = [...(canUs ? ["us"] : []), ...teams.map((t) => t.id), "other"];
   const [adding, setAdding] = useState(false);
+  // A time between two counted runners (never on top of either), so the order is certain.
+  const between = (a: PlaceEntry | null, b: PlaceEntry) => (a ? Math.floor((a.timeMs + b.timeMs) / 2) : b.timeMs - 1000);
   return (
     <Sheet title={`${ordinal(place)} · ${label(current)}`} subtitle="Fix this place. Everyone behind it moves with it." onClose={onClose}>
       <div className="space-y-4">
@@ -259,7 +275,7 @@ function FixPlaceSheet({
                   className="h-12 font-semibold"
                   onClick={() =>
                     adding
-                      ? onSend({ type: "tick", team: c, timeMs: entry.timeMs - 1 }, `Added ${label(c)} at ${ordinal(place)}`)
+                      ? onSend({ type: "tick", team: c, timeMs: between(before, entry) }, `Added ${label(c)} at ${ordinal(place)}`)
                       : onSend({ type: "edit", targetTapId: tapId, team: c }, `${ordinal(place)} is ${label(c)}`)
                   }
                 >
@@ -275,7 +291,7 @@ function FixPlaceSheet({
             </Button>
           )}
           {before && !adding && (
-            <Button variant="secondary" size="lg" onClick={() => onSend({ type: "edit", targetTapId: tapId, timeMs: before.timeMs - 1 }, `Swapped ${ordinal(place - 1)} and ${ordinal(place)}`)}>
+            <Button variant="secondary" size="lg" onClick={() => onSend({ type: "edit", targetTapId: tapId, timeMs: between(beforeThat, before) }, `Swapped ${ordinal(place - 1)} and ${ordinal(place)}`)}>
               Swap with {ordinal(place - 1)} ({before.kind === "us" ? "Us" : label(before.kind === "other" ? "other" : before.teamId)})
             </Button>
           )}

@@ -748,6 +748,7 @@ function RaceTapper({
               athletes={athletes}
               send={send}
               eventTime={eventTimeMs}
+              onPointer={notePointerDown}
               onAction={({ tapIds, label }) => setLastAction({ tapId: tapIds[0], more: tapIds.slice(1), label })}
               onToast={showToast}
             />
@@ -970,7 +971,7 @@ function RaceTapper({
 
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-bg/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
         {/* Lives in the fixed bar (not above the grid) so appearing never moves a tile under a thumb. */}
-      {hereDone && (
+      {hereDone && placesMode !== "places" && (
         <div className="mx-3 mt-2 rounded-lg border border-brand/30 bg-brand-soft px-3 py-2 text-sm text-ink">
           <div className="flex items-center justify-between gap-3">
             <span>
@@ -1006,6 +1007,7 @@ function RaceTapper({
               athletes={athletes}
               send={send}
               eventTime={eventTimeMs}
+              onPointer={notePointerDown}
               onAction={({ tapIds, label }) => setLastAction({ tapId: tapIds[0], more: tapIds.slice(1), label })}
               onToast={showToast}
             />}

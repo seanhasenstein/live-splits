@@ -73,9 +73,32 @@ describe("racePlaces", () => {
   });
 
   it("keeps earlier names by time when a phone switches to places only partway", () => {
-    const p = places([name("emma", 1000), tick("other", 1500), tick("us", 2000), tick("other", 2100), name("ava", 2500)])!;
+    const p = places([name("emma", 1000), tick("other", 4000), tick("us", 20_000), tick("other", 20_100), name("ava", 20_500)])!;
     expect(p.place.get("emma")).toBe(1);
     expect(p.place.get("ava")).toBe(3);
+  });
+
+  it("gives no place to names after the places phone stopped counting", () => {
+    // Us A, Other, Us B, Other, then Done counting; our 7th runner is named much later.
+    const p = places([tick("us", 1000), tick("other", 2000), tick("us", 3000), tick("other", 4000), name("a", 1500), name("b", 3500), name("c", 90_000)])!;
+    expect(p.place.get("a")).toBe(1);
+    expect(p.place.get("b")).toBe(3);
+    expect(p.place.has("c")).toBe(false);
+    expect(p.entries).toHaveLength(4);
+  });
+
+  it("ignores taps from before the gun", () => {
+    const taps = [tick("other", 500), tick("t_kim", 600), tick("other", 2000), name("emma", 3000)];
+    const p = racePlaces(["m1"], replay(race, taps), replayTicks(taps), 1000).get("m1")!;
+    expect(p.place.get("emma")).toBe(2);
+  });
+
+  it("brings a removed runner back when the remove is undone", () => {
+    const a = tick("other", 1000);
+    const remove = tap({ type: "void", targetTapId: a.clientTapId, serverTimeMs: 5000 });
+    const taps = [a, name("emma", 2000), tick("other", 2500), remove];
+    expect(places(taps)!.place.get("emma")).toBe(1);
+    expect(places([...taps, tap({ type: "void", targetTapId: remove.clientTapId, serverTimeMs: 6000 })])!.place.get("emma")).toBe(2);
   });
 
   it("keeps a place for an Us tap whose name nobody tapped", () => {
@@ -146,12 +169,14 @@ describe("fieldScores", () => {
       f("Hilbert", 1, true), f("Kimberly HS", 2), f("Hilbert High School", 3), f(null, 4), f("Kimberly", 5),
       f("Hilbert", 6, true), f("Kimberly", 7), f("Hilbert", 8, true), f("Kimberly", 9), f("Hilbert", 10, true), f("Kimberly", 11),
       f("Kaukauna", 12), f("Kimberly", 13, false, "dnf"),
+      // Shares a name with one of ours, but runs for Kaukauna.
+      f("Kaukauna", 14, true),
     ];
     const { scores, names } = fieldScores(field);
     const us = scores.find((s) => s.team === "us")!;
-    // The unattached 4th takes a place; Kaukauna (one runner) doesn't score and is taken out.
-    expect(us.places).toEqual([1, 3, 6, 8, 10]);
-    expect(scores.find((s) => s.team === "kimberly")!.places).toEqual([2, 5, 7, 9, 11]);
+    // The unattached 4th and Kaukauna (one runner) don't score and are taken out.
+    expect(us.places).toEqual([1, 3, 5, 7, 9]);
+    expect(scores.find((s) => s.team === "kimberly")!.places).toEqual([2, 4, 6, 8, 10]);
     expect(scores.find((s) => s.team === "kaukauna")!.points).toBeNull();
     expect(names.get("kimberly")).toBe("Kimberly HS");
   });

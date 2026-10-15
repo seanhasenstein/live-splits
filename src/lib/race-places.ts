@@ -24,8 +24,11 @@ export function replayTicks(taps: TapLike[]): Map<string, Tick[]> {
   for (const t of sorted) {
     if (t.type === "tick" && t.checkpointId && t.team) ticks.set(t.clientTapId, { tapId: t.clientTapId, checkpointId: t.checkpointId, team: t.team, timeMs: t.timeMs ?? t.serverTimeMs, by: t.createdBy?.name ?? null });
   }
-  // Undo can void a tick or an edit of one, whichever order the clocks put them in.
-  const voided = new Set(taps.filter((t) => t.type === "void" && t.targetTapId).map((t) => t.targetTapId!));
+  // Undo can void a tick or an edit of one, whichever order the clocks put them in; undoing a
+  // remove voids the void, which brings the tick back.
+  const voids = taps.filter((t) => t.type === "void" && t.targetTapId);
+  const undone = new Set(voids.map((t) => t.targetTapId!));
+  const voided = new Set(voids.filter((t) => !undone.has(t.clientTapId)).map((t) => t.targetTapId!));
   // Edits after the ticks they fix (a clock resync can order them first); the latest edit wins.
   for (const t of sorted) {
     if (voided.has(t.clientTapId)) continue;
@@ -43,8 +46,8 @@ export function replayTicks(taps: TapLike[]): Map<string, Tick[]> {
 
 export type PlaceEntry =
   | { kind: "us"; athleteId: string | null; tapId: string | null; timeMs: number }
-  | { kind: "team"; teamId: string; tapId: string; timeMs: number }
-  | { kind: "other"; tapId: string; timeMs: number };
+  | { kind: "team"; teamId: string; tapId: string; timeMs: number; by?: string | null }
+  | { kind: "other"; tapId: string; timeMs: number; by?: string | null };
 
 export type TeamScore = {
   /** "us" or a tracked team's id; for official results, the team's name. */
@@ -70,6 +73,10 @@ export type CheckpointPlaces = {
 };
 
 const OTHER = "*";
+/** A name tapped this much before an Us tap still belongs to it (the two phones' thumbs differ). */
+const US_LEAD_MS = 5_000;
+/** …and this much after it. */
+const US_LAG_MS = 30_000;
 
 /**
  * Places at each checkpoint where someone counted (a checkpoint with no place taps has none).
@@ -78,22 +85,31 @@ const OTHER = "*";
 export function racePlaces(checkpointIds: string[], state: RaceState, ticks: Map<string, Tick[]>, gunTimeMs: number | null): Map<string, CheckpointPlaces> {
   const out = new Map<string, CheckpointPlaces>();
   for (const id of checkpointIds) {
-    const list = ticks.get(id) ?? [];
+    // Taps from before the gun (someone trying the buttons) aren't runners.
+    const list = (ticks.get(id) ?? []).filter((t) => gunTimeMs === null || t.timeMs >= gunTimeMs);
     if (list.length === 0) continue;
     const ours = [...(state.get(id)?.byAthlete.values() ?? [])]
       .filter((m) => !m.missed && m.timeMs !== null && !(gunTimeMs !== null && m.timeMs < gunTimeMs))
       .sort((a, b) => a.timeMs! - b.timeMs! || a.assignedAt - b.assignedAt);
+    // A places-only phone's Us taps are our runners, matched in order to the names tapped here
+    // (the names phone may run a few seconds early or late). Names well before the next Us tap
+    // (the phone switched to places only partway) slot in by time; names after its last Us tap
+    // (it stopped counting) get no place rather than taking someone else's.
     const usTicks = list.filter((t) => t.team === "us");
-    // A places-only phone's Us taps are our runners in the order their names were tapped. When
-    // there are more names than Us taps (the phone switched to places only partway), the
-    // earliest names slot in by time, as on a phone tapping names and teams.
-    const byTime = Math.max(0, ours.length - usTicks.length);
-    let k = byTime;
+    const byTime: typeof ours = usTicks.length === 0 ? ours : [];
+    const matched = new Map<string, string | null>();
+    if (usTicks.length > 0) {
+      let k = 0;
+      for (const t of usTicks) {
+        while (k < ours.length && ours[k].timeMs! < t.timeMs - US_LEAD_MS) byTime.push(ours[k++]);
+        matched.set(t.tapId, k < ours.length && ours[k].timeMs! <= t.timeMs + US_LAG_MS ? ours[k++].athleteId : null);
+      }
+    }
     const tapped: PlaceEntry[] = list.map((t) =>
-      t.team === "us" ? { kind: "us", athleteId: ours[k++]?.athleteId ?? null, tapId: t.tapId, timeMs: t.timeMs } : t.team === "other" ? { kind: "other", tapId: t.tapId, timeMs: t.timeMs } : { kind: "team", teamId: t.team, tapId: t.tapId, timeMs: t.timeMs },
+      t.team === "us" ? { kind: "us", athleteId: matched.get(t.tapId) ?? null, tapId: t.tapId, timeMs: t.timeMs } : t.team === "other" ? { kind: "other", tapId: t.tapId, timeMs: t.timeMs, by: t.by } : { kind: "team", teamId: t.team, tapId: t.tapId, timeMs: t.timeMs, by: t.by },
     );
-    const named: PlaceEntry[] = ours.slice(0, byTime).map((m) => ({ kind: "us", athleteId: m.athleteId, tapId: null, timeMs: m.timeMs! }));
-    const entries = [...named, ...tapped].sort((a, b) => a.timeMs - b.timeMs);
+    const named: PlaceEntry[] = byTime.map((m) => ({ kind: "us", athleteId: m.athleteId, tapId: null, timeMs: m.timeMs! }));
+    const entries = [...named, ...tapped].sort((a, b) => a.timeMs - b.timeMs || (a.tapId ?? "").localeCompare(b.tapId ?? ""));
     const countingAll = entries.some((e) => e.kind === "other");
     const place = new Map<string, number>();
     let n = 0;
@@ -158,10 +174,13 @@ export function fieldScores(field: FieldEntry[]): { scores: TeamScore[]; names: 
   const order = field
     .filter((e) => e.status === "finished" && e.place !== null)
     .sort((a, b) => a.place! - b.place!)
+    // A runner with no team (unattached) isn't on a scoring team: taken out, like any non-scorer.
+    .filter((e) => e.team || e.ours)
     .map((e) => {
-      if (!e.team) return e.ours ? "us" : OTHER;
+      if (!e.team) return "us";
+      // By team, not by name match: another school's runner can share a name with one of ours.
       const k = teamKey(e.team);
-      if (e.ours || k === ourKey) return "us";
+      if (k === ourKey) return "us";
       if (!names.has(k)) names.set(k, e.team);
       return k;
     });

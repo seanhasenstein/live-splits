@@ -454,7 +454,8 @@ function RaceBoard({
           config={race.places}
           checkpoints={race.checkpoints}
           places={placesByCp}
-          official={officialPlaces && !(combined && who === "all") ? officialPlaces : null}
+          // A boys-and-girls race's field mixes both: no team scores from it.
+          official={officialPlaces && !combined ? officialPlaces : null}
           athletes={athletes}
         />
       )}
