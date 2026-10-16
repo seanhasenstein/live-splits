@@ -1162,12 +1162,9 @@ function AthleteSheet({
                       {placeText(p.place)}
                       {p.overall ? " place" : " among tracked teams"}
                       {p.gained !== null &&
-                        // The table's marks, so there's one set to learn; spelled out on hover.
-                        (p.gained === 0 ? (
-                          <span className="text-ink-3" title="Same place as the last checkpoint">
-                            {" "}=
-                          </span>
-                        ) : (
+                        // The table's ▲ / ▼, spelled out on hover. No mark for the same place: in a line of text
+                        // "1st place" says it, and a lone "=" just dangles.
+                        (p.gained === 0 ? null : (
                           <span className={p.gained > 0 ? "text-brand-text" : "text-danger"} title={`${p.gained > 0 ? "Up" : "Down"} ${Math.abs(p.gained)} place${Math.abs(p.gained) === 1 ? "" : "s"} since the last checkpoint`}>
                             {p.gained > 0 ? ` ▲${p.gained}` : ` ▼${-p.gained}`}
                           </span>
