@@ -23,7 +23,7 @@ export function PlacesCard({
   inSheet = false,
 }: {
   config: RacePlaces;
-  checkpoints: { id: string; label: string }[];
+  checkpoints: { id: string; label: string; kind?: "split" | "finish" }[];
   places: Map<string, CheckpointPlaces>;
   /** Team scores from the official results (every team), and our runners' official places. */
   official: { scores: TeamScore[]; names: Map<string, string>; place: Map<string, number> } | null;
@@ -92,6 +92,7 @@ export function PlacesCard({
   const cp = viewId === "official" ? null : places.get(viewId)!;
   const overall = viewId === "official" ? official!.place : cp!.countingAll ? cp!.place : null;
   const ours = overall ? [...overall].sort((a, b) => a[1] - b[1]) : [];
+  const finished = viewId === "official" || checkpoints.find((c) => c.id === viewId)?.kind === "finish";
 
   return (
     <Card className="mb-3 overflow-hidden">
@@ -137,7 +138,8 @@ export function PlacesCard({
                     {athletes[id] ?? "?"}
                   </span>
                   <span className={`shrink-0 text-xs ${made && !next ? "font-semibold text-brand-text" : "text-ink-2"}`}>
-                    {[made?.label, next ? `${next.places} from ${next.line.label.toLowerCase()}` : null].filter(Boolean).join(" · ")}
+                    {/* Mid-race, how far to the next line; at the finish only what the place earned. */}
+                    {[made?.label, next && !finished ? `${next.places} from ${next.line.label.toLowerCase()}` : null].filter(Boolean).join(" · ")}
                   </span>
                 </li>
               );

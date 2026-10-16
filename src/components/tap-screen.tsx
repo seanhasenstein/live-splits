@@ -16,7 +16,7 @@ import { type Recording, useRaceTaps } from "@/lib/client/use-race-taps";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
 import type { RacePlaces } from "@/lib/db/schema";
 import { type OrderMode, lastFinished, orderAthletes, orderKey, parseOrderMode } from "@/lib/order";
-import { awardStatus, ordinal, type OurTeam, racePlaces, replayTicks } from "@/lib/race-places";
+import { ordinal, type OurTeam, racePlaces, replayTicks } from "@/lib/race-places";
 import { paceMsPerMile, projectElapsed } from "@/lib/pace";
 import { type AthleteStatus, expectedAt, type Mark, replay, replayStatuses, type Slot, type SlotWithNames, STATUS_LABEL, STATUS_LONG, type TapLike } from "@/lib/replay";
 import type { LineupHistory, PriorResult } from "@/lib/results/history";
@@ -755,8 +755,7 @@ function RaceTapper({
   };
 
   // The shout card: our runner just tapped, with their place, time here and name (both filled in as soon
-  // as they're known: a places-only tap gets them once the names phone taps the runner), and how far
-  // they are from an award line when the race has any.
+  // as they're known: a places-only tap gets them once the names phone taps the runner).
   const shoutView = (() => {
     if (!shout || !cpPlaces) return null;
     const index = shout.tapId ? cpPlaces.entries.findIndex((e) => e.tapId === shout.tapId) : -1;
@@ -766,11 +765,7 @@ function RaceTapper({
     if (place === null) return null;
     const mark = athleteId ? cp?.byAthlete.get(athleteId) : undefined;
     const time = mark && !mark.missed && mark.timeMs !== null && gunTimeMs && mark.timeMs >= gunTimeMs ? formatElapsed(mark.timeMs - gunTimeMs) : null;
-    const awards = race.places?.awards ?? [];
-    const award = cpPlaces.countingAll && awards.length > 0 ? awardStatus(place, awards) : null;
-    // What a coach shouts, in numbers rather than award names: "Pass 3 for top 20", "In the top 10".
-    const gap = award?.next ? `Pass ${award.next.places} for top ${award.next.line.through}` : award?.made ? `In the top ${award.made.through}` : null;
-    return { key: shout.key, place, time, name: athleteId ? (athletes[athleteId] ?? null) : null, gap, overall: cpPlaces.countingAll };
+    return { key: shout.key, place, time, name: athleteId ? (athletes[athleteId] ?? null) : null, overall: cpPlaces.countingAll };
   })();
 
   return (
@@ -1019,14 +1014,7 @@ function RaceTapper({
                     // The place leads once they've passed: what the coach calls out.
                     <span className={`mt-0.5 block ${flashing ? "" : "text-ink"}`}>
                       <span className={`tnum font-bold ${large ? "text-xl" : "text-lg"}`}>{ordinal(cpPlaces.place.get(id)!)}</span>
-                      <span className={`text-xs ${flashing ? "" : "text-ink-2"}`}>
-                        {!cpPlaces.countingAll && " of tracked"}
-                        {cpPlaces.countingAll &&
-                          (() => {
-                            const { made, next } = awardStatus(cpPlaces.place.get(id)!, race.places?.awards ?? []);
-                            return next ? ` · pass ${next.places} for top ${next.line.through}` : made ? ` · in the top ${made.through}` : null;
-                          })()}
-                      </span>
+                      {!cpPlaces.countingAll && <span className={`text-xs ${flashing ? "" : "text-ink-2"}`}> of tracked</span>}
                     </span>
                   )}
                 </>
@@ -1099,7 +1087,6 @@ function RaceTapper({
               {!shoutView.overall && <span className="text-sm font-medium opacity-90">of tracked teams</span>}
             </div>
             {shoutView.name && <div className="mt-1 truncate text-base font-medium">{shoutView.name}</div>}
-            {shoutView.gap && <div className="mt-0.5 text-sm opacity-90">{shoutView.gap}</div>}
           </div>
         </div>
       )}
