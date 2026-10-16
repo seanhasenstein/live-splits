@@ -498,7 +498,8 @@ function OptionRow({ icon, label, hint, href, download, onClick }: { icon: React
       <ChevronRight className="size-4 text-ink-3" />
     </>
   );
-  const cls = "flex h-14 w-full items-center gap-3 rounded-lg border border-line bg-surface px-4 text-left hover:bg-surface-2";
+  // A minimum height, not a fixed one: a hint that wraps to two lines keeps its room.
+  const cls = "flex min-h-14 w-full items-center gap-3 rounded-lg border border-line bg-surface px-4 py-2.5 text-left hover:bg-surface-2";
   if (href)
     return (
       <a href={href} download={download} className={cls}>
