@@ -883,7 +883,8 @@ function RaceTapper({
         </div>
       )}
       {placesMode === "places" ? (
-        <div className="flex min-h-0 flex-1 flex-col pb-28">
+        // Room for the Undo bar, whatever the phone's home-bar inset.
+        <div className="flex min-h-0 flex-1 flex-col pb-[calc(7.5rem+env(safe-area-inset-bottom))]">
           <PlacesPad
               mode={placesMode}
               teams={race.places?.teams ?? []}
@@ -1228,7 +1229,7 @@ function RaceTapper({
           onSelect={(id) => setSelectedSlotId((cur) => (cur === id ? null : id))}
           onDelete={deleteSlot}
         />}
-        <div className={`flex gap-2 px-3 ${placesMode === "places" ? "py-3" : "pt-2"}`}>
+        <div className={`flex gap-2 px-3 ${placesMode === "places" ? "pt-3 pb-5" : "pt-2"}`}>
           <Button variant="secondary" size="lg" onClick={undo} disabled={!lastAction} className={`flex-col gap-0.5 px-1! ${placesMode === "places" ? "h-16 flex-1" : "h-16 w-20"}`}>
             <Undo2 className="size-6 shrink-0" />
             {/* Says what it will undo, so a stray tap on Undo is caught before it costs a good one. */}
