@@ -54,7 +54,7 @@ export function PlacesPad({
   onPointer: () => void;
   /** For Undo: the taps this action sent, newest action wins. */
   onAction: (a: { tapIds: string[]; label: string }) => void;
-  onToast: (text: string, tone?: "success" | "danger") => void;
+  onToast: (text: string) => void;
   /** Opens the scores at this checkpoint. */
   onScores: () => void;
   /** Done counting at this checkpoint (remembered on this phone, so a reload doesn't unlock it). */
@@ -115,8 +115,6 @@ export function PlacesPad({
     const tapId = send({ ...base, type: "tick", team, deviceTimeMs: at });
     buzz();
     flashNow();
-    // More of ours than are running: still counted (an earlier one may have been another team), but say so.
-    if (team === "us" && countOf("us") + 1 > ourExpected) onToast(`That's more of ours than are running (${countOf("us") + 1} of ${ourExpected}). Was an earlier one another team? Tap Fix.`, "danger");
     onAction({ tapIds: [tapId], label: `${ordinal(counted + 1)} ${label(team)}` });
   };
   // A clump of untracked runners: n Others at once, a few ms apart so they keep their order.
@@ -145,6 +143,9 @@ export function PlacesPad({
   const big = mode === "places";
   // How many of each team have passed here: a missed tap shows up as a count that looks low.
   const countOf = (team: string) => entries.filter((e) => (e.kind === "us" ? "us" : e.kind === "other" ? "other" : e.teamId) === team).length;
+  // More of ours than are running: the tap still counts (an earlier one may have been another team),
+  // and Fix turns red until it's sorted out.
+  const overUs = countOf("us") > ourExpected;
   const button = (team: string, name: string, colors: { bg: string; ink: string }, extra = "") => (
     <button
       key={team}
@@ -165,7 +166,7 @@ export function PlacesPad({
     >
       {/* How many of them have passed here; for ours, of how many are coming (still waiting on some = don't stop yet). */}
       {(countOf(team) > 0 || team === "us") && (
-        <span className={`tnum absolute top-1 right-1 rounded-md px-1.5 py-px text-sm leading-tight font-bold ${team === "us" && countOf("us") > ourExpected ? "bg-gold text-ink" : "bg-black/35 text-white"}`}>
+        <span className={`tnum absolute top-1 right-1 rounded-md px-1.5 py-px text-sm leading-tight font-bold ${team === "us" && overUs ? "bg-danger text-white" : "bg-black/35 text-white"}`}>
           {team === "us" ? `${countOf("us")} of ${ourExpected}` : countOf(team)}
         </span>
       )}
@@ -206,7 +207,13 @@ export function PlacesPad({
           )}
         </div>
         {entries.some((e) => e.tapId) && (
-          <Button variant="secondary" size="sm" onClick={() => setListOpen(true)} className="h-8 shrink-0 px-2">
+          <Button
+            variant={overUs ? "danger-solid" : "secondary"}
+            size="sm"
+            onClick={() => setListOpen(true)}
+            className="h-8 shrink-0 px-2"
+            title={overUs ? `${countOf("us")} of ours counted, ${ourExpected} running: was one of them another team?` : undefined}
+          >
             <Pencil className="size-3.5" />
             Fix
           </Button>
