@@ -166,7 +166,7 @@ export function PlacesPad({
     >
       {/* How many of them have passed here; for ours, of how many are coming (still waiting on some = don't stop yet). */}
       {(countOf(team) > 0 || team === "us") && (
-        <span className={`tnum absolute top-1 right-1 rounded-md px-1.5 py-px text-sm leading-tight font-bold ${team === "us" && overUs ? "bg-danger text-white" : "bg-black/35 text-white"}`}>
+        <span className={`tnum absolute top-2 right-2 rounded-md px-1.5 py-px text-sm leading-tight font-bold ${team === "us" && overUs ? "bg-danger text-white" : "bg-black/35 text-white"}`}>
           {team === "us" ? `${countOf("us")} of ${ourExpected}` : countOf(team)}
         </span>
       )}
