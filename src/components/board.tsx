@@ -424,19 +424,29 @@ function RaceBoard({
 
       {teamLine && <p className="mb-3 text-[13px] text-ink-2">{teamLine}</p>}
 
-      {recording.length > 0 && !isFinished && (
-        <p className="mb-3 text-[13px] text-ink-2">
-          <span className="font-medium text-ink">Recording now</span>
-          {race.checkpoints
-            .map((c) => ({ c, who: [...new Set(recording.filter((r) => r.checkpointId === c.id).map((r) => r.name))] }))
-            .filter(({ who }) => who.length > 0)
-            .map(({ c, who }) => (
-              <span key={c.id}>
-                {" · "}
-                {c.label}: {who.join(", ")}
-              </span>
-            ))}
-        </p>
+      {/* Coaches and managers only (the server doesn't send it to anyone else): who is at each checkpoint, doing what. */}
+      {staff && recording.length > 0 && !isFinished && (
+        <div className="mb-3 rounded-lg border border-line bg-surface px-3 py-2 text-[13px]">
+          <span className="font-medium text-ink">Who&rsquo;s where</span>
+          <ul className="mt-1 space-y-0.5">
+            {race.checkpoints.map((c) => {
+              const here = recording.filter((r) => r.checkpointId === c.id);
+              const byName = new Map(here.map((r) => [r.name, r.job]));
+              const placing = here.filter((r) => r.job === "places" || r.job === "both");
+              return (
+                <li key={c.id} className="flex gap-2">
+                  <span className="w-16 shrink-0 text-ink-2">{c.label}</span>
+                  <span className={here.length === 0 ? "text-ink-3" : "text-ink"}>
+                    {here.length === 0
+                      ? "nobody"
+                      : [...byName].map(([name, job]) => (race.places ? `${name} (${job === "both" ? "times + places" : job})` : name)).join(", ")}
+                    {race.places && placing.length > 1 && <span className="ml-1 text-danger">· two counting places</span>}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
 
       {longRunning && (

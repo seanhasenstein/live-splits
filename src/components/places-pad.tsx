@@ -1,6 +1,6 @@
 "use client";
 
-import { Lock, LockOpen, Trophy } from "lucide-react";
+import { Lock, LockOpen, Pencil, Trophy } from "lucide-react";
 import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import { Button, Sheet } from "@/components/ui";
 import type { TrackedTeam } from "@/lib/db/schema";
@@ -57,6 +57,7 @@ export function PlacesPad({
 }) {
   const [locked, setLocked] = useState(false);
   const [fixing, setFixing] = useState<{ entry: PlaceEntry; index: number } | null>(null);
+  const [listOpen, setListOpen] = useState(false);
   const [burst, setBurst] = useState<number | null>(null);
   const lastTap = useRef(new Map<string, number>());
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -150,50 +151,46 @@ export function PlacesPad({
     </button>
   );
 
-  const shown = entries.slice(-6);
-  // Two people tapping teams here count those runners twice.
-  const tappers = [...new Set(entries.flatMap((e) => (e.kind !== "us" && e.by ? [e.by] : [])))];
-  const offset = entries.length - shown.length;
+  const last = entries.at(-1) ?? null;
+  const teamOf = (e: PlaceEntry) => (e.kind === "us" ? "us" : e.kind === "other" ? "other" : e.teamId);
+  const colorsOf = (team: string) => (team === "us" ? US : team === "other" ? null : placeColor(teams.find((t) => t.id === team)?.color ?? "gray"));
+  const textOf = (e: PlaceEntry) => (e.kind === "us" && e.athleteId ? `${ourTeam.short} · ${(athletes[e.athleteId] ?? "?").split(" ")[0]}` : label(teamOf(e)));
+  const LastChip = ({ entry }: { entry: PlaceEntry }) => {
+    const c = colorsOf(teamOf(entry));
+    return (
+      <span style={c ? { background: c.bg, color: c.ink } : undefined} className={`rounded px-1.5 py-0.5 font-semibold ${c ? "" : "border border-line-strong text-ink"}`}>
+        {textOf(entry)}
+      </span>
+    );
+  };
 
   return (
     <div className="px-3 pt-2">
-      {tappers.length > 1 && <p className="mb-1 text-xs text-gold-text">{tappers.join(" and ")} are both counting here. If you&rsquo;re at the same spot, only one should tap teams.</p>}
-      {/* One row: the next place, the last few counted (tap to fix), and the lock. Nothing here changes height. */}
-      <div className="relative mb-2 flex h-8 items-center gap-2 text-xs text-ink-2">
-        <span className="shrink-0">
+      {/* One fixed line: the next place and the last tap (to confirm at a glance), then Fix, Scores and the lock. Never scrolls, never changes height. */}
+      <div className="relative mb-2 flex h-9 items-center gap-1.5 text-xs text-ink-2">
+        <span className="min-w-0 flex-1 truncate">
           {locked ? (
-            <span className="font-medium text-ink">Done · {counted}</span>
+            <span className="font-medium text-ink">Done · {counted} counted</span>
           ) : (
             <>
               Next <span className="tnum text-base font-semibold text-ink">{ordinal(counted + 1)}</span>
               {places && !places.countingAll && <span className="text-ink-3">*</span>}
+              {last && (
+                <span className="ml-2">
+                  Last <span className="tnum font-semibold text-ink">{ordinal(entries.length)}</span> <LastChip entry={last} />
+                </span>
+              )}
             </>
           )}
         </span>
-        {/* Newest first, so the tap just made is always in view. */}
-        <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:none]">
-          {shown.map((entry, i) => ({ entry, index: offset + i })).reverse().map(({ entry, index }) => {
-            const team = entry.kind === "us" ? "us" : entry.kind === "other" ? "other" : entry.teamId;
-            const c = team === "us" ? US : team === "other" ? null : placeColor(teams.find((t) => t.id === team)?.color ?? "gray");
-            const fixable = entry.tapId !== null;
-            const text = entry.kind === "us" && entry.athleteId ? (athletes[entry.athleteId] ?? "?").split(" ")[0] : label(team);
-            return (
-              <button
-                key={entry.tapId ?? `${entry.kind}-${index}`}
-                type="button"
-                disabled={!fixable}
-                onClick={() => setFixing({ entry, index })}
-                style={c ? { background: c.bg, color: c.ink } : undefined}
-                className={`flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${c ? "" : "border border-line-strong bg-surface text-ink"}`}
-              >
-                <span className="tnum opacity-75">{ordinal(index + 1)}</span>
-                {text}
-              </button>
-            );
-          })}
-        </div>
+        {entries.some((e) => e.tapId) && (
+          <button type="button" onClick={() => setListOpen(true)} className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1.5 font-medium text-ink-2 hover:bg-surface-2">
+            <Pencil className="size-3.5" />
+            Fix
+          </button>
+        )}
         {places && (
-          <button type="button" onClick={onScores} className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-ink-2 hover:bg-surface-2">
+          <button type="button" onClick={onScores} className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1.5 font-medium text-ink-2 hover:bg-surface-2">
             <Trophy className="size-3.5" />
             Scores
           </button>
@@ -202,7 +199,7 @@ export function PlacesPad({
           type="button"
           onClick={() => setLocked((v) => !v)}
           aria-label={locked ? "Count again" : "Done counting"}
-          className={`flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium ${locked ? "bg-brand-soft text-ink" : "text-ink-2 hover:bg-surface-2"}`}
+          className={`flex shrink-0 items-center gap-1 rounded-md px-2 py-1.5 font-medium ${locked ? "bg-brand-soft text-ink" : "text-ink-2 hover:bg-surface-2"}`}
         >
           {locked ? <LockOpen className="size-3.5" /> : <Lock className="size-3.5" />}
           {locked ? "Count again" : "Done"}
@@ -224,6 +221,39 @@ export function PlacesPad({
         {teams.map((t) => button(t.id, t.short, placeColor(t.color)))}
         {button("other", "Other", { bg: "var(--color-ink)", ink: "var(--color-bg)" }, big && teams.length % 2 === 0 ? "col-span-2" : "")}
       </div>
+
+      {listOpen && !fixing && (
+        <Sheet title="Fix a place" subtitle={`${entries.length} counted here. Newest first; tap one to fix it.`} onClose={() => setListOpen(false)}>
+          <ul className="max-h-[60dvh] divide-y divide-line overflow-y-auto rounded-lg border border-line">
+            {entries
+              .map((entry, index) => ({ entry, index }))
+              .slice(-30)
+              .reverse()
+              .map(({ entry, index }) => {
+                const c = colorsOf(teamOf(entry));
+                return (
+                  <li key={entry.tapId ?? `name-${index}`}>
+                    <button
+                      type="button"
+                      disabled={!entry.tapId}
+                      onClick={() => setFixing({ entry, index })}
+                      className="flex h-12 w-full items-center gap-3 px-3 text-left hover:bg-surface-2 disabled:hover:bg-transparent"
+                    >
+                      <span className="tnum w-12 shrink-0 text-sm font-semibold text-ink">{ordinal(index + 1)}</span>
+                      <span style={c ? { background: c.bg, color: c.ink } : undefined} className={`rounded px-2 py-0.5 text-sm font-semibold ${c ? "" : "border border-line-strong text-ink"}`}>
+                        {teamOf(entry) === "us" ? ourTeam.short : label(teamOf(entry))}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm text-ink-2">
+                        {entry.kind === "us" && entry.athleteId ? (athletes[entry.athleteId] ?? "?") : ""}
+                        {!entry.tapId && <span className="text-ink-3"> · name tap, fix on Live results</span>}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+          </ul>
+        </Sheet>
+      )}
 
       {fixing && (
         <FixPlaceSheet

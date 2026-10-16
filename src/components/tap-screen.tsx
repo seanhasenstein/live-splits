@@ -9,10 +9,10 @@ import { PlacesPad, type PlacesMode } from "@/components/places-pad";
 import { CheckpointCounts, DeltaText, RaceStatusBar } from "@/components/race-status";
 import { StartRaceControl } from "@/components/start-race";
 import { SessionMenu } from "@/components/session-menu";
-import { AppHeader, Badge, Button, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast, RaceStateBadge } from "@/components/ui";
+import { Alert, AppHeader, Badge, Button, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast, RaceStateBadge } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useLocalValue } from "@/lib/client/use-local-value";
-import { useRaceTaps } from "@/lib/client/use-race-taps";
+import { type Recording, useRaceTaps } from "@/lib/client/use-race-taps";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
 import type { RacePlaces } from "@/lib/db/schema";
 import { type OrderMode, lastFinished, orderAthletes, orderKey, parseOrderMode } from "@/lib/order";
@@ -71,6 +71,12 @@ const MODES: { value: RecordMode; label: string; hint: string }[] = [
   { value: "both", label: "Times + places", hint: "Our runners' splits, and a button for every other runner." },
   { value: "places", label: "Places", hint: "Count every runner. Times come from whoever taps names here." },
 ];
+/** What each mode does, as the server records it. */
+const JOB: Record<RecordMode, "times" | "places" | "both"> = { names: "times", both: "both", places: "places" };
+const countsPlaces = (job: string) => job === "places" || job === "both";
+const timesRunners = (job: string) => job === "times" || job === "both";
+const JOB_LABEL: Record<string, string> = { times: "times", places: "places", both: "times + places" };
+const names = (list: { name: string }[]) => [...new Set(list.map((r) => r.name))].join(" and ");
 /** This phone's job at a race that counts places (default: both). */
 const modeFrom = (pref: string | null): RecordMode => (pref === "places" || pref === "names" ? pref : "both");
 /** How many of this device's latest taps the bottom strip shows. */
@@ -147,7 +153,7 @@ export function TapScreen({ meetId, meetName, session, initial, timeZone, hasCou
  * Where taps go. Changing it is deliberate: open the sheet, pick, confirm.
  * A stray tap on a segmented control was too easy to make mid-race.
  */
-type RaceSummary = { counts: Record<string, number>; gunTimeMs: number | null };
+type RaceSummary = { counts: Record<string, number>; gunTimeMs: number | null; recording: Recording[] };
 
 function SwitchControl({
   races,
@@ -171,6 +177,13 @@ function SwitchControl({
   const pickedRace = races.find((r) => r.id === pick.raceId) ?? race;
   const pickedCp = pickedRace.checkpoints.find((c) => c.id === pick.checkpointId) ?? pickedRace.checkpoints[0];
   const hereMode = race.places?.on ? modeFrom(modePref) : null;
+  // Someone else here doing the same job: two people counting places count runners twice;
+  // two people timing ask to replace each other's times (fine if they've split the runners).
+  // Shown on the button's second line, so nothing moves under a thumb; the sheet explains.
+  const others = current.recording.filter((r) => !r.me && r.checkpointId === checkpointId);
+  const myJob = JOB[hereMode ?? "names"];
+  const placeClash = hereMode && countsPlaces(myJob) ? others.filter((r) => countsPlaces(r.job)) : [];
+  const timeClash = timesRunners(myJob) ? others.filter((r) => timesRunners(r.job)) : [];
   const changed = pick.raceId !== race.id || pick.checkpointId !== checkpointId || (!!pickedRace.places?.on && pickMode !== modeFrom(modePref));
   const summary: RaceSummary | null = pickedRace.id === race.id ? current : (fetched[pickedRace.id] ?? null);
 
@@ -180,11 +193,11 @@ function SwitchControl({
     let cancelled = false;
     fetch(`/api/races/${pickedRace.id}/taps`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((body: { taps: TapLike[]; gunTimeMs: number | null }) => {
+      .then((body: { taps: TapLike[]; gunTimeMs: number | null; recording?: Recording[] }) => {
         if (cancelled) return;
         const st = replay({ checkpoints: pickedRace.checkpoints.map((c) => ({ ...c, distance: { value: 0, unit: "mi", meters: 0 }, kind: "split" })) }, body.taps);
         const counts = Object.fromEntries(pickedRace.checkpoints.map((c) => [c.id, [...(st.get(c.id)?.byAthlete.values() ?? [])].filter((m) => !m.missed).length]));
-        setFetched((f) => ({ ...f, [pickedRace.id]: { counts, gunTimeMs: body.gunTimeMs } }));
+        setFetched((f) => ({ ...f, [pickedRace.id]: { counts, gunTimeMs: body.gunTimeMs, recording: body.recording ?? [] } }));
       })
       .catch(() => {});
     return () => {
@@ -209,6 +222,11 @@ function SwitchControl({
           <span className="block truncate text-[13px] text-ink-2">
             {race.name}
             {hereMode && <span className="font-medium text-ink"> · {MODES.find((m) => m.value === hereMode)!.label}</span>}
+            {placeClash.length > 0 ? (
+              <span className="font-semibold text-danger"> · {names(placeClash)} also counting places</span>
+            ) : (
+              timeClash.length > 0 && <span className="font-medium text-gold-text"> · {names(timeClash)} also timing</span>
+            )}
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-0.5 rounded-md bg-surface-2 px-2 py-1 text-[11px] font-medium text-ink-2">
@@ -247,16 +265,25 @@ function SwitchControl({
                 {pickedRace.checkpoints.map((c) => {
                   const active = c.id === pick.checkpointId;
                   const n = summary?.counts[c.id];
+                  const here = (summary?.recording ?? []).filter((r) => !r.me && r.checkpointId === c.id);
                   return (
                     <button
                       key={c.id}
                       type="button"
                       onClick={() => setPick({ raceId: pickedRace.id, checkpointId: c.id })}
-                      className={`flex h-12 items-center justify-between rounded-lg border px-4 text-left text-base font-medium ${
+                      className={`flex min-h-12 items-center justify-between gap-3 rounded-lg border px-4 py-1.5 text-left text-base font-medium ${
                         active ? "border-brand bg-brand-soft text-ink" : "border-line bg-surface text-ink hover:bg-surface-2"
                       }`}
                     >
-                      <span>{c.label}</span>
+                      <span className="min-w-0">
+                        {c.label}
+                        {/* Who else is here and doing what, so gaps and doubles show before picking. */}
+                        {here.length > 0 && (
+                          <span className="block text-xs font-normal text-ink-2">
+                            {here.map((r) => `${r.name} · ${pickedRace.places?.on ? JOB_LABEL[r.job] : "times"}`).join(", ")}
+                          </span>
+                        )}
+                      </span>
                       <span className="flex items-center gap-2 text-[13px] font-normal text-ink-2">
                         {n !== undefined && (
                           <span className="tnum">
@@ -278,6 +305,30 @@ function SwitchControl({
                     <OrderRow key={m.value} active={pickMode === m.value} label={m.label} hint={m.hint} onClick={() => setPickMode(m.value)} />
                   ))}
                 </div>
+                {(() => {
+                  const there = (summary?.recording ?? []).filter((r) => !r.me && r.checkpointId === pick.checkpointId);
+                  const job = JOB[pickMode];
+                  const placing = countsPlaces(job) ? there.filter((r) => countsPlaces(r.job)) : [];
+                  const timing = timesRunners(job) ? there.filter((r) => timesRunners(r.job)) : [];
+                  return (
+                    <>
+                      {placing.length > 0 && (
+                        <div className="mt-2">
+                        <Alert tone="danger">
+                          {names(placing)} {placing.length === 1 ? "is" : "are"} already counting places at {pickedCp?.label}. Two people counting the same runners count them twice: pick Times, or a different checkpoint.
+                        </Alert>
+                        </div>
+                      )}
+                      {timing.length > 0 && (
+                        <div className="mt-2">
+                        <Alert tone="gold">
+                          {names(timing)} {timing.length === 1 ? "is" : "are"} already timing at {pickedCp?.label}. Fine if you&rsquo;ve split our runners between you; otherwise you&rsquo;ll replace each other&rsquo;s times.
+                        </Alert>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
             <Button
@@ -336,7 +387,12 @@ function RaceTapper({
 }) {
   const clock = useClock();
   const checkpoint = race.checkpoints[cpIndex];
-  const { taps, gunTimeMs, official, officialLive, finished, staleMinutes, send, online, signedOut, rejected, loaded, unsent, refresh, adoptGun } = useRaceTaps(race.id, race.gunTimeMs, checkpoint.id);
+  const placesOn = !!race.places?.on;
+  const [placesModePref] = useLocalValue(PLACES_MODE_KEY);
+  // Chosen in the Switch sheet ("Your job here"), with the race and checkpoint.
+  const placesMode: RecordMode = !placesOn ? "names" : modeFrom(placesModePref);
+  const { taps, gunTimeMs, official, officialLive, finished, staleMinutes, send, online, signedOut, rejected, loaded, unsent, refresh, adoptGun, recording } = useRaceTaps(race.id, race.gunTimeMs, checkpoint.id, JOB[placesMode]);
+
   const isFinished = race.finished || finished;
   const officialAt = (athleteId: string): number | null => {
     const o = official[athleteId];
@@ -351,15 +407,13 @@ function RaceTapper({
   const prev = cpIndex > 0 ? state.get(race.checkpoints[cpIndex - 1].id) : undefined;
   const statuses = useMemo(() => replayStatuses(taps), [taps]);
   const ticks = useMemo(() => replayTicks(taps), [taps]);
-  const placesOn = !!race.places?.on;
   const cpPlaces = useMemo(
     () => (placesOn ? racePlaces([checkpoint.id], state, ticks, gunTimeMs).get(checkpoint.id) : undefined),
     [placesOn, checkpoint.id, state, ticks, gunTimeMs],
   );
-  const [placesModePref] = useLocalValue(PLACES_MODE_KEY);
   const [scoresOpen, setScoresOpen] = useState(false);
   // Chosen in the Switch sheet ("Your job here"), with the race and checkpoint.
-  const placesMode: RecordMode = !placesOn ? "names" : modeFrom(placesModePref);
+
   const counts = race.checkpoints.map((c, i) => {
     const has = (id: string) => {
       const o = official[id];
@@ -726,6 +780,7 @@ function RaceTapper({
         {pickerFor({
           gunTimeMs,
           counts: Object.fromEntries(counts.map((c) => [c.id, c.n])),
+          recording,
         })}
         {!gunTimeMs && !isFinished && canGun && (
           <StartRaceControl

@@ -29,17 +29,23 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
   // `?at=<checkpointId>` is the record screen saying where it is; remembered on the session
   // so the results page can show who's covering each checkpoint. Refreshed at most every 20 s.
   const at = url.searchParams.get("at");
-  if (session && at && can(session, "tap", meet) && race.checkpoints.some((c) => c.id === at)) {
+  const jobParam = url.searchParams.get("job");
+  const job = jobParam === "places" || jobParam === "both" ? jobParam : "times";
+  const staff = can(session, "tap", meet);
+  if (session && at && staff && race.checkpoints.some((c) => c.id === at)) {
     const p = session.presence;
-    if (!p || p.raceId !== race._id || p.checkpointId !== at || Date.now() - p.at.getTime() > 20_000) {
-      await collection(db, "sessions").updateOne({ _id: session._id }, { $set: { presence: { raceId: race._id, checkpointId: at, at: new Date() } } });
+    if (!p || p.raceId !== race._id || p.checkpointId !== at || p.job !== job || Date.now() - p.at.getTime() > 20_000) {
+      await collection(db, "sessions").updateOne({ _id: session._id }, { $set: { presence: { raceId: race._id, checkpointId: at, job, at: new Date() } } });
     }
   }
-  const recording = (
-    await collection(db, "sessions")
-      .find({ "presence.raceId": race._id, "presence.at": { $gt: new Date(Date.now() - PRESENCE_MS) }, revokedAt: null }, { projection: { name: 1, "presence.checkpointId": 1 } })
-      .toArray()
-  ).map((s) => ({ name: s.name, checkpointId: s.presence!.checkpointId }));
+  // Who is recording where, and doing what: for coaches and managers only, never the public.
+  const recording = staff
+    ? (
+        await collection(db, "sessions")
+          .find({ "presence.raceId": race._id, "presence.at": { $gt: new Date(Date.now() - PRESENCE_MS) }, revokedAt: null }, { projection: { name: 1, "presence.checkpointId": 1, "presence.job": 1 } })
+          .toArray()
+      ).map((s) => ({ name: s.name, checkpointId: s.presence!.checkpointId, job: s.presence!.job ?? "times", me: s._id === session?._id }))
+    : [];
   // Taps whose insert is still in flight have an earlier createdAt than this poll; re-send a
   // generous window (clients dedupe by clientTapId) so a slow write is never skipped.
   const serverTimeMs = Date.now() - 5000;

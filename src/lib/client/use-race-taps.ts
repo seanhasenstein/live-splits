@@ -27,10 +27,10 @@ const RETRY_MS = [1000, 2000, 4000, 8000, 15000];
  * The live tap log for a race: what the server has, plus what this device has
  * queued but not yet delivered. Polls the server and flushes the outbox.
  */
-export type Recording = { name: string; checkpointId: string };
+export type Recording = { name: string; checkpointId: string; job: "times" | "places" | "both"; me: boolean };
 
-/** `at`: the checkpoint this record screen is on, reported with each poll (undefined for the results page). */
-export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?: string) {
+/** `at`: the checkpoint this record screen is on, and `job` what it does there, reported with each poll (undefined for the results page). */
+export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?: string, job?: Recording["job"]) {
   const [serverTaps, setServerTaps] = useState<Map<string, ServerTap>>(() => new Map());
   const [outbox, setOutbox] = useState<Map<string, OutboxTap>>(() => new Map());
   const [gunTimeMs, setGunTimeMs] = useState(initialGunTimeMs);
@@ -51,9 +51,11 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
   /** When this device last fired the gun itself (see adoptGun). */
   const adoptedAt = useRef<number | null>(null);
   const atRef = useRef(at);
+  const jobRef = useRef(job);
   useEffect(() => {
     atRef.current = at;
-  }, [at]);
+    jobRef.current = job;
+  }, [at, job]);
   const [finished, setFinished] = useState(false);
   const [loaded, setLoaded] = useState(false);
   /** Derived in the poll loop (not during render): is the race overdue, and how old is our data. */
@@ -68,7 +70,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
   // --- polling -------------------------------------------------------------
   const poll = useCallback(async () => {
     try {
-      const res = await fetch(`/api/races/${raceId}/taps?since=${since.current}${atRef.current ? `&at=${encodeURIComponent(atRef.current)}` : ""}`, { cache: "no-store" });
+      const res = await fetch(`/api/races/${raceId}/taps?since=${since.current}${atRef.current ? `&at=${encodeURIComponent(atRef.current)}&job=${jobRef.current ?? "times"}` : ""}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const body = (await res.json()) as { taps: ServerTap[]; gunTimeMs: number | null; serverTimeMs: number; official?: OfficialTimes; field?: FieldEntry[]; officialLive?: boolean; finished?: boolean; recording?: Recording[] };
       if (body.recording) setRecording(body.recording);

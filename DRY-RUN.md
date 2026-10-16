@@ -58,6 +58,12 @@
     the 1st name tapped, and so on.
   - Each button shows how many of that team have been counted; Scores opens
     the head to head, estimate and award lines for that checkpoint.
+  - The line above the buttons shows the next place and the last tap. Fix
+    lists the last 30 (newest first) to correct one between packs.
+  - Who's where (Live results, coaches and managers only) lists each
+    checkpoint's people and jobs. Switch shows it too, and warns before two
+    people count places (or time) at the same checkpoint; the Switch button
+    turns red if it happens anyway.
   - Tapping Other means counting everyone: places become overall, the
     award lines and the whole-meet estimate show. Without Other, places are
     among our runners and the tracked teams only (marked *).
