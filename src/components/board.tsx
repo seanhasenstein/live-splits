@@ -8,6 +8,7 @@ import { CheckpointCounts, DeltaText, RaceStatusBar, RecordPill, RunningClock } 
 import { SessionMenu } from "@/components/session-menu";
 import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, LiveDot, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
+import { useLocalValue } from "@/lib/client/use-local-value";
 import { useTimeFormat } from "@/lib/client/time-format";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type AthleteStatus, type CheckpointState, expectedAt, type Mark, replay, replayStatuses, type Slot, STATUS_LABEL, STATUS_LONG } from "@/lib/replay";
@@ -337,6 +338,15 @@ function RaceBoard({
     };
   });
 
+  // Which checkpoint the table shows: All (the overview), or one checkpoint with everything at it.
+  // Remembered on this phone once picked; until then it follows the race (the latest checkpoint
+  // with times while it runs) and shows All once it's over.
+  const [focusPref, setFocusPref] = useLocalValue(`ls_board_focus_${race.id}`);
+  const latestWithTimes = counts.reduce((last, c, i) => (c.n > 0 ? i : last), -1);
+  const pickedIndex = focusPref && focusPref !== "all" ? race.checkpoints.findIndex((c) => c.id === focusPref) : -1;
+  const focusIndex: number | null =
+    focusPref === "all" ? null : pickedIndex >= 0 ? pickedIndex : !isFinished && gunTimeMs !== null && latestWithTimes >= 0 ? latestWithTimes : null;
+
   // Elapsed-from-gun time at a checkpoint (official beats app), for projections and the team line.
   const elapsedAt = (row: Row, i: number): number | null => {
     const c = row.cells[i];
@@ -377,6 +387,118 @@ function RaceBoard({
       : finishTimes.length > 0
         ? `${finishTimes.length} finished`
         : null;
+
+  /**
+   * One checkpoint with everything at it, a column each: time from the gun, split, the pace change
+   * from the previous segment, and the place with its change. In order at that checkpoint; anyone
+   * not there yet follows with a projection, anyone out of the race last.
+   */
+  const checkpointTable = (i: number) => {
+    const c = race.checkpoints[i];
+    const timeOf = (cell: Cell | undefined) => (cell ? (cell.official ?? cell.elapsedMs) : null);
+    const segMeters = c.meters - (i > 0 ? race.checkpoints[i - 1].meters : 0);
+    const prevSegMeters = i > 0 ? race.checkpoints[i - 1].meters - (i > 1 ? race.checkpoints[i - 2].meters : 0) : 0;
+    const list = rows.map((r) => {
+      const cell = r.cells[i];
+      const here = timeOf(cell);
+      const out = here === null && !cell.missed && ((!!r.status && !expectedAt(r.status, i, race.checkpoints)) || (!!r.officialStatus && r.officialStatus !== "finished"));
+      const projected = here === null && !cell.missed && !out ? projectAt(r, i) : null;
+      return { r, cell, here, out, projected };
+    });
+    list.sort((a, b) => Number(a.out) - Number(b.out) || Number(a.here === null) - Number(b.here === null) || (a.here ?? a.projected ?? Infinity) - (b.here ?? b.projected ?? Infinity));
+    const th = "px-2 py-2 text-right font-semibold";
+    return (
+      <Card className="overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-line text-left text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
+              <th className="px-3 py-2 font-semibold sm:px-4">Athlete</th>
+              <th className={th}>Time</th>
+              {i > 0 && <th className={th}>Split</th>}
+              <th className={`${th} ${race.places ? "" : "pr-3 sm:pr-4"}`} title={i > 0 ? "Pace change from the previous segment (+ slower, − faster)" : "Pace per mile"}>
+                {i > 0 ? "Pace ±" : "Pace"}
+              </th>
+              {race.places && <th className={`${th} pr-3 sm:pr-4`}>Place</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {!loaded && (
+              <tr>
+                <td colSpan={5} className="px-4 py-4 text-ink-3">
+                  Loading…
+                </td>
+              </tr>
+            )}
+            {list.map(({ r, cell, here, out, projected }) => {
+              const prev = i > 0 ? timeOf(r.cells[i - 1]) : here !== null ? 0 : null;
+              const split = here !== null && prev !== null ? here - prev : null;
+              const before = i > 1 ? timeOf(r.cells[i - 2]) : i === 1 ? 0 : null;
+              const prevSplit = i > 0 && prev !== null && before !== null ? prev - before : null;
+              const paceChange = split !== null && prevSplit !== null && segMeters > 0 && prevSegMeters > 0 ? paceMsPerMile(split, segMeters) - paceMsPerMile(prevSplit, prevSegMeters) : null;
+              const m = cell.mark;
+              const flag = cell.official !== null ? "" : m && !cell.missed && here !== null ? (m.estimate ? "~" : m.edited ? "*" : "") : "";
+              const place = race.places && here !== null ? placeAt(r.athleteId, i) : null;
+              const timeNode =
+                projected !== null ? (
+                  <span className={staff && overdue(projected) ? "text-gold-text/80" : "text-ink-3"}>
+                    <Time>~{formatElapsed(projected).replace(/\.\d$/, "")}</Time>
+                    {staff && overdue(projected) && <span className="block text-[11px]">overdue</span>}
+                  </span>
+                ) : (
+                  <Time className={cell.missed || cell.beforeGun ? "text-ink-3 italic" : here !== null ? "font-semibold text-ink" : "text-ink-3"}>
+                    {cell.missed ? "missed" : cell.beforeGun ? "before gun" : here !== null ? ft(here, cell.precision) : "—"}
+                    {flag}
+                  </Time>
+                );
+              return (
+                <tr key={r.athleteId} onClick={editing ? undefined : () => setAthleteSheet(r.athleteId)} className={`${here === null ? "text-ink-3" : ""} ${editing ? "" : "cursor-pointer hover:bg-surface-2 active:bg-surface-2"}`}>
+                  <td className={`px-3 py-2.5 align-top font-medium sm:px-4 ${here === null ? "" : "text-ink"}`}>
+                    {editing ? (
+                      <button type="button" onClick={() => setStatusFor(r.athleteId)} className="-mx-1.5 rounded px-1.5 py-0.5 text-left hover:bg-gold-soft" title="Set DNS / DNR / DNF">
+                        {athletes[r.athleteId]}
+                      </button>
+                    ) : (
+                      <span>
+                        {athletes[r.athleteId]}
+                        {c.kind === "finish" && r.record && <RecordPill badge={r.record} className="ml-2 align-[2px]" />}
+                      </span>
+                    )}
+                    {out && (
+                      <span className="mt-0.5 block">
+                        <Badge tone="neutral">{r.status ? STATUS_LABEL[r.status.status] : (r.officialStatus ?? "").toUpperCase()}</Badge>
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-2 py-2.5 text-right align-top">
+                    {editing && cell.official === null ? (
+                      <button type="button" onClick={() => setFix({ athleteId: r.athleteId, cpIndex: i })} className="rounded-md border border-dashed border-line-strong px-1.5 py-0.5 hover:bg-surface-2 active:bg-brand-soft">
+                        {timeNode}
+                      </button>
+                    ) : (
+                      <span className={`rounded-md px-1 py-0.5 transition-colors duration-1000 ${isFresh(m?.tapId) ? "bg-brand-soft" : ""}`}>{timeNode}</span>
+                    )}
+                  </td>
+                  {i > 0 && <td className="px-2 py-2.5 text-right align-top">{split !== null ? <Time>{ft(split)}</Time> : ""}</td>}
+                  <td className={`px-2 py-2.5 text-right align-top ${race.places ? "" : "pr-3 sm:pr-4"}`}>
+                    {i > 0 ? (
+                      paceChange !== null && (
+                        <Time>
+                          <DeltaText ms={paceChange} />
+                        </Time>
+                      )
+                    ) : (
+                      split !== null && segMeters > 0 && <Time className="text-ink-2">{formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}</Time>
+                    )}
+                  </td>
+                  {race.places && <td className="tnum px-2 py-2.5 pr-3 text-right align-top whitespace-nowrap sm:pr-4">{place ? placeNode(place) : ""}</td>}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </Card>
+    );
+  };
 
   return (
     <>
@@ -469,6 +591,19 @@ function RaceBoard({
         </div>
       )}
 
+      {race.checkpoints.length > 1 && (
+        <Segmented
+          size="sm"
+          scroll
+          className="mb-2"
+          value={focusIndex === null ? "all" : race.checkpoints[focusIndex].id}
+          onChange={(v) => setFocusPref(v)}
+          options={[{ value: "all", label: "All" }, ...race.checkpoints.map((c) => ({ value: c.id, label: c.label }))]}
+        />
+      )}
+      {focusIndex !== null ? (
+        checkpointTable(focusIndex)
+      ) : (
       <Card className="overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -607,6 +742,7 @@ function RaceBoard({
           </tbody>
         </table>
       </Card>
+      )}
 
       {/* Below the splits: the table is what most people come for; scores are secondary here. */}
       {race.places && (
@@ -640,7 +776,9 @@ function RaceBoard({
 
       <p className="mt-3 text-xs text-ink-3">
         {!editing && "Tap a runner for their splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a light ~ time is a projection from the runner's last split${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : race.placesDerived ? "Official times replace app taps where imported; the timing company scored the divisions as one field, so places here are ranked by the app within our division. " : "Official times replace app taps where imported. ")}{" "}
-        Time from the gun, with the split beneath (pace and pace changes are in each runner&rsquo;s sheet).{" "}
+        {focusIndex === null
+          ? "Time from the gun, with the split beneath. Pick a checkpoint above the table for its pace changes and places."
+          : "Time from the gun, the split for this segment, and Pace ±: the change in pace per mile from the previous segment (+ slower, − faster)."}{" "}
         Updates every few seconds.
         {race.places && placesByCp.size > 0 && (
           <span className="mt-1 block">
