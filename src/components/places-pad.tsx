@@ -178,7 +178,13 @@ export function PlacesPad({
       onPointerCancel={team === "other" ? holdEnd : undefined}
       onContextMenu={(e) => e.preventDefault()}
       onClick={(e) => tick(e, team)}
-      style={{ background: colors.bg, color: colors.ink, WebkitTouchCallout: "none" }}
+      // Teams (and ours): the color slightly softened inside a full-strength rim, like Capture time.
+      // Other keeps its outline (its border comes from OTHER_EDGE).
+      style={
+        team === "other"
+          ? { background: colors.bg, color: colors.ink, WebkitTouchCallout: "none" }
+          : { background: `color-mix(in srgb, ${colors.bg} 90%, transparent)`, border: `2px solid ${colors.bg}`, color: colors.ink, WebkitTouchCallout: "none" }
+      }
       className={`relative flex flex-col items-center justify-center rounded-lg font-bold shadow-card transition-transform duration-75 select-none active:scale-[0.97] disabled:opacity-40 ${big ? "h-full min-h-14 text-2xl" : "h-14 text-lg"} ${extra}`}
     >
       {flashLayer(team)}
