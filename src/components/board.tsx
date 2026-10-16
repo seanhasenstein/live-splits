@@ -754,6 +754,7 @@ function RaceBoard({
             ourTeam={race.ourTeam}
             // A boys-and-girls race's field mixes both: no team scores from it.
             official={officialPlaces && !combined ? officialPlaces : null}
+            focus={focusIndex === null ? null : race.checkpoints[focusIndex].id}
           />
         </div>
       )}

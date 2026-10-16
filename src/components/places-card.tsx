@@ -20,6 +20,7 @@ export function PlacesCard({
   official,
   ourTeam,
   inSheet = false,
+  focus = null,
 }: {
   config: RacePlaces;
   checkpoints: { id: string; label: string; kind?: "split" | "finish" }[];
@@ -29,14 +30,20 @@ export function PlacesCard({
   ourTeam: OurTeam;
   /** Shown in a sheet that already has a title: no heading of its own. */
   inSheet?: boolean;
+  /** The checkpoint the results table is on: the card shows the same one, with no switch of its own. */
+  focus?: string | null;
 }) {
   const views: View[] = [...checkpoints.filter((c) => places.has(c.id)), ...(official && official.scores.length > 0 ? [{ id: "official", label: "Official" }] : [])];
   const [picked, setPicked] = useState<string | null>(null);
   if (views.length === 0) return null;
   // Nothing to show without tracked teams, until official team scores post.
   if (config.teams.length === 0 && !views.some((v) => v.id === "official")) return null;
-  // Follow the race: the latest checkpoint with places, until someone picks one.
-  const viewId = picked && views.some((v) => v.id === picked) ? picked : views.at(-1)!.id;
+  // Following the table: its checkpoint (the finish means the official scores once they're in).
+  // Nothing counted there yet: nothing to show.
+  const focused = focus ? (checkpoints.find((c) => c.id === focus)?.kind === "finish" && views.some((v) => v.id === "official") ? "official" : focus) : null;
+  if (focused && !views.some((v) => v.id === focused)) return null;
+  // On its own: the latest checkpoint with places, until someone picks one.
+  const viewId = focused ?? (picked && views.some((v) => v.id === picked) ? picked : views.at(-1)!.id);
 
   const tracked = new Map(config.teams.map((t) => [t.id, t]));
   // The button's chip (so it matches the record screen) and the full name (so anyone can read it).
@@ -95,8 +102,10 @@ export function PlacesCard({
     <Card className="mb-3 overflow-hidden">
       {!inSheet && (
         <div className="space-y-2 border-b border-line px-3 py-2">
-          <span className="block text-sm font-semibold text-ink">Places</span>
-          {views.length > 1 && <Segmented size="sm" scroll value={viewId} onChange={setPicked} options={views.map((v) => ({ value: v.id, label: v.label }))} />}
+          <span className="block text-sm font-semibold text-ink">
+            Places{focused && <span className="font-normal text-ink-2"> · {focused === "official" ? "official results" : checkpoints.find((c) => c.id === focused)?.label}</span>}
+          </span>
+          {views.length > 1 && !focused && <Segmented size="sm" scroll value={viewId} onChange={setPicked} options={views.map((v) => ({ value: v.id, label: v.label }))} />}
         </div>
       )}
       {cp ? (
