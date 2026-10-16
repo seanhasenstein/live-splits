@@ -70,7 +70,7 @@
     people count places (or time) at the same checkpoint; the Switch button
     turns red if it happens anyway.
   - Each time one of ours is tapped, a big green card shows their place,
-    time here and name for 5 s ("23rd 6:02 · Eddy"), plus "3 from top 20"
+    time here and name for 5 s ("23rd 6:02 · Eddy"), plus "Pass 3 for top 20"
     when the race has award lines, for the coach beside the counter to
     shout; it never covers the buttons. Tiles on Times +
     places show the place in bold after they pass.

@@ -768,8 +768,8 @@ function RaceTapper({
     const time = mark && !mark.missed && mark.timeMs !== null && gunTimeMs && mark.timeMs >= gunTimeMs ? formatElapsed(mark.timeMs - gunTimeMs) : null;
     const awards = race.places?.awards ?? [];
     const award = cpPlaces.countingAll && awards.length > 0 ? awardStatus(place, awards) : null;
-    // In numbers, not award names: "3 from top 20" works at any meet and is quick to shout.
-    const gap = award?.next ? `${award.next.places} from top ${award.next.line.through}` : award?.made ? `top ${award.made.through}` : null;
+    // What a coach shouts, in numbers rather than award names: "Pass 3 for top 20", "In the top 10".
+    const gap = award?.next ? `Pass ${award.next.places} for top ${award.next.line.through}` : award?.made ? `In the top ${award.made.through}` : null;
     return { key: shout.key, place, time, name: athleteId ? (athletes[athleteId] ?? null) : null, gap, overall: cpPlaces.countingAll };
   })();
 
@@ -1024,7 +1024,7 @@ function RaceTapper({
                         {cpPlaces.countingAll &&
                           (() => {
                             const { made, next } = awardStatus(cpPlaces.place.get(id)!, race.places?.awards ?? []);
-                            return next ? ` · ${next.places} from top ${next.line.through}` : made ? ` · top ${made.through}` : null;
+                            return next ? ` · pass ${next.places} for top ${next.line.through}` : made ? ` · in the top ${made.through}` : null;
                           })()}
                       </span>
                     </span>
