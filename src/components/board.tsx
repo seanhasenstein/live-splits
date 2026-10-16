@@ -199,7 +199,8 @@ function RaceBoard({
         (p.gained === 0 ? (
           showSame && (
             <span className="text-ink-3" title="Same place as the last checkpoint">
-              {" "}=
+              {" "}
+              <MoveHorizontal className="inline size-3.5 align-[-2px]" aria-label="same place" />
             </span>
           )
         ) : (
@@ -502,7 +503,7 @@ function RaceBoard({
                           {place.gained !== null &&
                             (place.gained === 0 ? (
                               <span className="text-ink-3" title="Same place as the last checkpoint">
-                                =
+                                <MoveHorizontal className="inline size-3.5 align-[-2px]" aria-label="same place" />
                               </span>
                             ) : (
                               <span className={place.gained > 0 ? "text-brand-text" : "text-danger"}>{place.gained > 0 ? `▲${place.gained}` : `▼${-place.gained}`}</span>
@@ -803,7 +804,7 @@ function RaceBoard({
         Updates every few seconds.
         {race.places && placesByCp.size > 0 && (
           <span className="mt-1 block">
-            Places: under each name, the place at the latest checkpoint (the first checkpoint&rsquo;s under its time); ▲ places gained since the last checkpoint · ▼ places lost · = same place · * among our runners and the tracked teams only, not everyone.
+            Places: under each name, the place at the latest checkpoint (the first checkpoint&rsquo;s under its time); ▲ places gained since the last checkpoint · ▼ places lost · ↔ same place · * among our runners and the tracked teams only, not everyone.
           </span>
         )}
       </p>
