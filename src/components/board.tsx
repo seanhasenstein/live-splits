@@ -1162,7 +1162,16 @@ function AthleteSheet({
                       {placeText(p.place)}
                       {p.overall ? " place" : " among tracked teams"}
                       {p.gained !== null &&
-                        (p.gained === 0 ? <span className="text-ink-3"> · same place</span> : <span className={p.gained > 0 ? "text-brand-text" : "text-danger"}>{p.gained > 0 ? ` · up ${p.gained}` : ` · down ${-p.gained}`}</span>)}
+                        // The table's marks, so there's one set to learn; spelled out on hover.
+                        (p.gained === 0 ? (
+                          <span className="text-ink-3" title="Same place as the last checkpoint">
+                            {" "}=
+                          </span>
+                        ) : (
+                          <span className={p.gained > 0 ? "text-brand-text" : "text-danger"} title={`${p.gained > 0 ? "Up" : "Down"} ${Math.abs(p.gained)} place${Math.abs(p.gained) === 1 ? "" : "s"} since the last checkpoint`}>
+                            {p.gained > 0 ? ` ▲${p.gained}` : ` ▼${-p.gained}`}
+                          </span>
+                        ))}
                     </span>
                   );
                 })()}
