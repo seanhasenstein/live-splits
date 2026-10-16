@@ -83,6 +83,8 @@ const modeFrom = (pref: string | null): RecordMode => (pref === "places" || pref
 const RECENT_N = 3;
 type CompareMode = "last" | "course" | "off";
 const TOAST_MS = 2500;
+/** How long the shout card (our runner's place) stays up. */
+const SHOUT_MS = 5000;
 const FLASH_MS = 400;
 
 /**
@@ -412,6 +414,17 @@ function RaceTapper({
     [placesOn, checkpoint.id, state, ticks, gunTimeMs],
   );
   const [scoresOpen, setScoresOpen] = useState(false);
+  // The shout card: the place (and award gap) of the runner of ours just tapped, big enough for the
+  // coach beside the counter to call out. By name tap (athleteId) or by a places-only school tap (tapId).
+  const [shout, setShout] = useState<{ athleteId?: string; tapId?: string; key: number } | null>(null);
+  const shoutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shoutSeq = useRef(0);
+  const showShout = (who: { athleteId?: string; tapId?: string }) => {
+    shoutSeq.current += 1;
+    setShout({ ...who, key: shoutSeq.current });
+    if (shoutTimer.current) clearTimeout(shoutTimer.current);
+    shoutTimer.current = setTimeout(() => setShout(null), SHOUT_MS);
+  };
   // Done counting here, remembered on this phone (a reload mid-race doesn't unlock the buttons).
   const [placesDoneFlag, setPlacesDone] = useLocalValue(`ls_places_done_${race.id}_${checkpoint.id}`);
   const placesDone = placesDoneFlag === "1";
@@ -695,6 +708,7 @@ function RaceTapper({
     setLastAction({ tapId, label: athletes[athleteId] ?? "tap", restore });
     setRecent((r) => [{ athleteId, timeMs: slot ? slot.timeMs : deviceTimeMs + offset }, ...r.filter((x) => x.athleteId !== athleteId)].slice(0, RECENT_N));
     flash(athleteId);
+    if (placesOn) showShout({ athleteId });
     const how = slot ? (selected ? " · from the chip" : cp?.pending.some((p) => p.tapId === slot.tapId) ? " · from capture" : " · with the pack") : "";
     showToast(`${correction ? "Replaced" : "Recorded"} ${athletes[athleteId]} ${fmt(slot ? slot.timeMs : deviceTimeMs + offset)}${how}`);
   };
@@ -831,6 +845,7 @@ function RaceTapper({
               ourExpected={total - counts[cpIndex].out}
               onLock={(v) => setPlacesDone(v ? "1" : null)}
               onAction={({ tapIds, label }) => setLastAction({ tapId: tapIds[0], more: tapIds.slice(1), label })}
+              onOurTap={(tapId) => showShout({ tapId })}
               onToast={showToast}
             />
         </div>
@@ -982,15 +997,17 @@ function RaceTapper({
                     </span>
                   )}
                   {cpPlaces?.place.has(id) && (
-                    <span className={`block text-xs font-semibold ${flashing ? "" : "text-ink-2"}`}>
-                      {ordinal(cpPlaces.place.get(id)!)}
-                      {!cpPlaces.countingAll && <span className="font-normal"> of tracked</span>}
-                      {cpPlaces.countingAll &&
-                        (() => {
-                          // What to shout: how many places to the next award line.
-                          const { made, next } = awardStatus(cpPlaces.place.get(id)!, race.places?.awards ?? []);
-                          return next ? <span className="font-normal"> · {next.places} from {next.line.label.toLowerCase()}</span> : made ? <span className="font-normal"> · {made.label.toLowerCase()}</span> : null;
-                        })()}
+                    // The place leads once they've passed: what the coach calls out.
+                    <span className={`mt-0.5 block ${flashing ? "" : "text-ink"}`}>
+                      <span className={`tnum font-bold ${large ? "text-xl" : "text-lg"}`}>{ordinal(cpPlaces.place.get(id)!)}</span>
+                      <span className={`text-xs ${flashing ? "" : "text-ink-2"}`}>
+                        {!cpPlaces.countingAll && " of tracked"}
+                        {cpPlaces.countingAll &&
+                          (() => {
+                            const { made, next } = awardStatus(cpPlaces.place.get(id)!, race.places?.awards ?? []);
+                            return next ? ` · ${next.places} from ${next.line.label.toLowerCase()}` : made ? ` · ${made.label.toLowerCase()}` : null;
+                          })()}
+                      </span>
                     </span>
                   )}
                 </>
@@ -1053,9 +1070,32 @@ function RaceTapper({
         />
       )}
 
+      {(() => {
+        if (!shout || !cpPlaces) return null;
+        // Look the place up on every render: a places-only tap gets its name once the names phone taps it.
+        const index = shout.tapId ? cpPlaces.entries.findIndex((e) => e.tapId === shout.tapId) : -1;
+        const athleteId = shout.athleteId ?? (index >= 0 && cpPlaces.entries[index].kind === "us" ? (cpPlaces.entries[index] as { athleteId: string | null }).athleteId : null);
+        const place = athleteId && cpPlaces.place.get(athleteId) ? cpPlaces.place.get(athleteId)! : index >= 0 ? (cpPlaces.countingAll ? index + 1 : cpPlaces.entries.slice(0, index + 1).filter((e) => e.kind !== "other").length) : null;
+        if (place === null) return null;
+        const award = cpPlaces.countingAll ? awardStatus(place, race.places?.awards ?? []) : null;
+        const gap = award?.next ? `${award.next.places} from ${award.next.line.label.toLowerCase()}` : award?.made ? award.made.label : null;
+        return (
+          // Over the race card, never the buttons; taps pass straight through it.
+          <div key={shout.key} className="pointer-events-none fixed inset-x-3 top-16 z-30 flex justify-center">
+            <div className="w-full max-w-md rounded-xl bg-brand px-4 py-3 text-brand-ink shadow-sheet">
+              <div className="flex items-baseline gap-3">
+                <span className="tnum text-5xl leading-none font-bold">{ordinal(place)}</span>
+                <span className="text-lg leading-tight font-semibold">{cpPlaces.countingAll ? gap : "of tracked teams"}</span>
+              </div>
+              {athleteId && <div className="mt-1 truncate text-base opacity-90">{athletes[athleteId] ?? ""}</div>}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Read-only: taps go straight through it to the tiles beneath. Undo lives in the bar. */}
       {toast && (
-        <div className={`pointer-events-none fixed inset-x-0 z-20 flex justify-center px-3 [&>*]:pointer-events-none ${placesMode === "names" ? "bottom-36" : "top-36"}`}>
+        <div className={`pointer-events-none fixed inset-x-0 z-20 flex justify-center px-3 [&>*]:pointer-events-none ${placesMode === "names" ? "bottom-36" : shout ? "top-52" : "top-36"}`}>
           <Toast title={toast} />
         </div>
       )}
@@ -1133,6 +1173,7 @@ function RaceTapper({
               ourExpected={total - counts[cpIndex].out}
               onLock={(v) => setPlacesDone(v ? "1" : null)}
               onAction={({ tapIds, label }) => setLastAction({ tapId: tapIds[0], more: tapIds.slice(1), label })}
+              onOurTap={(tapId) => showShout({ tapId })}
               onToast={showToast}
             />}
         {placesMode === "names" && recent.length > 0 && (

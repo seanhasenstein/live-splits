@@ -40,6 +40,7 @@ export function PlacesPad({
   locked,
   onLock,
   ourExpected,
+  onOurTap,
 }: {
   mode: PlacesMode;
   teams: TrackedTeam[];
@@ -62,6 +63,8 @@ export function PlacesPad({
   onLock: (locked: boolean) => void;
   /** How many of ours should pass here (the lineup less anyone out of the race), for "5 of 7". */
   ourExpected: number;
+  /** One of ours was just counted (the shout card). */
+  onOurTap: (tapId: string) => void;
 }) {
   // The last-tap pill flashes on each tap from this phone: a confirmation seen from the corner of the eye.
   const [flash, setFlash] = useState(false);
@@ -121,6 +124,7 @@ export function PlacesPad({
     buzz();
     flashNow();
     flashButton(team);
+    if (team === "us") onOurTap(tapId);
     onAction({ tapIds: [tapId], label: `${ordinal(counted + 1)} ${label(team)}` });
   };
   // A clump of untracked runners: n Others at once, a few ms apart so they keep their order.
