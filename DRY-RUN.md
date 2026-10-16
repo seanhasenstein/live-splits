@@ -49,12 +49,15 @@
   (up to 6; names suggested from past results, labels and colors kept for
   next time), award lines (All-conference: 10 / 20 / 30), and "Show places to
   everyone" (off: only coaches and managers see them).
-- At a checkpoint, the record screen has Names / Names + places / Places only:
-  - One phone: Names + places. Tap our names as now and a team button for
+- Each phone picks its job in Switch ("Your job here"), with the race and
+  checkpoint: Times, Times + places, or Places. The header shows it.
+  - One phone: Times + places. Tap our names as now and a team button for
     their runners; Other for everyone else (hold Other for a pack of 2–5).
-  - Two phones: the name tapper stays on Names; a helper on Places only taps
-    our school's button / teams / Other for every runner. Its 1st tap is the
-    1st name tapped, and so on.
+  - Two phones: the name tapper on Times; a helper on Places taps our
+    school's button / teams / Other for every runner. Its 1st school tap is
+    the 1st name tapped, and so on.
+  - Each button shows how many of that team have been counted; Scores opens
+    the head to head, estimate and award lines for that checkpoint.
   - Tapping Other means counting everyone: places become overall, the
     award lines and the whole-meet estimate show. Without Other, places are
     among our runners and the tracked teams only (marked *).

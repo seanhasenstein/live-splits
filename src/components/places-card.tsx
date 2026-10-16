@@ -20,6 +20,7 @@ export function PlacesCard({
   official,
   ourTeam,
   athletes,
+  inSheet = false,
 }: {
   config: RacePlaces;
   checkpoints: { id: string; label: string }[];
@@ -28,6 +29,8 @@ export function PlacesCard({
   official: { scores: TeamScore[]; names: Map<string, string>; place: Map<string, number> } | null;
   ourTeam: OurTeam;
   athletes: Record<string, string>;
+  /** Shown in a sheet that already has a title: no heading of its own. */
+  inSheet?: boolean;
 }) {
   const views: View[] = [...checkpoints.filter((c) => places.has(c.id)), ...(official && official.scores.length > 0 ? [{ id: "official", label: "Official" }] : [])];
   const [picked, setPicked] = useState<string | null>(null);
@@ -92,10 +95,12 @@ export function PlacesCard({
 
   return (
     <Card className="mb-3 overflow-hidden">
-      <div className="space-y-2 border-b border-line px-3 py-2">
-        <span className="block text-sm font-semibold text-ink">Places</span>
-        {views.length > 1 && <Segmented size="sm" scroll value={viewId} onChange={setPicked} options={views.map((v) => ({ value: v.id, label: v.label }))} />}
-      </div>
+      {!inSheet && (
+        <div className="space-y-2 border-b border-line px-3 py-2">
+          <span className="block text-sm font-semibold text-ink">Places</span>
+          {views.length > 1 && <Segmented size="sm" scroll value={viewId} onChange={setPicked} options={views.map((v) => ({ value: v.id, label: v.label }))} />}
+        </div>
+      )}
       {cp ? (
         <>
           <p className="px-3 pt-2 text-xs text-ink-2">

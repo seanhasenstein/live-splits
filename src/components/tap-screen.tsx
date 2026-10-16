@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Check, ChevronDown, Pencil, SlidersHorizontal, Undo2, X } from "lucide-react";
 import { ClockWarning } from "@/components/race-card";
+import { PlacesCard } from "@/components/places-card";
 import { PlacesPad, type PlacesMode } from "@/components/places-pad";
 import { CheckpointCounts, DeltaText, RaceStatusBar } from "@/components/race-status";
 import { StartRaceControl } from "@/components/start-race";
@@ -64,6 +65,14 @@ const COMPARE_KEY = "ls_record_compare";
 const LARGE_KEY = "ls_record_large";
 /** This phone's part in counting places: "both" (names and teams), "places" (places only) or "names". */
 const PLACES_MODE_KEY = "ls_record_places_mode";
+type RecordMode = PlacesMode | "names";
+const MODES: { value: RecordMode; label: string; hint: string }[] = [
+  { value: "names", label: "Times", hint: "Our runners' splits." },
+  { value: "both", label: "Times + places", hint: "Our runners' splits, and a button for every other runner." },
+  { value: "places", label: "Places", hint: "Count every runner. Times come from whoever taps names here." },
+];
+/** This phone's job at a race that counts places (default: both). */
+const modeFrom = (pref: string | null): RecordMode => (pref === "places" || pref === "names" ? pref : "both");
 /** How many of this device's latest taps the bottom strip shows. */
 const RECENT_N = 3;
 type CompareMode = "last" | "course" | "off";
@@ -157,9 +166,12 @@ function SwitchControl({
   const [open, setOpen] = useState(false);
   const [pick, setPick] = useState({ raceId: race.id, checkpointId });
   const [fetched, setFetched] = useState<Record<string, RaceSummary>>({});
+  const [modePref, setModePref] = useLocalValue(PLACES_MODE_KEY);
+  const [pickMode, setPickMode] = useState<RecordMode>(modeFrom(modePref));
   const pickedRace = races.find((r) => r.id === pick.raceId) ?? race;
   const pickedCp = pickedRace.checkpoints.find((c) => c.id === pick.checkpointId) ?? pickedRace.checkpoints[0];
-  const changed = pick.raceId !== race.id || pick.checkpointId !== checkpointId;
+  const hereMode = race.places?.on ? modeFrom(modePref) : null;
+  const changed = pick.raceId !== race.id || pick.checkpointId !== checkpointId || (!!pickedRace.places?.on && pickMode !== modeFrom(modePref));
   const summary: RaceSummary | null = pickedRace.id === race.id ? current : (fetched[pickedRace.id] ?? null);
 
   // Another race's numbers: one fetch of its log, replayed here.
@@ -186,6 +198,7 @@ function SwitchControl({
         type="button"
         onClick={() => {
           setPick({ raceId: race.id, checkpointId });
+          setPickMode(modeFrom(modePref));
           setOpen(true);
         }}
         aria-label="Change race or checkpoint"
@@ -193,7 +206,10 @@ function SwitchControl({
       >
         <span className="min-w-0 flex-1">
           <span className="block truncate text-2xl leading-tight font-semibold tracking-tight text-ink">{race.checkpoints.find((c) => c.id === checkpointId)?.label}</span>
-          <span className="block truncate text-[13px] text-ink-2">{race.name}</span>
+          <span className="block truncate text-[13px] text-ink-2">
+            {race.name}
+            {hereMode && <span className="font-medium text-ink"> · {MODES.find((m) => m.value === hereMode)!.label}</span>}
+          </span>
         </span>
         <span className="flex shrink-0 items-center gap-0.5 rounded-md bg-surface-2 px-2 py-1 text-[11px] font-medium text-ink-2">
           Switch
@@ -254,16 +270,27 @@ function SwitchControl({
                 })}
               </div>
             </div>
+            {pickedRace.places?.on && (
+              <div>
+                <SectionLabel className="mb-1.5">Your job here</SectionLabel>
+                <div className="grid gap-2">
+                  {MODES.map((m) => (
+                    <OrderRow key={m.value} active={pickMode === m.value} label={m.label} hint={m.hint} onClick={() => setPickMode(m.value)} />
+                  ))}
+                </div>
+              </div>
+            )}
             <Button
               size="lg"
               disabled={!changed}
               onClick={() => {
+                if (pickedRace.places?.on) setModePref(pickMode === "both" ? null : pickMode);
                 onSwitch(pick);
                 setOpen(false);
               }}
               className="w-full"
             >
-              {changed ? `Record at ${pickedCp?.label ?? ""} · ${pickedRace.name}` : `Already at ${pickedCp?.label ?? ""} · ${pickedRace.name}`}
+              {changed ? `Record at ${pickedCp?.label ?? ""} · ${pickedRace.name}` : `Already here: ${pickedCp?.label ?? ""} · ${pickedRace.name}`}
             </Button>
           </div>
         </Sheet>
@@ -329,8 +356,10 @@ function RaceTapper({
     () => (placesOn ? racePlaces([checkpoint.id], state, ticks, gunTimeMs).get(checkpoint.id) : undefined),
     [placesOn, checkpoint.id, state, ticks, gunTimeMs],
   );
-  const [placesModePref, setPlacesModePref] = useLocalValue(PLACES_MODE_KEY);
-  const placesMode: PlacesMode | "names" = !placesOn ? "names" : placesModePref === "places" || placesModePref === "names" ? placesModePref : "both";
+  const [placesModePref] = useLocalValue(PLACES_MODE_KEY);
+  const [scoresOpen, setScoresOpen] = useState(false);
+  // Chosen in the Switch sheet ("Your job here"), with the race and checkpoint.
+  const placesMode: RecordMode = !placesOn ? "names" : modeFrom(placesModePref);
   const counts = race.checkpoints.map((c, i) => {
     const has = (id: string) => {
       const o = official[id];
@@ -708,10 +737,11 @@ function RaceTapper({
             onConflict={() => refresh()}
           />
         )}
-        <CheckpointCounts counts={counts} total={race.athleteIds.length} loaded={loaded} finished={isFinished} activeId={checkpoint.id} />
+        {/* A places counter doesn't need our runners' time counts. */}
+        {placesMode !== "places" && <CheckpointCounts counts={counts} total={race.athleteIds.length} loaded={loaded} finished={isFinished} activeId={checkpoint.id} />}
       </div>
 
-      {!introSeen && (
+      {!introSeen && placesMode !== "places" && (
         <div className="mx-3 mt-3 rounded-lg border border-brand/30 bg-brand-soft p-3 text-sm text-ink">
           <p className="font-semibold">How to record splits</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[13px] text-ink-2">
@@ -725,23 +755,9 @@ function RaceTapper({
           </Button>
         </div>
       )}
-      {placesOn && (
-        <div className="px-3 pt-3">
-          <Segmented
-            size="sm"
-            value={placesMode}
-            onChange={(v) => setPlacesModePref(v === "both" ? null : v)}
-            options={[
-              { value: "names", label: "Names" },
-              { value: "both", label: "Names + places" },
-              { value: "places", label: "Places only" },
-            ]}
-          />
-        </div>
-      )}
       {placesMode === "places" ? (
         <div className="flex-1 pb-28">
-          <p className="px-3 pt-3 text-[13px] text-ink-2">Tap every runner as they pass: <b>{race.ourTeam.name}</b> for ours (names come from the phone tapping names here), a team, or <b>Other</b>.</p>
+          <p className="px-3 pt-3 text-[13px] text-ink-2">One tap per runner as they pass.</p>
           <PlacesPad
               mode={placesMode}
               teams={race.places?.teams ?? []}
@@ -752,6 +768,7 @@ function RaceTapper({
               send={send}
               eventTime={eventTimeMs}
               onPointer={notePointerDown}
+              onScores={() => setScoresOpen(true)}
               onAction={({ tapIds, label }) => setLastAction({ tapId: tapIds[0], more: tapIds.slice(1), label })}
               onToast={showToast}
             />
@@ -924,6 +941,16 @@ function RaceTapper({
       </>
       )}
 
+      {scoresOpen && race.places && (
+        <Sheet title={`Scores at ${checkpoint.label}`} subtitle={race.name} onClose={() => setScoresOpen(false)}>
+          {cpPlaces ? (
+            <PlacesCard config={race.places} checkpoints={[checkpoint]} places={new Map([[checkpoint.id, cpPlaces]])} official={null} ourTeam={race.ourTeam} athletes={athletes} inSheet />
+          ) : (
+            <p className="text-sm text-ink-2">Nobody has been counted here yet.</p>
+          )}
+        </Sheet>
+      )}
+
       {holdId && (
         <TileStatusSheet
           name={athletes[holdId] ?? "?"}
@@ -1012,6 +1039,7 @@ function RaceTapper({
               send={send}
               eventTime={eventTimeMs}
               onPointer={notePointerDown}
+              onScores={() => setScoresOpen(true)}
               onAction={({ tapIds, label }) => setLastAction({ tapId: tapIds[0], more: tapIds.slice(1), label })}
               onToast={showToast}
             />}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Lock, LockOpen } from "lucide-react";
+import { Lock, LockOpen, Trophy } from "lucide-react";
 import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import { Button, Sheet } from "@/components/ui";
 import type { TrackedTeam } from "@/lib/db/schema";
@@ -36,6 +36,7 @@ export function PlacesPad({
   onPointer,
   onAction,
   onToast,
+  onScores,
 }: {
   mode: PlacesMode;
   teams: TrackedTeam[];
@@ -51,6 +52,8 @@ export function PlacesPad({
   /** For Undo: the taps this action sent, newest action wins. */
   onAction: (a: { tapIds: string[]; label: string }) => void;
   onToast: (text: string) => void;
+  /** Opens the scores at this checkpoint. */
+  onScores: () => void;
 }) {
   const [locked, setLocked] = useState(false);
   const [fixing, setFixing] = useState<{ entry: PlaceEntry; index: number } | null>(null);
@@ -121,6 +124,8 @@ export function PlacesPad({
   };
 
   const big = mode === "places";
+  // How many of each team have passed here: a missed tap shows up as a count that looks low.
+  const countOf = (team: string) => entries.filter((e) => (e.kind === "us" ? "us" : e.kind === "other" ? "other" : e.teamId) === team).length;
   const button = (team: string, name: string, colors: { bg: string; ink: string }, extra = "") => (
     <button
       key={team}
@@ -137,8 +142,9 @@ export function PlacesPad({
       onContextMenu={(e) => e.preventDefault()}
       onClick={(e) => tick(e, team)}
       style={{ background: colors.bg, color: colors.ink, WebkitTouchCallout: "none" }}
-      className={`flex flex-col items-center justify-center rounded-lg font-bold shadow-card select-none active:opacity-80 disabled:opacity-40 ${big ? "h-20 text-2xl" : "h-14 text-lg"} ${extra}`}
+      className={`relative flex flex-col items-center justify-center rounded-lg font-bold shadow-card select-none active:opacity-80 disabled:opacity-40 ${big ? "h-20 text-2xl" : "h-14 text-lg"} ${extra}`}
     >
+      {countOf(team) > 0 && <span className="tnum absolute top-1 right-1.5 text-xs font-semibold opacity-80">{countOf(team)}</span>}
       {name}
       {team === "other" && <span className="text-[10px] font-medium opacity-75">hold for a pack</span>}
     </button>
@@ -164,9 +170,9 @@ export function PlacesPad({
             </>
           )}
         </span>
-        <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
-          {shown.map((entry, i) => {
-            const index = offset + i;
+        {/* Newest first, so the tap just made is always in view. */}
+        <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:none]">
+          {shown.map((entry, i) => ({ entry, index: offset + i })).reverse().map(({ entry, index }) => {
             const team = entry.kind === "us" ? "us" : entry.kind === "other" ? "other" : entry.teamId;
             const c = team === "us" ? US : team === "other" ? null : placeColor(teams.find((t) => t.id === team)?.color ?? "gray");
             const fixable = entry.tapId !== null;
@@ -186,6 +192,12 @@ export function PlacesPad({
             );
           })}
         </div>
+        {places && (
+          <button type="button" onClick={onScores} className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-ink-2 hover:bg-surface-2">
+            <Trophy className="size-3.5" />
+            Scores
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setLocked((v) => !v)}
