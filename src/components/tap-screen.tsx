@@ -754,8 +754,8 @@ function RaceTapper({
     showToast(`Deleted ${fmt(slot.timeMs)}`);
   };
 
-  // The shout card: our runner just tapped, with their place, time here and name (both filled in as soon
-  // as they're known: a places-only tap gets them once the names phone taps the runner).
+  // The shout card: our runner just tapped, with their place, time here and name (a places-only tap gets
+  // the name once the names phone taps the runner).
   const shoutView = (() => {
     if (!shout || !cpPlaces) return null;
     const index = shout.tapId ? cpPlaces.entries.findIndex((e) => e.tapId === shout.tapId) : -1;
@@ -763,8 +763,11 @@ function RaceTapper({
     const athleteId = shout.athleteId ?? (entry?.kind === "us" ? entry.athleteId : null);
     const place = athleteId && cpPlaces.place.has(athleteId) ? cpPlaces.place.get(athleteId)! : index >= 0 ? (cpPlaces.countingAll ? index + 1 : cpPlaces.entries.slice(0, index + 1).filter((e) => e.kind !== "other").length) : null;
     if (place === null) return null;
+    // A places-only tap shows its own moment at once (and keeps it, so the number doesn't jump when the
+    // names phone's time arrives); a name tap shows that runner's recorded time.
     const mark = athleteId ? cp?.byAthlete.get(athleteId) : undefined;
-    const time = mark && !mark.missed && mark.timeMs !== null && gunTimeMs && mark.timeMs >= gunTimeMs ? formatElapsed(mark.timeMs - gunTimeMs) : null;
+    const at = entry ? entry.timeMs : mark && !mark.missed ? mark.timeMs : null;
+    const time = at !== null && gunTimeMs && at >= gunTimeMs ? formatElapsed(at - gunTimeMs) : null;
     return { key: shout.key, place, time, name: athleteId ? (athletes[athleteId] ?? null) : null, overall: cpPlaces.countingAll };
   })();
 
