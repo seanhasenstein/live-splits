@@ -658,6 +658,11 @@ function RaceBoard({
           ? "Splits are the time since the previous checkpoint; beneath each, the pace per mile and the change from the previous segment (+ slower, − faster). The finish column also shows the finish time."
           : "Cumulative time from the gun, with the split beneath and the pace change from the previous segment (+ slower, − faster)."}{" "}
         Updates every few seconds.
+        {race.places && placesByCp.size > 0 && (
+          <span className="mt-1 block">
+            Places: ▲ places gained since the last checkpoint · ▼ places lost · = same place · * among our runners and the tracked teams only, not everyone.
+          </span>
+        )}
       </p>
 
       {toast && (
