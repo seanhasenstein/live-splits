@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Fragment, type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, History as HistoryIcon, Info, Pencil, Share } from "lucide-react";
+import { ChevronLeft, ChevronRight, History as HistoryIcon, Info, MoveHorizontal, Pencil, Share } from "lucide-react";
 import { PlacesCard } from "@/components/places-card";
 import { CheckpointCounts, DeltaText, RaceStatusBar, RecordPill, RunningClock } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
@@ -1162,9 +1162,13 @@ function AthleteSheet({
                       {placeText(p.place)}
                       {p.overall ? " place" : " among tracked teams"}
                       {p.gained !== null &&
-                        // The table's ▲ / ▼, spelled out on hover. No mark for the same place: in a line of text
-                        // "1st place" says it, and a lone "=" just dangles.
-                        (p.gained === 0 ? null : (
+                        // ▲ / ▼ as in the table, spelled out on hover; the same place gets a quiet ↔.
+                        (p.gained === 0 ? (
+                          <span className="text-ink-3" title="Same place as the last checkpoint">
+                            {" "}
+                            <MoveHorizontal className="inline size-3.5 align-[-2px]" aria-label="same place" />
+                          </span>
+                        ) : (
                           <span className={p.gained > 0 ? "text-brand-text" : "text-danger"} title={`${p.gained > 0 ? "Up" : "Down"} ${Math.abs(p.gained)} place${Math.abs(p.gained) === 1 ? "" : "s"} since the last checkpoint`}>
                             {p.gained > 0 ? ` ▲${p.gained}` : ` ▼${-p.gained}`}
                           </span>
