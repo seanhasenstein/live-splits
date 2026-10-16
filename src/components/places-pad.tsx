@@ -37,6 +37,8 @@ export function PlacesPad({
   onAction,
   onToast,
   onScores,
+  locked,
+  onLock,
 }: {
   mode: PlacesMode;
   teams: TrackedTeam[];
@@ -54,8 +56,18 @@ export function PlacesPad({
   onToast: (text: string) => void;
   /** Opens the scores at this checkpoint. */
   onScores: () => void;
+  /** Done counting at this checkpoint (remembered on this phone, so a reload doesn't unlock it). */
+  locked: boolean;
+  onLock: (locked: boolean) => void;
 }) {
-  const [locked, setLocked] = useState(false);
+  // The last-tap pill flashes on each tap from this phone: a confirmation seen from the corner of the eye.
+  const [flash, setFlash] = useState(false);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashNow = () => {
+    setFlash(true);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(false), 450);
+  };
   const [fixing, setFixing] = useState<{ entry: PlaceEntry; index: number } | null>(null);
   const [listOpen, setListOpen] = useState(false);
   const [burst, setBurst] = useState<number | null>(null);
@@ -63,11 +75,10 @@ export function PlacesPad({
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const held = useRef(false);
 
-  // A new checkpoint starts unlocked, with nothing open.
+  // A new checkpoint starts with nothing open.
   const [seenCp, setSeenCp] = useState(checkpointId);
   if (seenCp !== checkpointId) {
     setSeenCp(checkpointId);
-    setLocked(false);
     setFixing(null);
     setBurst(null);
   }
@@ -100,13 +111,15 @@ export function PlacesPad({
     lastTap.current.set(team, at);
     const tapId = send({ ...base, type: "tick", team, deviceTimeMs: at });
     buzz();
-    onAction({ tapIds: [tapId], label: `${label(team)} · ${ordinal(counted + 1)}` });
+    flashNow();
+    onAction({ tapIds: [tapId], label: `${ordinal(counted + 1)} ${label(team)}` });
   };
   // A clump of untracked runners: n Others at once, a few ms apart so they keep their order.
   const pack = (e: SyntheticEvent, n: number) => {
     const at = eventTime(e);
     const tapIds = Array.from({ length: n }, (_, i) => send({ ...base, type: "tick", team: "other", deviceTimeMs: at + i * PACK_GAP_MS }));
     buzz();
+    flashNow();
     setBurst(null);
     onAction({ tapIds, label: `${n} Others` });
     onToast(`Counted ${n} Others · ${ordinal(counted + 1)}–${ordinal(counted + n)}`);
@@ -155,55 +168,49 @@ export function PlacesPad({
   const teamOf = (e: PlaceEntry) => (e.kind === "us" ? "us" : e.kind === "other" ? "other" : e.teamId);
   const colorsOf = (team: string) => (team === "us" ? US : team === "other" ? null : placeColor(teams.find((t) => t.id === team)?.color ?? "gray"));
   const textOf = (e: PlaceEntry) => (e.kind === "us" && e.athleteId ? `${ourTeam.short} · ${(athletes[e.athleteId] ?? "?").split(" ")[0]}` : label(teamOf(e)));
-  const LastChip = ({ entry }: { entry: PlaceEntry }) => {
-    const c = colorsOf(teamOf(entry));
-    return (
-      <span style={c ? { background: c.bg, color: c.ink } : undefined} className={`rounded px-1.5 py-0.5 font-semibold ${c ? "" : "border border-line-strong text-ink"}`}>
-        {textOf(entry)}
-      </span>
-    );
-  };
+  const lastColors = last ? colorsOf(teamOf(last)) : null;
 
   return (
     <div className="px-3 pt-2">
-      {/* One fixed line: the next place and the last tap (to confirm at a glance), then Fix, Scores and the lock. Never scrolls, never changes height. */}
-      <div className="relative mb-2 flex h-9 items-center gap-1.5 text-xs text-ink-2">
-        <span className="min-w-0 flex-1 truncate">
+      {/* One fixed line: the last tap first (what you just did), the running count, then Fix, Scores and Done. Never scrolls, never changes height. */}
+      <div className="relative mb-2 flex h-9 items-center gap-1.5">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           {locked ? (
-            <span className="font-medium text-ink">Done · {counted} counted</span>
-          ) : (
+            <span className="truncate text-sm font-medium text-ink">Done · {counted} counted</span>
+          ) : last ? (
             <>
-              Next <span className="tnum text-base font-semibold text-ink">{ordinal(counted + 1)}</span>
-              {places && !places.countingAll && <span className="text-ink-3">*</span>}
-              {last && (
-                <span className="ml-2">
-                  Last <span className="tnum font-semibold text-ink">{ordinal(entries.length)}</span> <LastChip entry={last} />
-                </span>
-              )}
+              <span
+                style={lastColors ? { background: lastColors.bg, color: lastColors.ink } : undefined}
+                className={`flex h-8 min-w-0 items-center truncate rounded-md px-2.5 text-sm font-bold transition-transform duration-150 ${lastColors ? "" : "border border-line-strong bg-surface text-ink"} ${flash ? "scale-105 ring-4 ring-brand/50" : ""}`}
+              >
+                <span className="tnum mr-1.5 opacity-80">{ordinal(entries.length)}</span>
+                <span className="truncate">{textOf(last)}</span>
+              </span>
+              <span className="shrink-0 text-xs text-ink-3">
+                next <span className="tnum font-semibold text-ink-2">{ordinal(counted + 1)}</span>
+                {places && !places.countingAll && "*"}
+              </span>
             </>
+          ) : (
+            <span className="truncate text-sm text-ink-3">Waiting for the first runner</span>
           )}
-        </span>
+        </div>
         {entries.some((e) => e.tapId) && (
-          <button type="button" onClick={() => setListOpen(true)} className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1.5 font-medium text-ink-2 hover:bg-surface-2">
+          <Button variant="secondary" size="sm" onClick={() => setListOpen(true)} className="h-8 shrink-0 px-2">
             <Pencil className="size-3.5" />
             Fix
-          </button>
+          </Button>
         )}
         {places && (
-          <button type="button" onClick={onScores} className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1.5 font-medium text-ink-2 hover:bg-surface-2">
+          <Button variant="secondary" size="sm" onClick={onScores} className="h-8 shrink-0 px-2">
             <Trophy className="size-3.5" />
             Scores
-          </button>
+          </Button>
         )}
-        <button
-          type="button"
-          onClick={() => setLocked((v) => !v)}
-          aria-label={locked ? "Count again" : "Done counting"}
-          className={`flex shrink-0 items-center gap-1 rounded-md px-2 py-1.5 font-medium ${locked ? "bg-brand-soft text-ink" : "text-ink-2 hover:bg-surface-2"}`}
-        >
+        <Button variant={locked ? "primary" : "secondary"} size="sm" onClick={() => onLock(!locked)} aria-label={locked ? "Count again" : "Done counting"} className="h-8 shrink-0 px-2">
           {locked ? <LockOpen className="size-3.5" /> : <Lock className="size-3.5" />}
           {locked ? "Count again" : "Done"}
-        </button>
+        </Button>
         {/* Over the row, not above the buttons, so the buttons never move under a thumb. */}
         {burst !== null && !locked && (
           <div className="absolute inset-x-0 bottom-0 z-10 grid grid-cols-4 gap-1.5 bg-bg">

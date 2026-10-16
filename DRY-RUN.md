@@ -58,8 +58,10 @@
     the 1st name tapped, and so on.
   - Each button shows how many of that team have been counted; Scores opens
     the head to head, estimate and award lines for that checkpoint.
-  - The line above the buttons shows the next place and the last tap. Fix
-    lists the last 30 (newest first) to correct one between packs.
+  - The line above the buttons shows the last tap (it flashes on each tap)
+    and the next place. Fix lists the last 30 (newest first) to correct one
+    between packs. Done locks the buttons and is remembered through a reload;
+    on Times + places, "Go to the next checkpoint" waits for Done.
   - Who's where (Live results, coaches and managers only) lists each
     checkpoint's people and jobs. Switch shows it too, and warns before two
     people count places (or time) at the same checkpoint; the Switch button

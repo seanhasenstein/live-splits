@@ -412,6 +412,9 @@ function RaceTapper({
     [placesOn, checkpoint.id, state, ticks, gunTimeMs],
   );
   const [scoresOpen, setScoresOpen] = useState(false);
+  // Done counting here, remembered on this phone (a reload mid-race doesn't unlock the buttons).
+  const [placesDoneFlag, setPlacesDone] = useLocalValue(`ls_places_done_${race.id}_${checkpoint.id}`);
+  const placesDone = placesDoneFlag === "1";
   // Chosen in the Switch sheet ("Your job here"), with the race and checkpoint.
 
   const counts = race.checkpoints.map((c, i) => {
@@ -824,6 +827,8 @@ function RaceTapper({
               eventTime={eventTimeMs}
               onPointer={notePointerDown}
               onScores={() => setScoresOpen(true)}
+              locked={placesDone}
+              onLock={(v) => setPlacesDone(v ? "1" : null)}
               onAction={({ tapIds, label }) => setLastAction({ tapId: tapIds[0], more: tapIds.slice(1), label })}
               onToast={showToast}
             />
@@ -1056,7 +1061,13 @@ function RaceTapper({
 
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-bg/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
         {/* Lives in the fixed bar (not above the grid) so appearing never moves a tile under a thumb. */}
-      {hereDone && placesMode !== "places" && (
+      {/* Counting places too: their runners are still coming, so Done (not our last runner) is what ends this checkpoint. */}
+      {hereDone && placesMode === "both" && !placesDone && (
+        <p className="mx-3 mt-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-2">
+          All ours are {checkpoint.kind === "finish" ? "in" : "through"} <b className="text-ink">{checkpoint.label}</b>. Keep counting, then tap <b className="text-ink">Done</b>.
+        </p>
+      )}
+      {hereDone && (placesMode === "names" || (placesMode === "both" && placesDone)) && (
         <div className="mx-3 mt-2 rounded-lg border border-brand/30 bg-brand-soft px-3 py-2 text-sm text-ink">
           <div className="flex items-center justify-between gap-3">
             <span>
@@ -1095,6 +1106,8 @@ function RaceTapper({
               eventTime={eventTimeMs}
               onPointer={notePointerDown}
               onScores={() => setScoresOpen(true)}
+              locked={placesDone}
+              onLock={(v) => setPlacesDone(v ? "1" : null)}
               onAction={({ tapIds, label }) => setLastAction({ tapId: tapIds[0], more: tapIds.slice(1), label })}
               onToast={showToast}
             />}
@@ -1118,9 +1131,10 @@ function RaceTapper({
           onDelete={deleteSlot}
         />}
         <div className="flex gap-2 px-3 pt-2">
-          <Button variant="secondary" size="lg" onClick={undo} disabled={!lastAction} className={`flex-col gap-0.5 px-0 ${placesMode === "places" ? "h-14 flex-1" : "h-16 w-20"}`}>
+          <Button variant="secondary" size="lg" onClick={undo} disabled={!lastAction} className={`flex-col gap-0.5 px-1! ${placesMode === "places" ? "h-14 flex-1" : "h-16 w-20"}`}>
             <Undo2 className="size-6 shrink-0" />
-            <span className="text-xs">{placesMode === "places" && lastAction ? `Undo ${lastAction.label}` : "Undo"}</span>
+            {/* Says what it will undo, so a stray tap on Undo is caught before it costs a good one. */}
+            <span className={`w-full truncate px-1 text-center ${placesMode === "places" ? "text-xs" : "text-[11px] leading-tight"}`}>{lastAction ? (placesMode === "places" ? `Undo ${lastAction.label}` : lastAction.label) : "Undo"}</span>
           </Button>
           {placesMode !== "places" && <button
             type="button"
