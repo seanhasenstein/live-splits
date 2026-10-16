@@ -85,6 +85,8 @@ const modeFrom = (pref: string | null): RecordMode => (pref === "places" || pref
 const RECENT_N = 3;
 type CompareMode = "last" | "course" | "off";
 const TOAST_MS = 2500;
+/** A tap still unsent after this long (or while offline) shows the "unsent" badge. */
+const UNSENT_SHOW_MS = 5000;
 /** How long the shout card (our runner's place) stays up. */
 const SHOUT_MS = 5000;
 const FLASH_MS = 400;
@@ -425,7 +427,7 @@ function RaceTapper({
   const [placesModePref] = useLocalValue(PLACES_MODE_KEY);
   // Chosen in the Switch sheet ("Your job here"), with the race and checkpoint.
   const placesMode: RecordMode = !placesOn ? "names" : modeFrom(placesModePref);
-  const { taps, gunTimeMs, official, officialLive, finished, staleMinutes, send, online, signedOut, rejected, loaded, unsent, refresh, adoptGun, recording } = useRaceTaps(race.id, race.gunTimeMs, checkpoint.id, JOB[placesMode]);
+  const { taps, gunTimeMs, official, officialLive, finished, staleMinutes, send, online, signedOut, rejected, loaded, unsent, oldestUnsentAt, refresh, adoptGun, recording } = useRaceTaps(race.id, race.gunTimeMs, checkpoint.id, JOB[placesMode]);
 
   const isFinished = race.finished || finished;
   const officialAt = (athleteId: string): number | null => {
@@ -643,10 +645,10 @@ function RaceTapper({
     if (release && heldRef.current) setHoldId(id);
   };
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
-  // Coarse clock for chip expiry; ticks every few seconds rather than reading the clock during render.
+  // Coarse clock for chip expiry and the stuck-unsent badge; ticks every couple of seconds rather than reading the clock during render.
   const [nowMs, setNowMs] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setNowMs(Date.now()), 5000);
+    const t = setInterval(() => setNowMs(Date.now()), 2000);
     return () => clearInterval(t);
   }, []);
   // First-use card. Until hydration the flag reads null, so the card waits a beat rather than flashing.
@@ -838,7 +840,8 @@ function RaceTapper({
               </Badge>
             )
           )}
-          {unsent > 0 && <Badge tone="gold">{unsent} unsent</Badge>}
+          {/* Every tap waits here for a moment while it sends; only say so when it's stuck (offline, or a few seconds). */}
+          {unsent > 0 && (!online || (oldestUnsentAt !== null && nowMs > 0 && nowMs - oldestUnsentAt > UNSENT_SHOW_MS)) && <Badge tone="gold">{unsent} unsent</Badge>}
           {staleMinutes > 0 && <Badge tone="gold">updated {staleMinutes} min ago</Badge>}
           {rejected > 0 && (
             <Badge tone="danger" dot>

@@ -306,6 +306,11 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
   }, [serverTaps, outbox, raceId]);
 
   const unsent = useMemo(() => [...outbox.values()].filter((t) => t.raceId === raceId).length, [outbox, raceId]);
+  /** When the oldest unsent tap was queued (null when all sent): a tap waiting long means no signal. */
+  const oldestUnsentAt = useMemo(() => {
+    const times = [...outbox.values()].filter((t) => t.raceId === raceId).map((t) => t.queuedAt);
+    return times.length ? Math.min(...times) : null;
+  }, [outbox, raceId]);
 
   return {
     taps,
@@ -324,6 +329,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
     rejected,
     loaded,
     unsent,
+    oldestUnsentAt,
     refresh: poll,
     adoptGun,
   };
