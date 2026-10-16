@@ -36,18 +36,30 @@ export function PlacesCard({
   const viewId = picked && views.some((v) => v.id === picked) ? picked : views.at(-1)!.id;
 
   const tracked = new Map(config.teams.map((t) => [t.id, t]));
+  // The button's chip (so it matches the record screen) and the full name (so anyone can read it).
   const teamChip = (key: string, name?: string) => {
     const t = tracked.get(key);
-    if (key === "us") return <span className="rounded bg-brand px-1.5 py-0.5 text-xs font-bold text-brand-ink">{ourTeam.short}</span>;
-    if (t) {
-      const c = placeColor(t.color);
+    const chip = (label: string, bg: string, ink: string) => (
+      <span className="mr-2 inline-block min-w-9 rounded px-1.5 py-0.5 text-center text-xs font-bold" style={{ background: bg, color: ink }}>
+        {label}
+      </span>
+    );
+    const full = (text: string) => <span className="text-[13px] text-ink">{text}</span>;
+    if (key === "us")
       return (
-        <span className="rounded px-1.5 py-0.5 text-xs font-bold" style={{ background: c.bg, color: c.ink }}>
-          {t.short}
+        <span className="flex items-center">
+          {chip(ourTeam.short, "var(--color-brand)", "var(--color-brand-ink)")}
+          {full(ourTeam.name)}
         </span>
       );
-    }
-    return <span className="text-[13px] text-ink">{name ?? key}</span>;
+    if (t)
+      return (
+        <span className="flex items-center">
+          {chip(t.short, placeColor(t.color).bg, placeColor(t.color).ink)}
+          {full(t.name)}
+        </span>
+      );
+    return full(name ?? key);
   };
   const scoreRows = (scores: TeamScore[], opts: { approx?: boolean; names?: Map<string, string>; only?: (team: string) => boolean } = {}) => (
     <table className="w-full text-sm">
