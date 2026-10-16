@@ -198,7 +198,7 @@ export function PlacesPad({
                 <span className="truncate">{textOf(last)}</span>
               </span>
               <span className="shrink-0 text-xs text-ink-3">
-                next place <span className="tnum font-semibold text-ink-2">{ordinal(counted + 1)}</span>
+                Next place <span className="tnum font-semibold text-ink-2">{ordinal(counted + 1)}</span>
                 {places && !places.countingAll && "*"}
               </span>
             </>
