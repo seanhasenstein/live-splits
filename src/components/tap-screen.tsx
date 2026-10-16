@@ -1063,9 +1063,31 @@ function RaceTapper({
         {/* Lives in the fixed bar (not above the grid) so appearing never moves a tile under a thumb. */}
       {/* Counting places too: their runners are still coming, so Done (not our last runner) is what ends this checkpoint. */}
       {hereDone && placesMode === "both" && !placesDone && (
-        <p className="mx-3 mt-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-2">
-          All ours are {checkpoint.kind === "finish" ? "in" : "through"} <b className="text-ink">{checkpoint.label}</b>. Keep counting, then tap <b className="text-ink">Done</b>.
-        </p>
+        <div className="mx-3 mt-2 flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-2">
+          <span>
+            All ours are {checkpoint.kind === "finish" ? "in" : "through"} <b className="text-ink">{checkpoint.label}</b>. Still counting their runners?
+          </span>
+          {/* One step when finished: locks the place buttons here and moves on. */}
+          {nextCp ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="shrink-0"
+              onClick={() => {
+                setPlacesDone("1");
+                onSwitch({ raceId: race.id, checkpointId: nextCp.id });
+              }}
+            >
+              Done here · Go to {nextCp.label}
+              <ArrowRight className="size-3.5" />
+            </Button>
+          ) : (
+            <LinkButton href={`/meets/${meetId}/results?race=${race.id}`} size="sm" variant="secondary" className="shrink-0" onClick={() => setPlacesDone("1")}>
+              Done here · Live results
+              <ArrowRight className="size-3.5" />
+            </LinkButton>
+          )}
+        </div>
       )}
       {hereDone && (placesMode === "names" || (placesMode === "both" && placesDone)) && (
         <div className="mx-3 mt-2 rounded-lg border border-brand/30 bg-brand-soft px-3 py-2 text-sm text-ink">

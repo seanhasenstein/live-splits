@@ -207,10 +207,11 @@ export function PlacesPad({
             Scores
           </Button>
         )}
-        <Button variant={locked ? "primary" : "secondary"} size="sm" onClick={() => onLock(!locked)} aria-label={locked ? "Count again" : "Done counting"} className="h-8 shrink-0 px-2">
+        {/* On Times + places, finishing here is one step at the end (Done here · Go to …); only Count again shows in the row. */}
+        {(mode === "places" || locked) && <Button variant={locked ? "primary" : "secondary"} size="sm" onClick={() => onLock(!locked)} aria-label={locked ? "Count again" : "Done counting"} className="h-8 shrink-0 px-2">
           {locked ? <LockOpen className="size-3.5" /> : <Lock className="size-3.5" />}
           {locked ? "Count again" : "Done"}
-        </Button>
+        </Button>}
         {/* Over the row, not above the buttons, so the buttons never move under a thumb. */}
         {burst !== null && !locked && (
           <div className="absolute inset-x-0 bottom-0 z-10 grid grid-cols-4 gap-1.5 bg-bg">
