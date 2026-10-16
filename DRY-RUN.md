@@ -64,7 +64,8 @@
     and the next place. Fix lists the last 30 (newest first) to correct one
     between packs. On Places, Done locks the buttons (remembered through a
     reload). On Times + places there's no Done in the row: once all ours are
-    through, "Done here · Go to Mile 2" locks the place buttons and moves on.
+    through a mile mark, "Done here · Go to Mile 2" locks the place buttons
+    and moves on; the finish shows the usual "Everyone has finished" message.
   - Who's where (Live results, coaches and managers only) lists each
     checkpoint's people and jobs. Switch shows it too, and warns before two
     people count places (or time) at the same checkpoint; the Switch button

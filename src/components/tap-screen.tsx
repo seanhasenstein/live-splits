@@ -1102,34 +1102,28 @@ function RaceTapper({
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-bg/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
         {/* Lives in the fixed bar (not above the grid) so appearing never moves a tile under a thumb. */}
       {/* Counting places too: their runners are still coming, so Done (not our last runner) is what ends this checkpoint. */}
-      {hereDone && placesMode === "both" && !placesDone && (
+      {/* Counting places at a mile mark: one step to finish here (locks the place buttons) and move on. */}
+      {hereDone && placesMode === "both" && !placesDone && nextCp && (
         <div className="mx-3 mt-2 flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-2">
           <span>
-            All ours are {checkpoint.kind === "finish" ? "in" : "through"} <b className="text-ink">{checkpoint.label}</b>. Still counting their runners?
+            All ours are through <b className="text-ink">{checkpoint.label}</b>.
           </span>
-          {/* One step when finished: locks the place buttons here and moves on. */}
-          {nextCp ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              className="shrink-0"
-              onClick={() => {
-                setPlacesDone("1");
-                onSwitch({ raceId: race.id, checkpointId: nextCp.id });
-              }}
-            >
-              Done here · Go to {nextCp.label}
-              <ArrowRight className="size-3.5" />
-            </Button>
-          ) : (
-            <LinkButton href={`/meets/${meetId}/results?race=${race.id}`} size="sm" variant="secondary" className="shrink-0" onClick={() => setPlacesDone("1")}>
-              Done here · Live results
-              <ArrowRight className="size-3.5" />
-            </LinkButton>
-          )}
+          <Button
+            size="sm"
+            variant="secondary"
+            className="shrink-0"
+            onClick={() => {
+              setPlacesDone("1");
+              onSwitch({ raceId: race.id, checkpointId: nextCp.id });
+            }}
+          >
+            Done here · Go to {nextCp.label}
+            <ArrowRight className="size-3.5" />
+          </Button>
         </div>
       )}
-      {hereDone && (placesMode === "names" || (placesMode === "both" && placesDone)) && (
+      {/* The finish (nothing comes next) reads the same as on Times. */}
+      {hereDone && (placesMode === "names" || (placesMode === "both" && (placesDone || !nextCp))) && (
         <div className="mx-3 mt-2 rounded-lg border border-brand/30 bg-brand-soft px-3 py-2 text-sm text-ink">
           <div className="flex items-center justify-between gap-3">
             <span>
