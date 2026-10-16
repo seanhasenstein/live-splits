@@ -13,7 +13,7 @@ import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type AthleteStatus, type CheckpointState, expectedAt, type Mark, replay, replayStatuses, type Slot, STATUS_LABEL, STATUS_LONG } from "@/lib/replay";
 import type { AthleteRaceStatus, Precision, RacePlaces } from "@/lib/db/schema";
 import { fieldScores, ordinal as placeText, type OurTeam, racePlaces, replayTicks } from "@/lib/race-places";
-import { METERS_PER_MILE, paceMsPerMile, projectElapsed } from "@/lib/pace";
+import { paceMsPerMile, projectElapsed } from "@/lib/pace";
 import { RECORD_LABEL, recordBadge } from "@/lib/records";
 import type { LineupBests, PriorFinish } from "@/lib/results/bests";
 import { formatClock, formatDateWithYear, formatElapsed, formatLocalDate, parseTypedTime } from "@/lib/time";
@@ -238,7 +238,6 @@ function RaceBoard({
     return at !== undefined && localNow > 0 && localNow - at < FRESH_MS;
   };
   const [editing, setEditing] = useState(false);
-  const [view, setView] = useState<"splits" | "both">("both");
   // A combined race (boys and girls together) gets a filter; the counts follow it.
   const combined = race.athleteIds.some((id) => genders[id] === "F") && race.athleteIds.some((id) => genders[id] === "M");
   const [who, setWho] = useState<"all" | "F" | "M">("all");
@@ -411,15 +410,6 @@ function RaceBoard({
               className="w-full sm:w-64"
             />
           )}
-          <Segmented
-            value={view}
-            onChange={setView}
-            options={[
-              { value: "both", label: "Cumulative + splits" },
-              { value: "splits", label: "Splits only" },
-            ]}
-            className="w-full sm:w-80"
-          />
         </div>
       </div>
 
@@ -467,19 +457,10 @@ function RaceBoard({
           <thead>
             <tr className="border-b border-line text-left text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
               <th className="px-3 py-2 font-semibold sm:px-4">{hasOfficial ? (race.placesDerived ? "Division place · Athlete" : "Place · Athlete") : "Athlete"}</th>
-              {race.checkpoints.map((c, i) => (
+              {race.checkpoints.map((c) => (
                 <th key={c.id} className="px-2 py-2 text-right font-semibold last:px-3 sm:last:px-4">
                   {c.label}
-                  {view === "both" && <span className="hidden text-[10px] font-normal tracking-normal normal-case text-ink-3 min-[420px]:block">cumulative · split</span>}
-                  {view === "splits" && (
-                    <span className="hidden text-[10px] font-normal tracking-normal normal-case text-ink-3 min-[420px]:block">
-                      {(() => {
-                        const prev = i > 0 ? race.checkpoints[i - 1].meters : 0;
-                        const mi = (c.meters - prev) / METERS_PER_MILE;
-                        return `${Number.isInteger(+mi.toFixed(2)) ? mi.toFixed(0) : mi.toFixed(2)} mi`;
-                      })()}
-                    </span>
-                  )}
+                  <span className="hidden text-[10px] font-normal tracking-normal normal-case text-ink-3 min-[420px]:block">cumulative · split</span>
                 </th>
               ))}
             </tr>
@@ -549,7 +530,7 @@ function RaceBoard({
                   const prevPace = prevSplit !== null ? paceMsPerMile(prevSplit, race.checkpoints[i - 1].meters - (i > 1 ? race.checkpoints[i - 2].meters : 0)) : null;
                   const last = i === row.cells.length - 1;
                   const cumulative = cell.official !== null ? ft(cell.official, cell.precision) : cell.absoluteMs !== null ? fmt(cell.absoluteMs) : "—";
-                  const shown = cell.missed ? "missed" : cell.beforeGun ? "before gun" : view === "splits" && i > 0 ? (split === null ? "—" : ft(split)) : cumulative;
+                  const shown = cell.missed ? "missed" : cell.beforeGun ? "before gun" : cumulative;
                   const flag = cell.official !== null ? "" : m && !cell.missed && shown !== "—" ? (m.estimate ? "~" : m.edited ? "*" : "") : "";
                   const projected = here === null && !cell.missed ? projectAt(row, i) : null;
                   const fresh = isFresh(m?.tapId);
@@ -561,12 +542,12 @@ function RaceBoard({
                           <span className="block text-[10px] tracking-wide uppercase">{staff && overdue(projected) ? "overdue" : "projected"}</span>
                         </span>
                       ) : (
-                        <Time className={`block ${cell.missed || cell.beforeGun ? "italic" : last && here !== null && view !== "splits" ? "font-semibold" : ""}`}>
+                        <Time className={`block ${cell.missed || cell.beforeGun ? "italic" : last && here !== null ? "font-semibold" : ""}`}>
                           {shown}
                           {flag}
                         </Time>
                       )}
-                      {view === "both" && i > 0 && split !== null && (
+                      {i > 0 && split !== null && (
                         <Time className="block text-[11px] text-ink-3">
                           {ft(split)}
                           {prevPace !== null && segMeters > 0 && (
@@ -575,23 +556,6 @@ function RaceBoard({
                               <DeltaText ms={paceMsPerMile(split, segMeters) - prevPace} suffix="/mi" />
                             </>
                           )}
-                        </Time>
-                      )}
-                      {view === "splits" && split !== null && (
-                        <Time className="block text-[11px] text-ink-3">
-                          {formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}/mi
-                          {prevPace !== null && (
-                            <>
-                              {" · "}
-                              <DeltaText ms={paceMsPerMile(split, segMeters) - prevPace} />
-                            </>
-                          )}
-                        </Time>
-                      )}
-                      {view === "splits" && last && i > 0 && here !== null && !cell.missed && (
-                        <Time className="block text-[11px] font-semibold text-ink">
-                          {cumulative}
-                          {flag}
                         </Time>
                       )}
                     </>
@@ -670,9 +634,7 @@ function RaceBoard({
 
       <p className="mt-3 text-xs text-ink-3">
         {!editing && "Tap a runner for their splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a ~ time marked projected is a guess from the runner's last split${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : race.placesDerived ? "Official times replace app taps where imported; the timing company scored the divisions as one field, so places here are ranked by the app within our division. " : "Official times replace app taps where imported. ")}{" "}
-        {view === "splits"
-          ? "Splits are the time since the previous checkpoint; beneath each, the pace per mile and the change from the previous segment (+ slower, − faster). The finish column also shows the finish time."
-          : "Cumulative time from the gun, with the split beneath and the pace change from the previous segment (+ slower, − faster)."}{" "}
+        Cumulative time from the gun, with the split beneath and the pace change from the previous segment (+ slower, − faster).{" "}
         Updates every few seconds.
         {race.places && placesByCp.size > 0 && (
           <span className="mt-1 block">
