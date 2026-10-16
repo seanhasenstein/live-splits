@@ -741,7 +741,8 @@ function RaceTapper({
   };
 
   return (
-    <main className="flex min-h-dvh flex-col bg-bg">
+    // Places fits the screen exactly: the buttons take what's left, so a slipping thumb can't scroll them away.
+    <main className={`flex flex-col bg-bg ${placesMode === "places" ? "h-dvh overflow-hidden" : "min-h-dvh"}`}>
       <AppHeader
         title={meetName}
         titleHref={`/meets/${meetId}`}
@@ -814,7 +815,7 @@ function RaceTapper({
         </div>
       )}
       {placesMode === "places" ? (
-        <div className="flex-1 pb-28">
+        <div className="flex min-h-0 flex-1 flex-col pb-28">
           <p className="px-3 pt-3 text-[13px] text-ink-2">One tap per runner as they pass.</p>
           <PlacesPad
               mode={placesMode}

@@ -148,7 +148,7 @@ export function PlacesPad({
       onPointerDown={() => {
         onPointer();
         held.current = false;
-        if (team === "other") holdStart();
+        if (team === "other" && !big) holdStart();
       }}
       onPointerUp={team === "other" ? holdEnd : undefined}
       onPointerLeave={team === "other" ? holdEnd : undefined}
@@ -156,11 +156,11 @@ export function PlacesPad({
       onContextMenu={(e) => e.preventDefault()}
       onClick={(e) => tick(e, team)}
       style={{ background: colors.bg, color: colors.ink, WebkitTouchCallout: "none" }}
-      className={`relative flex flex-col items-center justify-center rounded-lg font-bold shadow-card select-none active:opacity-80 disabled:opacity-40 ${big ? "h-20 text-2xl" : "h-14 text-lg"} ${extra}`}
+      className={`relative flex flex-col items-center justify-center rounded-lg font-bold shadow-card select-none active:opacity-80 disabled:opacity-40 ${big ? "h-full min-h-14 text-2xl" : "h-14 text-lg"} ${extra}`}
     >
       {countOf(team) > 0 && <span className="tnum absolute top-1 right-1.5 text-xs font-semibold opacity-80">{countOf(team)}</span>}
       {name}
-      {team === "other" && <span className="text-[10px] font-medium opacity-75">hold for a pack</span>}
+      {team === "other" && !big && <span className="text-[10px] font-medium opacity-75">hold for a pack</span>}
     </button>
   );
 
@@ -171,7 +171,7 @@ export function PlacesPad({
   const lastColors = last ? colorsOf(teamOf(last)) : null;
 
   return (
-    <div className="px-3 pt-2">
+    <div className={`px-3 pt-2 ${big ? "flex min-h-0 flex-1 flex-col" : ""}`}>
       {/* One fixed line: the last tap first (what you just did), the running count, then Fix, Scores and Done. Never scrolls, never changes height. */}
       <div className="relative mb-2 flex h-9 items-center gap-1.5">
         <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -224,11 +224,40 @@ export function PlacesPad({
         )}
       </div>
 
-      <div className={`grid gap-1.5 ${big ? "grid-cols-2" : teams.length + 1 <= 3 ? "grid-cols-3" : "grid-cols-4"}`}>
-        {big && button("us", ourTeam.name, US, "col-span-2 h-24!")}
-        {teams.map((t) => button(t.id, t.short, placeColor(t.color)))}
-        {button("other", "Other", { bg: "var(--color-ink)", ink: "var(--color-bg)" }, big && teams.length % 2 === 0 ? "col-span-2" : "")}
-      </div>
+      {big ? (
+        // Places: the buttons share the screen's height (nothing to scroll mid-pack). Up to three
+        // teams get a full-width row each; more go two to a row. Other has the pack buttons beside it.
+        <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+          <div className="flex min-h-0 flex-[1.3]">{button("us", ourTeam.name, US, "w-full")}</div>
+          {(teams.length <= 3 ? teams.map((t) => [t]) : Array.from({ length: Math.ceil(teams.length / 2) }, (_, i) => teams.slice(i * 2, i * 2 + 2))).map((row) => (
+            <div key={row[0].id} className="flex min-h-0 flex-1 gap-1.5">
+              {row.map((t) => button(t.id, t.short, placeColor(t.color), "flex-1"))}
+            </div>
+          ))}
+          <div className="flex min-h-0 flex-1 gap-1.5">
+            {button("other", "Other", { bg: "var(--color-ink)", ink: "var(--color-bg)" }, "flex-[2]")}
+            {[2, 3, 4].map((n) => (
+              <button
+                key={n}
+                type="button"
+                disabled={locked}
+                onPointerDown={onPointer}
+                onClick={(e) => pack(e, n)}
+                aria-label={`${n} Others`}
+                className="flex h-full min-h-14 flex-1 flex-col items-center justify-center rounded-lg border border-line-strong bg-surface text-xl font-bold text-ink shadow-card select-none active:bg-surface-2 disabled:opacity-40"
+              >
+                +{n}
+                <span className="text-[10px] font-medium text-ink-3">Others</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className={`grid gap-1.5 ${teams.length + 1 <= 3 ? "grid-cols-3" : "grid-cols-4"}`}>
+          {teams.map((t) => button(t.id, t.short, placeColor(t.color)))}
+          {button("other", "Other", { bg: "var(--color-ink)", ink: "var(--color-bg)" })}
+        </div>
+      )}
 
       {listOpen && !fixing && (
         <Sheet title="Fix a place" subtitle={`${entries.length} counted here. Newest first; tap one to fix it.`} onClose={() => setListOpen(false)}>

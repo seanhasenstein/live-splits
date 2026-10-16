@@ -55,7 +55,9 @@
     their runners; Other for everyone else (hold Other for a pack of 2–5).
   - Two phones: the name tapper on Times; a helper on Places taps our
     school's button / teams / Other for every runner. Its 1st school tap is
-    the 1st name tapped, and so on.
+    the 1st name tapped, and so on. Places fills the screen (no scrolling):
+    up to 3 teams get a full-width row each, more go two to a row, and Other
+    has +2 / +3 / +4 beside it (no hold needed there).
   - Each button shows how many of that team have been counted; Scores opens
     the head to head, estimate and award lines for that checkpoint.
   - The line above the buttons shows the last tap (it flashes on each tap)
