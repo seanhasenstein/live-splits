@@ -1152,8 +1152,8 @@ function RaceTapper({
           onSelect={(id) => setSelectedSlotId((cur) => (cur === id ? null : id))}
           onDelete={deleteSlot}
         />}
-        <div className="flex gap-2 px-3 pt-2">
-          <Button variant="secondary" size="lg" onClick={undo} disabled={!lastAction} className={`flex-col gap-0.5 px-1! ${placesMode === "places" ? "h-14 flex-1" : "h-16 w-20"}`}>
+        <div className={`flex gap-2 px-3 ${placesMode === "places" ? "py-3" : "pt-2"}`}>
+          <Button variant="secondary" size="lg" onClick={undo} disabled={!lastAction} className={`flex-col gap-0.5 px-1! ${placesMode === "places" ? "h-16 flex-1" : "h-16 w-20"}`}>
             <Undo2 className="size-6 shrink-0" />
             {/* Says what it will undo, so a stray tap on Undo is caught before it costs a good one. */}
             <span className={`w-full truncate px-1 text-center ${placesMode === "places" ? "text-xs" : "text-[11px] leading-tight"}`}>{lastAction ? (placesMode === "places" ? `Undo ${lastAction.label}` : lastAction.label) : "Undo"}</span>

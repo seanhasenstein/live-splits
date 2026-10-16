@@ -125,6 +125,13 @@ body {
   color: var(--ink);
 }
 
+/* Quick repeated taps (two runners of one team, a pack of names) must count, not zoom the page on iPhone. */
+button,
+a,
+[role="button"] {
+  touch-action: manipulation;
+}
+
 /* Every number that could be a time lines up. */
 .tnum,
 table,
