@@ -53,7 +53,8 @@
   - One phone: Names + places. Tap our names as now and a team button for
     their runners; Other for everyone else (hold Other for a pack of 2–5).
   - Two phones: the name tapper stays on Names; a helper on Places only taps
-    Us / teams / Other for every runner. The 1st Us is the 1st name tapped.
+    our school's button / teams / Other for every runner. Its 1st tap is the
+    1st name tapped, and so on.
   - Tapping Other means counting everyone: places become overall, the
     award lines and the whole-meet estimate show. Without Other, places are
     among our runners and the tracked teams only (marked *).

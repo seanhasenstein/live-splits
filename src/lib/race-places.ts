@@ -218,6 +218,10 @@ export function trackedTeamFor(name: string | null, teams: TrackedTeam[]): Track
   return teams.find((t) => [t.name, ...t.aliases].some((n) => teamKey(n) === k)) ?? null;
 }
 
+/** Our school as places show it: the short name in full where there's room, a button label where not. */
+export type OurTeam = { name: string; short: string };
+export const ourTeamOf = (school: { shortName: string } | null): OurTeam => ({ name: school?.shortName ?? "Our team", short: school ? shortLabel(school.shortName) : "US" });
+
 /** A button label: "KIM" for "Kimberly", initials for several words ("Little Chute" → "LC"). */
 export function shortLabel(name: string): string {
   const words = teamKey(name).split(" ").filter(Boolean);

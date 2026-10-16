@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { generateCode } from "@/lib/auth/crypto";
 import { can, getSession, sessionActor } from "@/lib/auth/session";
-import { getMeet, getProgram, getRace, listAthletes, listDistances } from "@/lib/data";
+import { getMeet, getProgram, getRace, getSchool, listAthletes, listDistances } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
 import { collection, COLLECTIONS } from "@/lib/db/collections";
 import { newId } from "@/lib/db/client";
@@ -333,6 +333,10 @@ export async function setRacePlacesAction(raceId: string, places: RacePlaces): P
   if (new Set(ids).size !== ids.length) return { error: "Two teams share an id" };
   const keys = parsed.data.teams.map((t) => teamKey(t.name));
   if (new Set(keys).size !== keys.length) return { error: "A team is listed twice" };
+  // Our runners are counted by name (or the school's own button); tracking the school too would count them twice.
+  const school = await getSchool(meet.schoolId);
+  const own = parsed.data.teams.find((t) => school && [school.name, school.shortName].some((n) => teamKey(n) === teamKey(t.name)));
+  if (own) return { error: `${own.name} is your school. It's always counted; track the other teams.` };
   const lines = parsed.data.awards.map((a) => a.through);
   if (new Set(lines).size !== lines.length) return { error: "Two award lines end at the same place" };
   await collection(await getDb(), "races").updateOne({ _id: race._id }, { $set: { places: parsed.data, updatedAt: new Date(), updatedBy: sessionActor(session!) } });
@@ -366,16 +370,18 @@ export async function teamSuggestionsAction(raceId: string): Promise<TeamSuggest
       ])
       .toArray(),
   ]);
+  const school = await getSchool(meet.schoolId);
+  const ownKeys = new Set(school ? [teamKey(school.name), teamKey(school.shortName)] : []);
   const out = new Map<string, TeamSuggestion>();
   for (const r of tracked) {
     for (const t of r.places?.teams ?? []) {
       const k = teamKey(t.name);
-      if (!out.has(k)) out.set(k, { name: t.name, short: t.short, color: t.color, aliases: t.aliases, tracked: true });
+      if (!out.has(k) && !ownKeys.has(k)) out.set(k, { name: t.name, short: t.short, color: t.color, aliases: t.aliases, tracked: true });
     }
   }
   for (const e of seen) {
     const k = teamKey(e._id);
-    if (k && !out.has(k)) out.set(k, { name: e._id, short: null, color: null, aliases: [], tracked: false });
+    if (k && !out.has(k) && !ownKeys.has(k)) out.set(k, { name: e._id, short: null, color: null, aliases: [], tracked: false });
   }
   return [...out.values()];
 }

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Card, Segmented } from "@/components/ui";
 import type { RacePlaces } from "@/lib/db/schema";
-import { awardStatus, type CheckpointPlaces, ordinal, placeColor, type TeamScore, trackedTeamFor } from "@/lib/race-places";
+import { awardStatus, type CheckpointPlaces, ordinal, type OurTeam, placeColor, type TeamScore, trackedTeamFor } from "@/lib/race-places";
 
 type View = { id: string; label: string };
 
@@ -18,6 +18,7 @@ export function PlacesCard({
   checkpoints,
   places,
   official,
+  ourTeam,
   athletes,
 }: {
   config: RacePlaces;
@@ -25,6 +26,7 @@ export function PlacesCard({
   places: Map<string, CheckpointPlaces>;
   /** Team scores from the official results (every team), and our runners' official places. */
   official: { scores: TeamScore[]; names: Map<string, string>; place: Map<string, number> } | null;
+  ourTeam: OurTeam;
   athletes: Record<string, string>;
 }) {
   const views: View[] = [...checkpoints.filter((c) => places.has(c.id)), ...(official && official.scores.length > 0 ? [{ id: "official", label: "Official" }] : [])];
@@ -36,7 +38,7 @@ export function PlacesCard({
   const tracked = new Map(config.teams.map((t) => [t.id, t]));
   const teamChip = (key: string, name?: string) => {
     const t = tracked.get(key);
-    if (key === "us") return <span className="rounded bg-brand px-1.5 py-0.5 text-xs font-bold text-brand-ink">Us</span>;
+    if (key === "us") return <span className="rounded bg-brand px-1.5 py-0.5 text-xs font-bold text-brand-ink">{ourTeam.short}</span>;
     if (t) {
       const c = placeColor(t.color);
       return (

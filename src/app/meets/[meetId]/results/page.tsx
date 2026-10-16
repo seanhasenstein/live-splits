@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { Board } from "@/components/board";
 import { can, getSession, isSchoolCoach } from "@/lib/auth/session";
-import { getMeet, getProgram, listAthletes, listDistances, listRaces } from "@/lib/data";
+import { getMeet, getProgram, getSchool, listAthletes, listDistances, listRaces } from "@/lib/data";
+import { ourTeamOf } from "@/lib/race-places";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
 import { gradeForSeason } from "@/lib/grade";
@@ -21,11 +22,12 @@ export default async function ResultsPage({ params, searchParams }: PageProps<"/
   const races = await listRaces(meet._id);
   const athleteIds = [...new Set(races.flatMap((r) => r.lineup.map((l) => l.athleteId)))];
   const program = await getProgram(meet.schoolId, "xc");
-  const [athletes, bests, season, distances] = await Promise.all([
+  const [athletes, bests, season, distances, school] = await Promise.all([
     listAthletes(meet.schoolId, athleteIds),
     Promise.all(races.map((r) => getLineupBests(meet, r, program))),
     collection(await getDb(), "seasons").findOne({ _id: meet.seasonId }),
     listDistances("xc"),
+    getSchool(meet.schoolId),
   ]);
   const levelLabel = (id: string) => program?.settings.levels.find((l) => l.id === id)?.label ?? id;
 
@@ -51,6 +53,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps<"/
         recordsExcluded: meet.recordsExclusion !== null && meet.recordsExclusion !== undefined,
         // Coaches and managers always; everyone else once the coach shows places to all.
         places: r.places?.on && (r.places.public || can(session, "tap", meet)) ? r.places : null,
+        ourTeam: ourTeamOf(school),
       }))}
       grades={Object.fromEntries(athletes.map((a) => [a._id, a.graduationYear !== null && season ? gradeForSeason(a.graduationYear, season.endDate) : null]))}
       initialAthleteId={typeof athlete === "string" ? athlete : null}

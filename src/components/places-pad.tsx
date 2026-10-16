@@ -4,7 +4,7 @@ import { Lock, LockOpen } from "lucide-react";
 import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import { Button, Sheet } from "@/components/ui";
 import type { TrackedTeam } from "@/lib/db/schema";
-import { type CheckpointPlaces, ordinal, type PlaceEntry, placeColor } from "@/lib/race-places";
+import { type CheckpointPlaces, ordinal, type OurTeam, type PlaceEntry, placeColor } from "@/lib/race-places";
 import type { TapInput } from "@/lib/taps";
 
 type Send = (input: Omit<TapInput, "clientTapId" | "deviceTimeMs" | "clockOffsetMs" | "raceId"> & { deviceTimeMs?: number }) => string;
@@ -16,16 +16,18 @@ export type PlacesMode = "both" | "places";
 const BOUNCE_MS = 120;
 const HOLD_MS = 500;
 const PACK_GAP_MS = 10;
-const US = { short: "US", bg: "var(--color-brand)", ink: "var(--color-brand-ink)" };
+/** Our school's button and chips: the app's brand color. */
+const US = { bg: "var(--color-brand)", ink: "var(--color-brand-ink)" };
 
 /**
  * The place buttons on the record screen: one per tracked team, Other (everyone else; hold
- * for a pack of 2–5) and, on a places-only phone, Us. Below them the last few runners
+ * for a pack of 2–5) and, on a places-only phone, our school. Below them the last few runners
  * counted here, each with its place; tap one to fix it.
  */
 export function PlacesPad({
   mode,
   teams,
+  ourTeam,
   checkpointId,
   places,
   athletes,
@@ -37,6 +39,7 @@ export function PlacesPad({
 }: {
   mode: PlacesMode;
   teams: TrackedTeam[];
+  ourTeam: OurTeam;
   checkpointId: string;
   places: CheckpointPlaces | undefined;
   athletes: Record<string, string>;
@@ -71,7 +74,7 @@ export function PlacesPad({
   }, [burst]);
 
   const base = { checkpointId, athleteId: null, targetTapId: null, timeMs: null, estimate: false, missed: false, note: null } as const;
-  const label = (team: string) => (team === "us" ? "Us" : team === "other" ? "Other" : (teams.find((t) => t.id === team)?.short ?? "?"));
+  const label = (team: string) => (team === "us" ? ourTeam.short : team === "other" ? "Other" : (teams.find((t) => t.id === team)?.short ?? "?"));
   const entries = places?.entries ?? [];
   const counted = places ? (places.countingAll ? entries.length : entries.filter((e) => e.kind !== "other").length) : 0;
 
@@ -205,7 +208,7 @@ export function PlacesPad({
       </div>
 
       <div className={`grid gap-1.5 ${big ? "grid-cols-2" : teams.length + 1 <= 3 ? "grid-cols-3" : "grid-cols-4"}`}>
-        {big && button("us", "Us", US, "col-span-2 h-24!")}
+        {big && button("us", ourTeam.name, US, "col-span-2 h-24!")}
         {teams.map((t) => button(t.id, t.short, placeColor(t.color)))}
         {button("other", "Other", { bg: "var(--color-ink)", ink: "var(--color-bg)" }, big && teams.length % 2 === 0 ? "col-span-2" : "")}
       </div>
@@ -214,6 +217,7 @@ export function PlacesPad({
         <FixPlaceSheet
           entry={fixing.entry}
           place={fixing.index + 1}
+          ourTeam={ourTeam}
           before={fixing.index > 0 ? entries[fixing.index - 1] : null}
           beforeThat={fixing.index > 1 ? entries[fixing.index - 2] : null}
           teams={teams}
@@ -236,6 +240,7 @@ export function PlacesPad({
 function FixPlaceSheet({
   entry,
   place,
+  ourTeam,
   before,
   beforeThat,
   teams,
@@ -246,6 +251,7 @@ function FixPlaceSheet({
 }: {
   entry: PlaceEntry;
   place: number;
+  ourTeam: OurTeam;
   before: PlaceEntry | null;
   beforeThat: PlaceEntry | null;
   teams: TrackedTeam[];
@@ -292,7 +298,7 @@ function FixPlaceSheet({
           )}
           {before && !adding && (
             <Button variant="secondary" size="lg" onClick={() => onSend({ type: "edit", targetTapId: tapId, timeMs: between(beforeThat, before) }, `Swapped ${ordinal(place - 1)} and ${ordinal(place)}`)}>
-              Swap with {ordinal(place - 1)} ({before.kind === "us" ? "Us" : label(before.kind === "other" ? "other" : before.teamId)})
+              Swap with {ordinal(place - 1)} ({before.kind === "us" ? ourTeam.short : label(before.kind === "other" ? "other" : before.teamId)})
             </Button>
           )}
           {!adding && (

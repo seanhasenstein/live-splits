@@ -15,7 +15,7 @@ import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
 import type { RacePlaces } from "@/lib/db/schema";
 import { type OrderMode, lastFinished, orderAthletes, orderKey, parseOrderMode } from "@/lib/order";
-import { awardStatus, ordinal, racePlaces, replayTicks } from "@/lib/race-places";
+import { awardStatus, ordinal, type OurTeam, racePlaces, replayTicks } from "@/lib/race-places";
 import { paceMsPerMile, projectElapsed } from "@/lib/pace";
 import { type AthleteStatus, expectedAt, type Mark, replay, replayStatuses, type Slot, type SlotWithNames, STATUS_LABEL, STATUS_LONG, type TapLike } from "@/lib/replay";
 import type { LineupHistory, PriorResult } from "@/lib/results/history";
@@ -32,6 +32,8 @@ type RaceInfo = {
   history: LineupHistory;
   /** Place counting, when the race has it on. */
   places: RacePlaces | null;
+  /** Our school, for the places buttons. */
+  ourTeam: OurTeam;
 };
 
 type Props = {
@@ -739,10 +741,11 @@ function RaceTapper({
       )}
       {placesMode === "places" ? (
         <div className="flex-1 pb-28">
-          <p className="px-3 pt-3 text-[13px] text-ink-2">Tap every runner as they pass: <b>Us</b> for ours (names come from the phone tapping names here), a team, or <b>Other</b>.</p>
+          <p className="px-3 pt-3 text-[13px] text-ink-2">Tap every runner as they pass: <b>{race.ourTeam.name}</b> for ours (names come from the phone tapping names here), a team, or <b>Other</b>.</p>
           <PlacesPad
               mode={placesMode}
               teams={race.places?.teams ?? []}
+              ourTeam={race.ourTeam}
               checkpointId={checkpoint.id}
               places={cpPlaces}
               athletes={athletes}
@@ -1002,6 +1005,7 @@ function RaceTapper({
         {placesMode === "both" && <PlacesPad
               mode={placesMode}
               teams={race.places?.teams ?? []}
+              ourTeam={race.ourTeam}
               checkpointId={checkpoint.id}
               places={cpPlaces}
               athletes={athletes}

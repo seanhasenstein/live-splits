@@ -12,7 +12,7 @@ import { useTimeFormat } from "@/lib/client/time-format";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type AthleteStatus, type CheckpointState, expectedAt, type Mark, replay, replayStatuses, type Slot, STATUS_LABEL, STATUS_LONG } from "@/lib/replay";
 import type { AthleteRaceStatus, Precision, RacePlaces } from "@/lib/db/schema";
-import { fieldScores, ordinal as placeText, racePlaces, replayTicks } from "@/lib/race-places";
+import { fieldScores, ordinal as placeText, type OurTeam, racePlaces, replayTicks } from "@/lib/race-places";
 import { METERS_PER_MILE, paceMsPerMile, projectElapsed } from "@/lib/pace";
 import { RECORD_LABEL, recordBadge } from "@/lib/records";
 import type { LineupBests, PriorFinish } from "@/lib/results/bests";
@@ -37,6 +37,8 @@ type RaceInfo = {
   recordsExcluded: boolean;
   /** Place counting, when the race has it on and this viewer may see it. */
   places: RacePlaces | null;
+  /** Our school, as places show it. */
+  ourTeam: OurTeam;
 };
 
 type Props = {
@@ -454,6 +456,7 @@ function RaceBoard({
           config={race.places}
           checkpoints={race.checkpoints}
           places={placesByCp}
+          ourTeam={race.ourTeam}
           // A boys-and-girls race's field mixes both: no team scores from it.
           official={officialPlaces && !combined ? officialPlaces : null}
           athletes={athletes}
