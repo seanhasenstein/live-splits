@@ -829,6 +829,7 @@ function RaceTapper({
               onPointer={notePointerDown}
               onScores={() => setScoresOpen(true)}
               locked={placesDone}
+              ourExpected={total - counts[cpIndex].out}
               onLock={(v) => setPlacesDone(v ? "1" : null)}
               onAction={({ tapIds, label }) => setLastAction({ tapId: tapIds[0], more: tapIds.slice(1), label })}
               onToast={showToast}
@@ -1130,6 +1131,7 @@ function RaceTapper({
               onPointer={notePointerDown}
               onScores={() => setScoresOpen(true)}
               locked={placesDone}
+              ourExpected={total - counts[cpIndex].out}
               onLock={(v) => setPlacesDone(v ? "1" : null)}
               onAction={({ tapIds, label }) => setLastAction({ tapId: tapIds[0], more: tapIds.slice(1), label })}
               onToast={showToast}

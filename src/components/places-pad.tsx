@@ -39,6 +39,7 @@ export function PlacesPad({
   onScores,
   locked,
   onLock,
+  ourExpected,
 }: {
   mode: PlacesMode;
   teams: TrackedTeam[];
@@ -59,6 +60,8 @@ export function PlacesPad({
   /** Done counting at this checkpoint (remembered on this phone, so a reload doesn't unlock it). */
   locked: boolean;
   onLock: (locked: boolean) => void;
+  /** How many of ours should pass here (the lineup less anyone out of the race), for "5 of 7". */
+  ourExpected: number;
 }) {
   // The last-tap pill flashes on each tap from this phone: a confirmation seen from the corner of the eye.
   const [flash, setFlash] = useState(false);
@@ -158,7 +161,12 @@ export function PlacesPad({
       style={{ background: colors.bg, color: colors.ink, WebkitTouchCallout: "none" }}
       className={`relative flex flex-col items-center justify-center rounded-lg font-bold shadow-card select-none active:opacity-80 disabled:opacity-40 ${big ? "h-full min-h-14 text-2xl" : "h-14 text-lg"} ${extra}`}
     >
-      {countOf(team) > 0 && <span className="tnum absolute top-1 right-1.5 text-xs font-semibold opacity-80">{countOf(team)}</span>}
+      {/* How many of them have passed here; for ours, of how many are coming (still waiting on some = don't stop yet). */}
+      {(countOf(team) > 0 || team === "us") && (
+        <span className="tnum absolute top-1 right-1 rounded-md bg-black/35 px-1.5 py-px text-sm leading-tight font-bold text-white">
+          {team === "us" ? `${countOf("us")} of ${ourExpected}` : countOf(team)}
+        </span>
+      )}
       {name}
       {team === "other" && <span className="text-[10px] font-medium opacity-75">{big ? "+1" : "hold for a pack"}</span>}
     </button>
