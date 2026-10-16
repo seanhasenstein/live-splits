@@ -16,6 +16,9 @@ export type PlacesMode = "both" | "places";
 const BOUNCE_MS = 120;
 const HOLD_MS = 500;
 const PACK_GAP_MS = 10;
+/** Other (and its pack buttons) is outlined: one group, never mistaken for Capture time or a team. */
+const OTHER = { bg: "var(--color-surface)", ink: "var(--color-ink)" };
+const OTHER_EDGE = "border-2 border-line-strong";
 /** Our school's button and chips: the app's brand color. */
 const US = { bg: "var(--color-brand)", ink: "var(--color-brand-ink)" };
 
@@ -152,6 +155,9 @@ export function PlacesPad({
   };
 
   const big = mode === "places";
+  // The pack buttons sit beside Other when there's room: always on Places, and on Times + places when
+  // there are no team buttons. Otherwise Other is held for a pack.
+  const showPacks = big || teams.length === 0;
   // How many of each team have passed here: a missed tap shows up as a count that looks low.
   const countOf = (team: string) => entries.filter((e) => (e.kind === "us" ? "us" : e.kind === "other" ? "other" : e.teamId) === team).length;
   // More of ours than are running: the tap still counts (an earlier one may have been another team),
@@ -165,7 +171,7 @@ export function PlacesPad({
       onPointerDown={() => {
         onPointer();
         held.current = false;
-        if (team === "other" && !big) holdStart();
+        if (team === "other" && !showPacks) holdStart();
       }}
       onPointerUp={team === "other" ? holdEnd : undefined}
       onPointerLeave={team === "other" ? holdEnd : undefined}
@@ -183,9 +189,25 @@ export function PlacesPad({
         </span>
       )}
       {name}
-      {team === "other" && <span className="text-[10px] font-medium opacity-75">{big ? "+1" : "hold for a pack"}</span>}
+      {team === "other" && <span className="text-[10px] font-medium opacity-75">{showPacks ? "+1" : "hold for a pack"}</span>}
     </button>
   );
+
+  const packButtons = [2, 3, 4].map((n) => (
+    <button
+      key={n}
+      type="button"
+      disabled={locked}
+      onPointerDown={onPointer}
+      onClick={(e) => pack(e, n)}
+      aria-label={`${n} Others`}
+      className={`relative flex flex-1 flex-col items-center justify-center rounded-lg border-2 border-line-strong bg-surface font-bold text-ink shadow-card transition-transform duration-75 select-none active:scale-[0.97] disabled:opacity-40 ${big ? "h-full min-h-14 text-xl" : "h-14 text-lg"}`}
+    >
+      {flashLayer(`pack${n}`)}
+      +{n}
+      <span className="text-[10px] font-medium text-ink-3">Others</span>
+    </button>
+  ));
 
   const last = entries.at(-1) ?? null;
   const teamOf = (e: PlaceEntry) => (e.kind === "us" ? "us" : e.kind === "other" ? "other" : e.teamId);
@@ -264,29 +286,24 @@ export function PlacesPad({
             </div>
           ))}
           <div className="flex min-h-0 flex-1 gap-1.5">
-            {button("other", "Other", { bg: "var(--color-ink)", ink: "var(--color-bg)" }, "flex-[2]")}
-            {[2, 3, 4].map((n) => (
-              <button
-                key={n}
-                type="button"
-                disabled={locked}
-                onPointerDown={onPointer}
-                onClick={(e) => pack(e, n)}
-                aria-label={`${n} Others`}
-                className="relative flex h-full min-h-14 flex-1 flex-col items-center justify-center rounded-lg border border-line-strong bg-surface text-xl font-bold text-ink shadow-card transition-transform duration-75 select-none active:scale-[0.97] disabled:opacity-40"
-              >
-                {flashLayer(`pack${n}`)}
-                +{n}
-                <span className="text-[10px] font-medium text-ink-3">Others</span>
-              </button>
-            ))}
+            {button("other", "Other", OTHER, `flex-[2] ${OTHER_EDGE}`)}
+            {packButtons}
           </div>
         </div>
       ) : (
-        <div className={`grid gap-1.5 ${teams.length + 1 <= 3 ? "grid-cols-3" : "grid-cols-4"}`}>
-          {teams.map((t) => button(t.id, t.short, placeColor(t.color)))}
-          {button("other", "Other", { bg: "var(--color-ink)", ink: "var(--color-bg)" })}
-        </div>
+        // Times + places: the buttons always fill the row (up to four across, then a second row).
+        // With no teams to track, Other gets the pack buttons beside it.
+        teams.length === 0 ? (
+          <div className="flex gap-1.5">
+            {button("other", "Other", OTHER, `flex-[2] ${OTHER_EDGE}`)}
+            {packButtons}
+          </div>
+        ) : (
+          <div className={`grid gap-1.5 ${["", "", "grid-cols-2", "grid-cols-3"][teams.length + 1] ?? "grid-cols-4"}`}>
+            {teams.map((t) => button(t.id, t.short, placeColor(t.color)))}
+            {button("other", "Other", OTHER, OTHER_EDGE)}
+          </div>
+        )
       )}
 
       {listOpen && !fixing && (
