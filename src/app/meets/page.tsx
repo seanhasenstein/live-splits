@@ -67,7 +67,7 @@ export default async function MeetsPage() {
               ? `${rs.length} race${rs.length === 1 ? "" : "s"}`
               : "";
     return (
-      <a key={m._id} href={`/meets/${m._id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-2">
+      <a key={m._id} href={`/meets/${m._id}`} className={`flex items-center gap-3 px-4 py-3 ${status === "live" ? "hover:bg-danger-soft" : "hover:bg-surface-2"}`}>
         <span className={`flex size-9 shrink-0 items-center justify-center rounded-md ${status === "live" ? "bg-danger-soft text-danger" : "bg-surface-2 text-ink-2"}`}>
           {status === "live" ? <LiveDot /> : <CalendarDays className="size-4" />}
         </span>
@@ -128,8 +128,9 @@ export default async function MeetsPage() {
               groups[status].length ? (
                 <section key={status}>
                   <SectionLabel className="mb-1.5">{status === "live" ? "Happening now" : status === "upcoming" ? "Upcoming" : "Past meets"}</SectionLabel>
-                  <Card>
-                    <div className="divide-y divide-line">{groups[status].map((m) => row(m, status))}</div>
+                  {/* Happening now gets the running-race tint from the meet page: red means running, on both. */}
+                  <Card className={status === "live" ? "border-danger/40! bg-danger-soft/70!" : ""}>
+                    <div className={`divide-y ${status === "live" ? "divide-danger/20" : "divide-line"}`}>{groups[status].map((m) => row(m, status))}</div>
                   </Card>
                 </section>
               ) : null,
