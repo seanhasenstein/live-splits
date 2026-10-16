@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Fragment, type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, History as HistoryIcon, Info, MoveHorizontal, Pencil, Share } from "lucide-react";
 import { PlacesCard } from "@/components/places-card";
+import { TeamCard, type TeamRow } from "@/components/team-card";
 import { CheckpointCounts, DeltaText, RaceStatusBar, RecordPill, RunningClock } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
 import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, LiveDot, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
@@ -13,7 +14,7 @@ import { useTimeFormat } from "@/lib/client/time-format";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type AthleteStatus, type CheckpointState, expectedAt, type Mark, replay, replayStatuses, type Slot, STATUS_LABEL, STATUS_LONG } from "@/lib/replay";
 import type { AthleteRaceStatus, Precision, RacePlaces } from "@/lib/db/schema";
-import { fieldScores, ordinal as placeText, type OurTeam, racePlaces, replayTicks } from "@/lib/race-places";
+import { type CheckpointPlaces, fieldScores, ordinal as placeText, type OurTeam, racePlaces, replayTicks } from "@/lib/race-places";
 import { paceMsPerMile, projectElapsed } from "@/lib/pace";
 import { RECORD_LABEL, recordBadge } from "@/lib/records";
 import type { LineupBests, PriorFinish } from "@/lib/results/bests";
@@ -165,7 +166,7 @@ function RaceBoard({
   );
   const statuses = useMemo(() => replayStatuses(taps), [taps]);
   const placesByCp = useMemo(
-    () => (race.places ? racePlaces(race.checkpoints.map((c) => c.id), state, replayTicks(taps), gunTimeMs) : new Map()),
+    () => (race.places ? racePlaces(race.checkpoints.map((c) => c.id), state, replayTicks(taps), gunTimeMs) : new Map<string, CheckpointPlaces>()),
     [race, state, taps, gunTimeMs],
   );
   const officialPlaces = useMemo(() => {
@@ -353,7 +354,6 @@ function RaceBoard({
     const c = row.cells[i];
     return c ? (c.official ?? c.elapsedMs) : null;
   };
-  const finishIndex = race.checkpoints.findIndex((c) => c.kind === "finish");
   /**
    * While the race runs: when they'd reach checkpoint `i` at their last segment's pace.
    * Only for checkpoints after their last real time, and never for anyone out of the race.
@@ -374,20 +374,58 @@ function RaceBoard({
     return n !== null && gunTimeMs !== null && n - gunTimeMs - projected > OVERDUE_MS;
   };
   // Finish times of runners still in the race, for the team line (a combined race needs the Girls/Boys filter first).
-  const finishTimes =
-    finishIndex < 0 || (combined && who === "all")
-      ? []
-      : rows
-          .filter((r) => !(r.status || (r.officialStatus && r.officialStatus !== "finished")))
-          .map((r) => elapsedAt(r, finishIndex))
-          .filter((t): t is number => t !== null)
-          .sort((a, b) => a - b);
-  const teamLine =
-    finishTimes.length >= 5
-      ? `Top 5 avg ${ft(Math.round(finishTimes.slice(0, 5).reduce((a, b) => a + b, 0) / 5))} · 1–5 spread ${ft(finishTimes[4] - finishTimes[0])} · ${finishTimes.length} finished`
-      : finishTimes.length > 0
-        ? `${finishTimes.length} finished`
-        : null;
+  // Our team checkpoint by checkpoint (a combined race needs the Girls/Boys filter first): the scorers'
+  // places, the team's points and place when places were counted, and the 1–5 spread and top-five average.
+  const teamRows: TeamRow[] = race.checkpoints.map((c, i) => {
+    const inRace = rows.filter((r) => !(r.status || (r.officialStatus && r.officialStatus !== "finished")));
+    const times = inRace
+      .map((r) => elapsedAt(r, i))
+      .filter((t): t is number => t !== null)
+      .sort((a, b) => a - b);
+    const top5 = times.length >= 5 ? times.slice(0, 5) : null;
+    let places: number[] = [];
+    let overall = true;
+    let points: number | null = null;
+    let teamPlace: number | null = null;
+    let approx = false;
+    const rank = (scores: { team: string; points: number | null }[]) => {
+      const scored = scores.filter((x) => x.points !== null);
+      const k = scored.findIndex((x) => x.team === "us");
+      return k >= 0 ? k + 1 : null;
+    };
+    if (race.places) {
+      if (c.kind === "finish" && officialPlaces && !combined && inRace.some((r) => officialPlaces.place.has(r.athleteId))) {
+        // Official results: real places and real team scores.
+        places = inRace.flatMap((r) => (officialPlaces.place.has(r.athleteId) ? [officialPlaces.place.get(r.athleteId)!] : []));
+        points = officialPlaces.scores.find((x) => x.team === "us")?.points ?? null;
+        teamPlace = rank(officialPlaces.scores);
+      } else {
+        const cp = placesByCp.get(c.id);
+        if (cp) {
+          places = inRace.flatMap((r) => (cp.place.has(r.athleteId) ? [cp.place.get(r.athleteId)!] : []));
+          overall = cp.countingAll || race.places.teams.length === 0;
+          // Points need someone to score against: the whole-meet estimate, or the tracked teams.
+          const table = cp.estimate ?? (race.places.teams.length > 0 ? cp.scores : null);
+          if (table) {
+            points = table.find((x) => x.team === "us")?.points ?? null;
+            teamPlace = rank(table.filter((x) => x.team !== "*"));
+            approx = !!cp.estimate;
+          }
+        }
+      }
+    }
+    return {
+      label: c.label,
+      timed: times.length,
+      avgMs: top5 ? Math.round(top5.reduce((a, b) => a + b, 0) / 5) : null,
+      spreadMs: top5 ? top5[4] - top5[0] : null,
+      places: places.sort((a, b) => a - b).slice(0, 7),
+      overall,
+      points,
+      teamPlace,
+      approx,
+    };
+  });
 
   /**
    * One checkpoint with everything at it, a column each: time from the gun, split, the pace change
@@ -573,7 +611,6 @@ function RaceBoard({
         </div>
       </div>
 
-      {teamLine && <p className="mb-3 text-[13px] text-ink-2">{teamLine}</p>}
 
       {/* Coaches and managers only (the server doesn't send it to anyone else): who is at each checkpoint, doing what. */}
       {staff && recording.length > 0 && !isFinished && (
@@ -762,7 +799,16 @@ function RaceBoard({
       </Card>
       )}
 
-      {/* Below the splits: the table is what most people come for; scores are secondary here. */}
+      {/* Below the splits (the table is what most people come for): our team, then everyone's scores. */}
+      <div className="mt-3">
+        <TeamCard
+          name={race.ourTeam.name}
+          rows={teamRows}
+          ft={(ms) => ft(ms)}
+          note={combined && who === "all" ? "Pick Girls or Boys above to see the team." : null}
+        />
+      </div>
+
       {race.places && (
         <div className="mt-3">
           <PlacesCard

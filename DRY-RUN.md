@@ -88,8 +88,10 @@
     gap to its 5th runner looks better than it is).
   - Mistakes: Fix (who it was, swap with the one ahead, someone missed before
     it, remove), or Undo.
-- Live results: place and ▲/▼ under each time, and below the table the
-  Places card, and at the finish real team scores from the live
+- Live results: place and ▲/▼ under each time; below the table the Team
+  card (per checkpoint: team place and points, our scorers' places 1–5 and
+  (6)(7), 1–5 spread, top-5 average; spread and average work without places)
+  and the Places card, and at the finish real team scores from the live
   feed or imported results. Meets that score only declared runners (more than
   7 entered) can differ by a few points below the top teams.
 
