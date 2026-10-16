@@ -179,12 +179,13 @@ function RaceBoard({
     const official = c.kind === "finish" && officialPlaces?.place.has(athleteId) ? officialPlaces.place.get(athleteId)! : null;
     const place = official ?? here?.place.get(athleteId) ?? null;
     if (place === null) return null;
-    const overall = official !== null || !!here?.countingAll;
+    // With no tracked teams everyone else is Other, so the places are overall.
+    const overall = official !== null || !!here?.countingAll || (race.places?.teams.length ?? 0) === 0;
     let gained: number | null = null;
     for (let j = i - 1; j >= 0 && gained === null; j--) {
       const before = placesByCp.get(race.checkpoints[j].id);
       const p = before?.place.get(athleteId);
-      if (p !== undefined && before!.countingAll === overall) gained = p - place;
+      if (p !== undefined && (before!.countingAll || (race.places?.teams.length ?? 0) === 0) === overall) gained = p - place;
     }
     return { place, overall, gained };
   };

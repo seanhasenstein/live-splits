@@ -35,6 +35,8 @@ export function PlacesCard({
   const views: View[] = [...checkpoints.filter((c) => places.has(c.id)), ...(official && official.scores.length > 0 ? [{ id: "official", label: "Official" }] : [])];
   const [picked, setPicked] = useState<string | null>(null);
   if (views.length === 0) return null;
+  // Nothing to show without tracked teams or award lines, until official team scores post.
+  if (config.teams.length === 0 && config.awards.length === 0 && !views.some((v) => v.id === "official")) return null;
   // Follow the race: the latest checkpoint with places, until someone picks one.
   const viewId = picked && views.some((v) => v.id === picked) ? picked : views.at(-1)!.id;
 
@@ -77,7 +79,7 @@ export function PlacesCard({
               <tr key={s.team} className={mine ? "bg-brand-soft/60" : ""}>
                 <td className="tnum w-8 py-1.5 pl-3 text-ink-3">{s.points !== null ? i + 1 : ""}</td>
                 <td className="py-1.5">{teamChip(trackedId ?? s.team, opts.names?.get(s.team))}</td>
-                <td className="tnum py-1.5 text-right font-semibold text-ink">{s.points !== null ? `${opts.approx ? "≈" : ""}${s.points}` : <span className="font-normal text-ink-3">{s.runners} counted</span>}</td>
+                <td className="tnum py-1.5 pr-3 text-right font-semibold text-ink sm:pr-0">{s.points !== null ? `${opts.approx ? "≈" : ""}${s.points}` : <span className="font-normal text-ink-3">{s.runners} counted</span>}</td>
                 <td className="tnum hidden py-1.5 pr-3 pl-4 text-right text-xs text-ink-3 sm:table-cell">
                   {s.places.slice(0, 5).join("-")}
                   {s.places.length > 5 && ` (${s.places.slice(5).join(", ")})`}
@@ -107,11 +109,18 @@ export function PlacesCard({
           <p className="px-3 pt-2 text-xs text-ink-2">
             {cp.countingAll
               ? `${cp.entries.length} counted, everyone. Places are overall.`
-              : `${cp.entries.length} counted: ours and the tracked teams. Places are among those teams.`}
+              : config.teams.length > 0
+                ? `${cp.entries.length} counted: ours and the tracked teams. Places are among those teams.`
+                : `${cp.entries.length} counted.`}
           </p>
-          <p className="px-3 pt-2 text-[11px] font-semibold tracking-wide text-ink-3 uppercase">Head to head</p>
-          {scoreRows(cp.scores)}
-          {cp.estimate && (
+          {/* Scores need someone to score against: none without tracked teams. */}
+          {config.teams.length > 0 && (
+            <>
+              <p className="px-3 pt-2 text-[11px] font-semibold tracking-wide text-ink-3 uppercase">Head to head</p>
+              {scoreRows(cp.scores)}
+            </>
+          )}
+          {cp.estimate && config.teams.length > 0 && (
             <>
               <p className="px-3 pt-3 text-[11px] font-semibold tracking-wide text-ink-3 uppercase">Whole meet, estimated</p>
               {scoreRows(cp.estimate, { approx: true, only: (t) => t !== "*" })}

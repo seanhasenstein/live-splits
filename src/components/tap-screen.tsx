@@ -442,8 +442,9 @@ function RaceTapper({
   const statuses = useMemo(() => replayStatuses(taps), [taps]);
   const ticks = useMemo(() => replayTicks(taps), [taps]);
   const cpPlaces = useMemo(
-    () => (placesOn ? racePlaces([checkpoint.id], state, ticks, gunTimeMs).get(checkpoint.id) : undefined),
-    [placesOn, checkpoint.id, state, ticks, gunTimeMs],
+    // Counting here (Times + places or Places): places from the first tap, even one of ours leading.
+    () => (placesOn ? racePlaces([checkpoint.id], state, ticks, gunTimeMs, placesMode === "names" ? [] : [checkpoint.id]).get(checkpoint.id) : undefined),
+    [placesOn, checkpoint.id, state, ticks, gunTimeMs, placesMode],
   );
   const [scoresOpen, setScoresOpen] = useState(false);
   // The shout card: the place (and award gap) of the runner of ours just tapped, big enough for the
@@ -800,7 +801,8 @@ function RaceTapper({
     const mark = athleteId ? cp?.byAthlete.get(athleteId) : undefined;
     const at = entry ? entry.timeMs : mark && !mark.missed ? mark.timeMs : null;
     const time = at !== null && gunTimeMs && at >= gunTimeMs ? formatElapsed(at - gunTimeMs) : null;
-    return { key: shout.key, place, time, name: athleteId ? (athletes[athleteId] ?? null) : null, overall: cpPlaces.countingAll };
+    // "Of tracked teams" only means something when there are tracked teams; with none, everyone else is Other.
+    return { key: shout.key, place, time, name: athleteId ? (athletes[athleteId] ?? null) : null, overall: cpPlaces.countingAll || (race.places?.teams.length ?? 0) === 0 };
   })();
 
   return (
@@ -1049,7 +1051,7 @@ function RaceTapper({
                     // The place leads once they've passed: what the coach calls out.
                     <span className={`mt-0.5 block ${flashing ? "" : "text-ink"}`}>
                       <span className={`tnum font-bold ${large ? "text-xl" : "text-lg"}`}>{ordinal(cpPlaces.place.get(id)!)}</span>
-                      {!cpPlaces.countingAll && <span className={`text-xs ${flashing ? "" : "text-ink-2"}`}> of tracked</span>}
+                      {!cpPlaces.countingAll && (race.places?.teams.length ?? 0) > 0 && <span className={`text-xs ${flashing ? "" : "text-ink-2"}`}> of tracked</span>}
                     </span>
                   )}
                 </>

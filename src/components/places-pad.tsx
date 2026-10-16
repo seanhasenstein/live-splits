@@ -233,7 +233,7 @@ export function PlacesPad({
               </span>
               <span className="shrink-0 text-xs text-ink-3">
                 Next place <span className="tnum font-semibold text-ink-2">{ordinal(counted + 1)}</span>
-                {places && !places.countingAll && "*"}
+                {places && !places.countingAll && teams.length > 0 && "*"}
               </span>
             </>
           ) : (
@@ -252,7 +252,8 @@ export function PlacesPad({
             Fix
           </Button>
         )}
-        {places && (
+        {/* Scores need someone to score against: no tracked teams, no Scores. */}
+        {places && teams.length > 0 && (
           <Button variant="secondary" size="sm" onClick={onScores} className="h-8 shrink-0 px-2">
             <Trophy className="size-3.5" />
             Scores

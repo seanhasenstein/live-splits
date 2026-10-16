@@ -82,12 +82,20 @@ const US_LAG_MS = 30_000;
  * Places at each checkpoint where someone counted (a checkpoint with no place taps has none).
  * `gunTimeMs` drops name taps from before the gun (a restarted race).
  */
-export function racePlaces(checkpointIds: string[], state: RaceState, ticks: Map<string, Tick[]>, gunTimeMs: number | null): Map<string, CheckpointPlaces> {
+export function racePlaces(
+  checkpointIds: string[],
+  state: RaceState,
+  ticks: Map<string, Tick[]>,
+  gunTimeMs: number | null,
+  /** Checkpoints this phone is counting at: places from the first name tap, before any place tap (our runner leading). */
+  counting: string[] = [],
+): Map<string, CheckpointPlaces> {
   const out = new Map<string, CheckpointPlaces>();
   for (const id of checkpointIds) {
     // Taps from before the gun (someone trying the buttons) aren't runners.
     const list = (ticks.get(id) ?? []).filter((t) => gunTimeMs === null || t.timeMs >= gunTimeMs);
-    if (list.length === 0) continue;
+    // Nobody counting here: no places (a phone only timing must not rank our runners among themselves).
+    if (list.length === 0 && !counting.includes(id)) continue;
     const ours = [...(state.get(id)?.byAthlete.values() ?? [])]
       .filter((m) => !m.missed && m.timeMs !== null && !(gunTimeMs !== null && m.timeMs < gunTimeMs))
       .sort((a, b) => a.timeMs! - b.timeMs! || a.assignedAt - b.assignedAt);

@@ -140,6 +140,11 @@ describe("racePlaces", () => {
   it("has nothing for a checkpoint nobody counted", () => {
     expect(places([name("emma", 1000)])).toBeUndefined();
   });
+
+  it("places our leader at once on a phone that's counting there", () => {
+    const taps = [name("emma", 1000)];
+    expect(racePlaces(["m1"], replay(race, taps), replayTicks(taps), null, ["m1"]).get("m1")!.place.get("emma")).toBe(1);
+  });
 });
 
 describe("awardStatus", () => {
