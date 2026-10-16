@@ -125,6 +125,16 @@ body {
   color: var(--ink);
 }
 
+/* A place button's flash after a counted tap; restarted (not stacked) by each tap. */
+@keyframes place-flash {
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
 /* Quick repeated taps (two runners of one team, a pack of names) must count, not zoom the page on iPhone. */
 button,
 a,

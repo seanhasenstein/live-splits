@@ -73,6 +73,11 @@ export function PlacesPad({
   };
   const [fixing, setFixing] = useState<{ entry: PlaceEntry; index: number } | null>(null);
   const [listOpen, setListOpen] = useState(false);
+  /** Taps counted per button: a new value restarts that button's flash (in the button's text color, so it shows on every background). */
+  const [flashes, setFlashes] = useState<Record<string, number>>({});
+  const flashButton = (key: string) => setFlashes((f) => ({ ...f, [key]: (f[key] ?? 0) + 1 }));
+  const flashLayer = (key: string) =>
+    flashes[key] ? <span key={flashes[key]} aria-hidden className="pointer-events-none absolute inset-0 rounded-lg bg-current opacity-0 animate-[place-flash_160ms_ease-out]" /> : null;
   const [burst, setBurst] = useState<number | null>(null);
   const lastTap = useRef(new Map<string, number>());
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -115,6 +120,7 @@ export function PlacesPad({
     const tapId = send({ ...base, type: "tick", team, deviceTimeMs: at });
     buzz();
     flashNow();
+    flashButton(team);
     onAction({ tapIds: [tapId], label: `${ordinal(counted + 1)} ${label(team)}` });
   };
   // A clump of untracked runners: n Others at once, a few ms apart so they keep their order.
@@ -123,6 +129,7 @@ export function PlacesPad({
     const tapIds = Array.from({ length: n }, (_, i) => send({ ...base, type: "tick", team: "other", deviceTimeMs: at + i * PACK_GAP_MS }));
     buzz();
     flashNow();
+    flashButton(`pack${n}`);
     setBurst(null);
     onAction({ tapIds, label: `${n} Others` });
     onToast(`Counted ${n} Others · ${ordinal(counted + 1)}–${ordinal(counted + n)}`);
@@ -162,8 +169,9 @@ export function PlacesPad({
       onContextMenu={(e) => e.preventDefault()}
       onClick={(e) => tick(e, team)}
       style={{ background: colors.bg, color: colors.ink, WebkitTouchCallout: "none" }}
-      className={`relative flex flex-col items-center justify-center rounded-lg font-bold shadow-card select-none active:opacity-80 disabled:opacity-40 ${big ? "h-full min-h-14 text-2xl" : "h-14 text-lg"} ${extra}`}
+      className={`relative flex flex-col items-center justify-center rounded-lg font-bold shadow-card transition-transform duration-75 select-none active:scale-[0.97] disabled:opacity-40 ${big ? "h-full min-h-14 text-2xl" : "h-14 text-lg"} ${extra}`}
     >
+      {flashLayer(team)}
       {/* How many of them have passed here; for ours, of how many are coming (still waiting on some = don't stop yet). */}
       {(countOf(team) > 0 || team === "us") && (
         <span className={`tnum absolute top-2 right-2 rounded-md px-1.5 py-px text-sm leading-tight font-bold ${team === "us" && overUs ? "bg-danger text-white" : "bg-black/35 text-white"}`}>
@@ -261,8 +269,9 @@ export function PlacesPad({
                 onPointerDown={onPointer}
                 onClick={(e) => pack(e, n)}
                 aria-label={`${n} Others`}
-                className="flex h-full min-h-14 flex-1 flex-col items-center justify-center rounded-lg border border-line-strong bg-surface text-xl font-bold text-ink shadow-card select-none active:bg-surface-2 disabled:opacity-40"
+                className="relative flex h-full min-h-14 flex-1 flex-col items-center justify-center rounded-lg border border-line-strong bg-surface text-xl font-bold text-ink shadow-card transition-transform duration-75 select-none active:scale-[0.97] disabled:opacity-40"
               >
+                {flashLayer(`pack${n}`)}
                 +{n}
                 <span className="text-[10px] font-medium text-ink-3">Others</span>
               </button>
