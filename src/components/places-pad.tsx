@@ -160,7 +160,7 @@ export function PlacesPad({
     >
       {countOf(team) > 0 && <span className="tnum absolute top-1 right-1.5 text-xs font-semibold opacity-80">{countOf(team)}</span>}
       {name}
-      {team === "other" && !big && <span className="text-[10px] font-medium opacity-75">hold for a pack</span>}
+      {team === "other" && <span className="text-[10px] font-medium opacity-75">{big ? "+1" : "hold for a pack"}</span>}
     </button>
   );
 
