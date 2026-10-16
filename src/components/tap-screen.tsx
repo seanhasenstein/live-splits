@@ -1123,17 +1123,18 @@ function RaceTapper({
         // Over the race card, never the buttons; taps pass straight through it.
         <div key={shoutView.key} className="pointer-events-none fixed inset-x-3 top-16 z-30 flex justify-center">
           <div className="w-full max-w-md rounded-xl bg-brand px-4 py-3 text-brand-ink shadow-sheet">
+            {/* Who, then where: the order it's shouted in. */}
+            {(shoutView.name || !shoutView.overall) && (
+              <div className="mb-1.5 truncate text-base font-semibold">
+                {shoutView.name}
+                {!shoutView.overall && <span className="text-sm font-medium opacity-80">{shoutView.name ? " · " : ""}among the tracked teams</span>}
+              </div>
+            )}
             <div className="flex items-baseline gap-3">
               <span className="tnum text-5xl leading-none font-bold">{ordinal(shoutView.place)}</span>
               <span className="text-base font-medium opacity-80">{shoutView.time ? "place in" : "place"}</span>
               {shoutView.time && <Time className="text-4xl leading-none font-bold">{shoutView.time}</Time>}
             </div>
-            {(shoutView.name || !shoutView.overall) && (
-              <div className="mt-1 truncate text-base font-medium">
-                {shoutView.name}
-                {!shoutView.overall && <span className="text-sm opacity-80">{shoutView.name ? " · " : ""}among the tracked teams</span>}
-              </div>
-            )}
           </div>
         </div>
       )}
