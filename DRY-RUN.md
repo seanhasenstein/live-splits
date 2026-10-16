@@ -45,7 +45,9 @@
 
 ## Places (added Oct 15 2026, first used at the Big East conference meet Oct 17)
 
-- Set up per race: meet page → race Options → Count places. Tracked teams
+- Set up per race: meet page → race Options → Count places (or on Record
+  splits: Switch → "Count places in …", for coaches and managers). The race
+  card then shows "Places · ML, KEW · top 10 / 20 / 30". Tracked teams
   (up to 6; names suggested from past results, labels and colors kept for
   next time), award lines (All-conference: 10 / 20 / 30), and "Show places to
   everyone" (off: only coaches and managers see them).

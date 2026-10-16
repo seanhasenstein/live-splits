@@ -102,6 +102,14 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
         )}
       </div>
       <div className="mt-0.5 text-[13px] text-ink-2">{details}</div>
+      {places?.on && (
+        <div className="mt-0.5 text-[13px] text-ink-2">
+          <span className="font-medium text-ink">Places</span>
+          {places.teams.length > 0 ? ` · ${places.teams.map((t) => t.short).join(", ")}` : " · no tracked teams"}
+          {places.awards.length > 0 && ` · top ${places.awards.map((a) => a.through).join(" / ")}`}
+          {places.public && " · shown to everyone"}
+        </div>
+      )}
 
       {gunTimeMs !== null ? (
         <div className="mt-3">

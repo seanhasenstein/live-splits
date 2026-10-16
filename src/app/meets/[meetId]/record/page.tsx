@@ -37,7 +37,8 @@ export default async function RecordPage({ params, searchParams }: PageProps<"/m
         checkpoints: r.checkpoints.map((c) => ({ id: c.id, label: c.label, kind: c.kind, meters: c.distance.meters })),
         athleteIds: r.lineup.map((l) => l.athleteId),
         history: histories[i],
-        places: r.places?.on ? r.places : null,
+        // As set up, on or off: the Switch sheet can turn it on (screens check .on).
+        places: r.places ?? null,
         ourTeam: ourTeamOf(school),
       }))}
       athletes={Object.fromEntries(athletes.map((a) => [a._id, a.displayName]))}

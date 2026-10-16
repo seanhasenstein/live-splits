@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Check, ChevronDown, Pencil, SlidersHorizontal, Undo2, X } from "lucide-react";
 import { ClockWarning } from "@/components/race-card";
 import { PlacesCard } from "@/components/places-card";
 import { PlacesPad, type PlacesMode } from "@/components/places-pad";
+import { PlacesSetupSheet } from "@/components/places-setup";
 import { CheckpointCounts, DeltaText, RaceStatusBar } from "@/components/race-status";
 import { StartRaceControl } from "@/components/start-race";
 import { SessionMenu } from "@/components/session-menu";
@@ -146,7 +148,7 @@ export function TapScreen({ meetId, meetName, session, initial, timeZone, hasCou
       hasCourse={hasCourse}
       canGun={canGun}
       onSwitch={setSel}
-      pickerFor={(current) => <SwitchControl races={races} race={race} checkpointId={race.checkpoints[cpIndex].id} current={current} onSwitch={setSel} />}
+      pickerFor={(current) => <SwitchControl races={races} race={race} checkpointId={race.checkpoints[cpIndex].id} current={current} onSwitch={setSel} canSetUp={canGun} />}
     />
   );
 }
@@ -163,15 +165,20 @@ function SwitchControl({
   checkpointId,
   current,
   onSwitch,
+  canSetUp,
 }: {
   races: RaceInfo[];
   race: RaceInfo;
   checkpointId: string;
+  /** Coaches and managers: may turn places on or change their setup from here. */
+  canSetUp: boolean;
   /** Live numbers for the race we're on; other races are fetched when picked. */
   current: RaceSummary;
   onSwitch: (sel: { raceId: string; checkpointId: string }) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [placesFor, setPlacesFor] = useState<RaceInfo | null>(null);
+  const router = useRouter();
   const [pick, setPick] = useState({ raceId: race.id, checkpointId });
   const [fetched, setFetched] = useState<Record<string, RaceSummary>>({});
   const [modePref, setModePref] = useLocalValue(PLACES_MODE_KEY);
@@ -299,6 +306,19 @@ function SwitchControl({
                 })}
               </div>
             </div>
+            {canSetUp && (
+              // Last-minute help at the course: turn places on (or change the teams) without going back to the meet page.
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setPlacesFor(pickedRace);
+                }}
+                className="text-[13px] font-medium text-brand-text hover:underline"
+              >
+                {pickedRace.places?.on ? `Places setup for ${pickedRace.name}…` : `Count places in ${pickedRace.name}…`}
+              </button>
+            )}
             {pickedRace.places?.on && (
               <div>
                 <SectionLabel className="mb-1.5">Your job here</SectionLabel>
@@ -347,6 +367,18 @@ function SwitchControl({
             </Button>
           </div>
         </Sheet>
+      )}
+      {placesFor && (
+        <PlacesSetupSheet
+          raceId={placesFor.id}
+          raceName={placesFor.name}
+          initial={placesFor.places}
+          onClose={() => setPlacesFor(null)}
+          onSaved={() => {
+            setPlacesFor(null);
+            router.refresh();
+          }}
+        />
       )}
     </>
   );
