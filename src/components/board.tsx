@@ -418,7 +418,7 @@ function RaceBoard({
               <th className={`${th} ${race.places ? "" : "pr-3 sm:pr-4"}`} title={i > 0 ? "Pace change from the previous segment (+ slower, − faster)" : "Pace per mile"}>
                 {i > 0 ? "Pace ±" : "Pace"}
               </th>
-              {race.places && <th className={`${th} pr-3 sm:pr-4`}>Place</th>}
+              {race.places && <th className="py-2 pr-3 pl-3 text-left font-semibold sm:pr-4">Place</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -490,7 +490,27 @@ function RaceBoard({
                       split !== null && segMeters > 0 && <Time className="text-ink-2">{formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}</Time>
                     )}
                   </td>
-                  {race.places && <td className="tnum px-2 py-2.5 pr-3 text-right align-top whitespace-nowrap sm:pr-4">{place ? placeNode(place) : ""}</td>}
+                  {race.places && (
+                    // Left-aligned, the place a fixed width so ▲ / ▼ / = line up beside it.
+                    <td className="tnum py-2.5 pr-3 pl-3 text-left align-top whitespace-nowrap sm:pr-4">
+                      {place && (
+                        <>
+                          <span className="inline-block w-11">
+                            {placeText(place.place)}
+                            {!place.overall && "*"}
+                          </span>
+                          {place.gained !== null &&
+                            (place.gained === 0 ? (
+                              <span className="text-ink-3" title="Same place as the last checkpoint">
+                                =
+                              </span>
+                            ) : (
+                              <span className={place.gained > 0 ? "text-brand-text" : "text-danger"}>{place.gained > 0 ? `▲${place.gained}` : `▼${-place.gained}`}</span>
+                            ))}
+                        </>
+                      )}
+                    </td>
+                  )}
                 </tr>
               );
             })}
