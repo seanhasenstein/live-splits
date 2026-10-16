@@ -1005,7 +1005,7 @@ function RaceTapper({
                         {cpPlaces.countingAll &&
                           (() => {
                             const { made, next } = awardStatus(cpPlaces.place.get(id)!, race.places?.awards ?? []);
-                            return next ? ` · ${next.places} from ${next.line.label.toLowerCase()}` : made ? ` · ${made.label.toLowerCase()}` : null;
+                            return next ? ` · ${next.places} from top ${next.line.through}` : made ? ` · top ${made.through}` : null;
                           })()}
                       </span>
                     </span>
@@ -1078,7 +1078,8 @@ function RaceTapper({
         const place = athleteId && cpPlaces.place.get(athleteId) ? cpPlaces.place.get(athleteId)! : index >= 0 ? (cpPlaces.countingAll ? index + 1 : cpPlaces.entries.slice(0, index + 1).filter((e) => e.kind !== "other").length) : null;
         if (place === null) return null;
         const award = cpPlaces.countingAll ? awardStatus(place, race.places?.awards ?? []) : null;
-        const gap = award?.next ? `${award.next.places} from ${award.next.line.label.toLowerCase()}` : award?.made ? award.made.label : null;
+        // In numbers, not award names: "3 from top 20" works at any meet and is quick to shout.
+        const gap = award?.next ? `${award.next.places} from top ${award.next.line.through}` : award?.made ? `top ${award.made.through}` : null;
         return (
           // Over the race card, never the buttons; taps pass straight through it.
           <div key={shout.key} className="pointer-events-none fixed inset-x-3 top-16 z-30 flex justify-center">
