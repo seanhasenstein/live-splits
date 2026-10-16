@@ -128,8 +128,9 @@ export default async function MeetsPage() {
               groups[status].length ? (
                 <section key={status}>
                   <SectionLabel className="mb-1.5">{status === "live" ? "Happening now" : status === "upcoming" ? "Upcoming" : "Past meets"}</SectionLabel>
-                  {/* Happening now gets the running-race tint from the meet page: red means running, on both. */}
-                  <Card className={status === "live" ? "border-danger/40! bg-danger-soft/70!" : ""}>
+                  {/* Happening now gets the running-race tint from the meet page: red means running, on both.
+                      overflow-hidden keeps a hovered first or last row inside the rounded corners. */}
+                  <Card className={`overflow-hidden ${status === "live" ? "border-danger/40! bg-danger-soft/70!" : ""}`}>
                     <div className={`divide-y ${status === "live" ? "divide-danger/20" : "divide-line"}`}>{groups[status].map((m) => row(m, status))}</div>
                   </Card>
                 </section>
