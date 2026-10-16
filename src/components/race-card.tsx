@@ -34,7 +34,7 @@ type Props = {
   hasOfficial: boolean;
   /** The timing company's live feed, polled while the race runs. */
   liveFeed: { url: string; contestName: string | null } | null;
-  /** Place counting (tracked teams, award lines), if set up. */
+  /** Place counting (tracked teams), if set up. */
   places: RacePlaces | null;
   /** Record splits / Live results, rendered inside the card; one version per race state so it can match. */
   actions?: Record<RaceState, React.ReactNode>;
@@ -106,7 +106,6 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
         <div className="mt-0.5 text-[13px] text-ink-2">
           <span className="font-medium text-ink">Places</span>
           {places.teams.length > 0 ? ` · ${places.teams.map((t) => t.short).join(", ")}` : " · no tracked teams"}
-          {places.awards.length > 0 && ` · top ${places.awards.map((a) => a.through).join(" / ")}`}
           {places.public && " · shown to everyone"}
         </div>
       )}
@@ -165,7 +164,7 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
               <OptionRow
                 icon={<ListOrdered className="size-4" />}
                 label={places?.on ? `Places · ${places.teams.length ? places.teams.map((t) => t.short).join(", ") : "no teams yet"}` : "Count places…"}
-                hint={places?.on ? "Tracked teams, award lines, who sees places." : "Team buttons on Record splits: places, scores and award lines at each checkpoint."}
+                hint={places?.on ? "Tracked teams, who sees places." : "Team buttons on Record splits: places and scores at each checkpoint."}
                 onClick={() => {
                   setOptions(false);
                   setPlacesOpen(true);

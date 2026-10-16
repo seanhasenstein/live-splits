@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Card, Segmented } from "@/components/ui";
 import type { RacePlaces } from "@/lib/db/schema";
-import { awardStatus, type CheckpointPlaces, ordinal, type OurTeam, placeColor, type TeamScore, trackedTeamFor } from "@/lib/race-places";
+import { type CheckpointPlaces, type OurTeam, placeColor, type TeamScore, trackedTeamFor } from "@/lib/race-places";
 
 type View = { id: string; label: string };
 
@@ -19,7 +19,6 @@ export function PlacesCard({
   places,
   official,
   ourTeam,
-  athletes,
   inSheet = false,
 }: {
   config: RacePlaces;
@@ -28,15 +27,14 @@ export function PlacesCard({
   /** Team scores from the official results (every team), and our runners' official places. */
   official: { scores: TeamScore[]; names: Map<string, string>; place: Map<string, number> } | null;
   ourTeam: OurTeam;
-  athletes: Record<string, string>;
   /** Shown in a sheet that already has a title: no heading of its own. */
   inSheet?: boolean;
 }) {
   const views: View[] = [...checkpoints.filter((c) => places.has(c.id)), ...(official && official.scores.length > 0 ? [{ id: "official", label: "Official" }] : [])];
   const [picked, setPicked] = useState<string | null>(null);
   if (views.length === 0) return null;
-  // Nothing to show without tracked teams or award lines, until official team scores post.
-  if (config.teams.length === 0 && config.awards.length === 0 && !views.some((v) => v.id === "official")) return null;
+  // Nothing to show without tracked teams, until official team scores post.
+  if (config.teams.length === 0 && !views.some((v) => v.id === "official")) return null;
   // Follow the race: the latest checkpoint with places, until someone picks one.
   const viewId = picked && views.some((v) => v.id === picked) ? picked : views.at(-1)!.id;
 
@@ -92,9 +90,6 @@ export function PlacesCard({
   );
 
   const cp = viewId === "official" ? null : places.get(viewId)!;
-  const overall = viewId === "official" ? official!.place : cp!.countingAll ? cp!.place : null;
-  const ours = overall ? [...overall].sort((a, b) => a[1] - b[1]) : [];
-  const finished = viewId === "official" || checkpoints.find((c) => c.id === viewId)?.kind === "finish";
 
   return (
     <Card className="mb-3 overflow-hidden">
@@ -132,28 +127,6 @@ export function PlacesCard({
         <>
           <p className="px-3 pt-2 text-xs text-ink-2">From the timing company&rsquo;s results, every team.</p>
           {scoreRows(official!.scores, { names: official!.names })}
-        </>
-      )}
-      {config.awards.length > 0 && ours.length > 0 && (
-        <>
-          <p className="px-3 pt-3 text-[11px] font-semibold tracking-wide text-ink-3 uppercase">Award lines</p>
-          <ul className="divide-y divide-line text-sm">
-            {ours.map(([id, place]) => {
-              const { made, next } = awardStatus(place, config.awards);
-              return (
-                <li key={id} className="flex items-center justify-between gap-3 px-3 py-1.5">
-                  <span className="min-w-0 truncate">
-                    <span className="tnum mr-2 inline-block w-9 text-ink-3">{ordinal(place)}</span>
-                    {athletes[id] ?? "?"}
-                  </span>
-                  <span className={`shrink-0 text-xs ${made && !next ? "font-semibold text-brand-text" : "text-ink-2"}`}>
-                    {/* Mid-race, how far to the next line; at the finish only what the place earned. */}
-                    {[made?.label, next && !finished ? `${next.places} from ${next.line.label.toLowerCase()}` : null].filter(Boolean).join(" · ")}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
         </>
       )}
       <div className="h-2" />

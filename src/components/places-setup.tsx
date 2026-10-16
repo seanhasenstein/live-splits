@@ -5,18 +5,19 @@ import { useEffect, useState, useTransition } from "react";
 import { setRacePlacesAction, type TeamSuggestion, teamSuggestionsAction } from "@/app/actions/races";
 import { Alert, Button, Input, SectionLabel, Select, Sheet } from "@/components/ui";
 import type { AwardLine, RacePlaces, TrackedTeam } from "@/lib/db/schema";
-import { DEFAULT_AWARDS, PLACE_COLORS, placeColor, shortLabel, teamKey } from "@/lib/race-places";
+import { PLACE_COLORS, placeColor, shortLabel, teamKey } from "@/lib/race-places";
 
 const MAX_TEAMS = 6;
 
 /**
  * A race's place counting: on or off, the teams that get their own button, the
- * award lines, and whether everyone sees places or only coaches and managers.
+ * and whether everyone sees places or only coaches and managers.
  */
 export function PlacesSetupSheet({ raceId, raceName, initial, onClose, onSaved }: { raceId: string; raceName: string; initial: RacePlaces | null; onClose: () => void; onSaved: () => void }) {
   const [on, setOn] = useState(initial?.on ?? true);
   const [teams, setTeams] = useState<TrackedTeam[]>(initial?.teams ?? []);
-  const [awards, setAwards] = useState<AwardLine[]>(initial?.awards ?? []);
+  // Award lines aren't shown anywhere any more; whatever a race had is kept as is.
+  const awards: AwardLine[] = initial?.awards ?? [];
   const [isPublic, setPublic] = useState(initial?.public ?? false);
   const [draft, setDraft] = useState("");
   const [suggestions, setSuggestions] = useState<TeamSuggestion[]>([]);
@@ -50,9 +51,8 @@ export function PlacesSetupSheet({ raceId, raceName, initial, onClose, onSaved }
   const update = (id: string, patch: Partial<TrackedTeam>) => setTeams((list) => list.map((t) => (t.id === id ? { ...t, ...patch } : t)));
 
   const save = () => {
-    const lines = awards.filter((a) => a.label.trim() && a.through > 0).sort((a, b) => a.through - b.through);
     startSaving(async () => {
-      const r = await setRacePlacesAction(raceId, { on, teams: teams.map((t) => ({ ...t, short: t.short.trim() || shortLabel(t.name) })), awards: lines, public: isPublic });
+      const r = await setRacePlacesAction(raceId, { on, teams: teams.map((t) => ({ ...t, short: t.short.trim() || shortLabel(t.name) })), awards, public: isPublic });
       if (r.error) return setError(r.error);
       onSaved();
     });
@@ -131,47 +131,11 @@ export function PlacesSetupSheet({ raceId, raceName, initial, onClose, onSaved }
               )}
             </div>
 
-            <div>
-              <SectionLabel className="mb-1">Award lines</SectionLabel>
-              <p className="mb-2 text-xs text-ink-2">Runners see how many places they are from the next line (&ldquo;2 from first team&rdquo;). Best first.</p>
-              <div className="space-y-2">
-                {awards.map((a, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="text-[13px] text-ink-2">Places 1–</span>
-                    <Input
-                      value={a.through ? String(a.through) : ""}
-                      onChange={(e) => setAwards((list) => list.map((x, j) => (j === i ? { ...x, through: Number(e.target.value.replace(/\D/g, "")) || 0 } : x)))}
-                      inputMode="numeric"
-                      className="w-16! text-right"
-                      aria-label="Last place for this line"
-                    />
-                    <Input value={a.label} onChange={(e) => setAwards((list) => list.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} maxLength={40} className="min-w-0 flex-1" aria-label="What it earns" />
-                    <button type="button" onClick={() => setAwards((list) => list.filter((_, j) => j !== i))} className="rounded p-1.5 text-ink-3 hover:bg-surface-2 hover:text-ink" aria-label="Remove this line">
-                      <X className="size-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {awards.length < 5 && (
-                  <Button size="sm" variant="secondary" onClick={() => setAwards((list) => [...list, { through: (list.at(-1)?.through ?? 0) + 10, label: "" }])}>
-                    <Plus className="size-3.5" />
-                    Add a line
-                  </Button>
-                )}
-                {awards.length === 0 && (
-                  <Button size="sm" variant="secondary" onClick={() => setAwards(DEFAULT_AWARDS)}>
-                    All-conference: 10 / 20 / 30
-                  </Button>
-                )}
-              </div>
-            </div>
-
             <ToggleRow
               checked={isPublic}
               onChange={setPublic}
               label="Show places to everyone"
-              hint={isPublic ? "Parents and runners see places, scores and award lines on Live results." : "Only coaches and managers see places. Official finish places always show."}
+              hint={isPublic ? "Parents and runners see places and scores on Live results." : "Only coaches and managers see places. Official finish places always show."}
             />
           </>
         )}

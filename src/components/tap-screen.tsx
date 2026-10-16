@@ -1071,7 +1071,7 @@ function RaceTapper({
       {scoresOpen && race.places && (
         <Sheet title={`Scores at ${checkpoint.label}`} subtitle={race.name} onClose={() => setScoresOpen(false)}>
           {cpPlaces ? (
-            <PlacesCard config={race.places} checkpoints={[checkpoint]} places={new Map([[checkpoint.id, cpPlaces]])} official={null} ourTeam={race.ourTeam} athletes={athletes} inSheet />
+            <PlacesCard config={race.places} checkpoints={[checkpoint]} places={new Map([[checkpoint.id, cpPlaces]])} official={null} ourTeam={race.ourTeam} inSheet />
           ) : (
             <p className="text-sm text-ink-2">Nobody has been counted here yet.</p>
           )}

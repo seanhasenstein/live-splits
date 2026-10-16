@@ -462,18 +462,6 @@ function RaceBoard({
         </div>
       )}
 
-      {race.places && (
-        <PlacesCard
-          config={race.places}
-          checkpoints={race.checkpoints}
-          places={placesByCp}
-          ourTeam={race.ourTeam}
-          // A boys-and-girls race's field mixes both: no team scores from it.
-          official={officialPlaces && !combined ? officialPlaces : null}
-          athletes={athletes}
-        />
-      )}
-
       <Card className="overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -649,6 +637,20 @@ function RaceBoard({
           </tbody>
         </table>
       </Card>
+
+      {/* Below the splits: the table is what most people come for; scores are secondary here. */}
+      {race.places && (
+        <div className="mt-3">
+          <PlacesCard
+            config={race.places}
+            checkpoints={race.checkpoints}
+            places={placesByCp}
+            ourTeam={race.ourTeam}
+            // A boys-and-girls race's field mixes both: no team scores from it.
+            official={officialPlaces && !combined ? officialPlaces : null}
+          />
+        </div>
+      )}
 
       {pendingTotal > 0 && (
         <div className="mt-3">

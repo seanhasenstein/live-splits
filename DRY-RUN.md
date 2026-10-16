@@ -47,7 +47,7 @@
 
 - Set up per race: meet page → race Options → Count places (or on Record
   splits: Switch → "Count places in …", for coaches and managers). The race
-  card then shows "Places · ML, KEW · top 10 / 20 / 30". Tracked teams
+  card then shows "Places · ML, KEW". Tracked teams
   (up to 6; names suggested from past results, labels and colors kept for
   next time), award lines (All-conference: 10 / 20 / 30), and "Show places to
   everyone" (off: only coaches and managers see them).
@@ -76,13 +76,13 @@
     time here and name for 5 s ("23rd place in 6:02 · Eddy", whole seconds) for the coach beside the
     counter to shout; it never covers the buttons. Tiles on Times +
     places show the place in bold after they pass.
-  - Tapping Other means counting everyone: places become overall, the
-    award lines and the whole-meet estimate show. Without Other, places are
+  - Tapping Other means counting everyone: places become overall and the
+    whole-meet estimate shows. Without Other, places are
     among our runners and the tracked teams only (marked *).
   - Mistakes: tap a chip in the strip (who it was, swap with the one ahead,
     someone missed before it, remove), or Undo. Done locks the buttons.
-- Live results: place and ▲/▼ under each time, the Places card (head to head,
-  estimate, award lines), and at the finish real team scores from the live
+- Live results: place and ▲/▼ under each time, and below the table the
+  Places card (head to head, estimate), and at the finish real team scores from the live
   feed or imported results. Meets that score only declared runners (more than
   7 entered) can differ by a few points below the top teams.
 
