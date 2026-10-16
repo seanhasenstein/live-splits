@@ -667,24 +667,6 @@ function RaceBoard({
                           {row.record && <RecordPill badge={row.record} className="ml-2 align-[2px]" />}
                         </button>
                       )}
-                      {/* Where they are now: the place at the latest checkpoint they reached. Read at a glance. */}
-                      {race.places &&
-                        !row.status &&
-                        (() => {
-                          for (let j = row.reached; j >= 0; j--) {
-                            const p = placeAt(row.athleteId, j);
-                            if (!p) continue;
-                            // The official finish place already sits beside the name.
-                            if (race.checkpoints[j].kind === "finish" && row.officialPlace !== null && hasOfficial) return null;
-                            return (
-                              <span className="tnum block text-xs font-medium text-ink-2" title={p.overall ? "Place overall" : "Place among the tracked teams"}>
-                                {placeNode(p, false)}
-                                <span className="font-normal text-ink-3"> · {race.checkpoints[j].label}</span>
-                              </span>
-                            );
-                          }
-                          return null;
-                        })()}
                       {row.status ? (
                         <span className="mt-0.5 block">
                           <Badge tone="neutral">{STATUS_LABEL[row.status.status]}</Badge>
@@ -719,10 +701,15 @@ function RaceBoard({
                   const flag = cell.official !== null ? "" : m && !cell.missed && shown !== "—" ? (m.estimate ? "~" : m.edited ? "*" : "") : "";
                   const projected = here === null && !cell.missed ? projectAt(row, i) : null;
                   const fresh = isFresh(m?.tapId);
-                  // Two lines at most: the time from the gun (bold where they are now), then the split, or at
-                  // the first checkpoint (where the split is the time) the place there. Pace changes live in
-                  // the athlete sheet; a projection is just a light "~" time ("overdue" for staff).
-                  const firstPlace = i === 0 && race.places ? placeAt(row.athleteId, 0) : null;
+                  // Three short lines, one job each: the time from the gun (bold where they are now); the split
+                  // and its pace change from the previous segment; the place and its change (when counting
+                  // places). A projection is just a light "~" time ("overdue" for staff).
+                  const place = race.places && here !== null ? placeAt(row.athleteId, i) : null;
+                  const segMeters = race.checkpoints[i].meters - (i > 0 ? race.checkpoints[i - 1].meters : 0);
+                  const prevSegMeters = i > 0 ? race.checkpoints[i - 1].meters - (i > 1 ? race.checkpoints[i - 2].meters : 0) : 0;
+                  const before = i > 1 ? t(row.cells[i - 2]) : i === 1 ? 0 : null;
+                  const prevSplit = i > 0 && prev !== null && before !== null ? prev - before : null;
+                  const paceChange = split !== null && prevSplit !== null && segMeters > 0 && prevSegMeters > 0 ? paceMsPerMile(split, segMeters) - paceMsPerMile(prevSplit, prevSegMeters) : null;
                   const cellNode = (
                     <>
                       {projected !== null ? (
@@ -736,8 +723,18 @@ function RaceBoard({
                           {flag}
                         </Time>
                       )}
-                      {i > 0 && split !== null && <Time className="block text-xs text-ink-3">{ft(split)}</Time>}
-                      {firstPlace && <span className="tnum block text-xs font-medium text-ink-2">{placeNode(firstPlace)}</span>}
+                      {i > 0 && split !== null && (
+                        <Time className="block text-xs leading-5 text-ink-3">
+                          {ft(split)}
+                          {paceChange !== null && (
+                            <>
+                              {" · "}
+                              <DeltaText ms={paceChange} />
+                            </>
+                          )}
+                        </Time>
+                      )}
+                      {place && <span className="tnum block text-xs leading-5 font-medium text-ink-2">{placeNode(place)}</span>}
                     </>
                   );
                   return (
@@ -799,12 +796,12 @@ function RaceBoard({
       <p className="mt-3 text-xs text-ink-3">
         {!editing && "Tap a runner for their splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a light ~ time is a projection from the runner's last split${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : race.placesDerived ? "Official times replace app taps where imported; the timing company scored the divisions as one field, so places here are ranked by the app within our division. " : "Official times replace app taps where imported. ")}{" "}
         {focusIndex === null
-          ? "Time from the gun, with the split beneath. Pick a checkpoint above the table for its pace changes and places."
+          ? "Time from the gun; beneath it the split and the change in pace per mile from the previous segment (+ slower, − faster)."
           : "Time from the gun, the split for this segment, and Pace ±: the change in pace per mile from the previous segment (+ slower, − faster)."}{" "}
         Updates every few seconds.
         {race.places && placesByCp.size > 0 && (
           <span className="mt-1 block">
-            Places: under each name, the place at the latest checkpoint (the first checkpoint&rsquo;s under its time); ▲ places gained since the last checkpoint · ▼ places lost · ↔ same place · * among our runners and the tracked teams only, not everyone.
+            Places: ▲ places gained since the last checkpoint · ▼ places lost · ↔ same place · * among our runners and the tracked teams only, not everyone.
           </span>
         )}
       </p>
