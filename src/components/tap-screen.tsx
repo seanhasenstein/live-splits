@@ -802,7 +802,8 @@ function RaceTapper({
     // names phone's time arrives); a name tap shows that runner's recorded time.
     const mark = athleteId ? cp?.byAthlete.get(athleteId) : undefined;
     const at = entry ? entry.timeMs : mark && !mark.missed ? mark.timeMs : null;
-    const time = at !== null && gunTimeMs && at >= gunTimeMs ? formatElapsed(at - gunTimeMs) : null;
+    // Whole seconds: what gets shouted ("14:59"), and finer than a thumb tap anyway.
+    const time = at !== null && gunTimeMs && at >= gunTimeMs ? formatElapsed(at - gunTimeMs, "seconds") : null;
     // "Of tracked teams" only means something when there are tracked teams; with none, everyone else is Other.
     return { key: shout.key, place, time, name: athleteId ? (athletes[athleteId] ?? null) : null, overall: cpPlaces.countingAll || (race.places?.teams.length ?? 0) === 0 };
   })();
@@ -1124,10 +1125,15 @@ function RaceTapper({
           <div className="w-full max-w-md rounded-xl bg-brand px-4 py-3 text-brand-ink shadow-sheet">
             <div className="flex items-baseline gap-3">
               <span className="tnum text-5xl leading-none font-bold">{ordinal(shoutView.place)}</span>
-              {shoutView.time && <Time className="text-3xl leading-none font-semibold">{shoutView.time}</Time>}
-              {!shoutView.overall && <span className="text-sm font-medium opacity-90">of tracked teams</span>}
+              <span className="text-base font-medium opacity-80">{shoutView.time ? "place in" : "place"}</span>
+              {shoutView.time && <Time className="text-4xl leading-none font-bold">{shoutView.time}</Time>}
             </div>
-            {shoutView.name && <div className="mt-1 truncate text-base font-medium">{shoutView.name}</div>}
+            {(shoutView.name || !shoutView.overall) && (
+              <div className="mt-1 truncate text-base font-medium">
+                {shoutView.name}
+                {!shoutView.overall && <span className="text-sm opacity-80">{shoutView.name ? " · " : ""}among the tracked teams</span>}
+              </div>
+            )}
           </div>
         </div>
       )}

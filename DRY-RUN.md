@@ -73,7 +73,7 @@
     people count places (or time) at the same checkpoint; the Switch button
     turns red if it happens anyway.
   - Each time one of ours is tapped, a big green card shows their place,
-    time here and name for 5 s ("23rd 6:02 · Eddy") for the coach beside the
+    time here and name for 5 s ("23rd place in 6:02 · Eddy", whole seconds) for the coach beside the
     counter to shout; it never covers the buttons. Tiles on Times +
     places show the place in bold after they pass.
   - Tapping Other means counting everyone: places become overall, the
