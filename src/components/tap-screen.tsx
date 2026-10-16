@@ -754,6 +754,25 @@ function RaceTapper({
     showToast(`Deleted ${fmt(slot.timeMs)}`);
   };
 
+  // The shout card: our runner just tapped, with their place, time here and name (both filled in as soon
+  // as they're known: a places-only tap gets them once the names phone taps the runner), and how far
+  // they are from an award line when the race has any.
+  const shoutView = (() => {
+    if (!shout || !cpPlaces) return null;
+    const index = shout.tapId ? cpPlaces.entries.findIndex((e) => e.tapId === shout.tapId) : -1;
+    const entry = index >= 0 ? cpPlaces.entries[index] : null;
+    const athleteId = shout.athleteId ?? (entry?.kind === "us" ? entry.athleteId : null);
+    const place = athleteId && cpPlaces.place.has(athleteId) ? cpPlaces.place.get(athleteId)! : index >= 0 ? (cpPlaces.countingAll ? index + 1 : cpPlaces.entries.slice(0, index + 1).filter((e) => e.kind !== "other").length) : null;
+    if (place === null) return null;
+    const mark = athleteId ? cp?.byAthlete.get(athleteId) : undefined;
+    const time = mark && !mark.missed && mark.timeMs !== null && gunTimeMs && mark.timeMs >= gunTimeMs ? formatElapsed(mark.timeMs - gunTimeMs) : null;
+    const awards = race.places?.awards ?? [];
+    const award = cpPlaces.countingAll && awards.length > 0 ? awardStatus(place, awards) : null;
+    // In numbers, not award names: "3 from top 20" works at any meet and is quick to shout.
+    const gap = award?.next ? `${award.next.places} from top ${award.next.line.through}` : award?.made ? `top ${award.made.through}` : null;
+    return { key: shout.key, place, time, name: athleteId ? (athletes[athleteId] ?? null) : null, gap, overall: cpPlaces.countingAll };
+  })();
+
   return (
     // Places fits the screen exactly: the buttons take what's left, so a slipping thumb can't scroll them away.
     <main className={`flex flex-col bg-bg ${placesMode === "places" ? "h-dvh overflow-hidden" : "min-h-dvh"}`}>
@@ -1070,33 +1089,25 @@ function RaceTapper({
         />
       )}
 
-      {(() => {
-        if (!shout || !cpPlaces) return null;
-        // Look the place up on every render: a places-only tap gets its name once the names phone taps it.
-        const index = shout.tapId ? cpPlaces.entries.findIndex((e) => e.tapId === shout.tapId) : -1;
-        const athleteId = shout.athleteId ?? (index >= 0 && cpPlaces.entries[index].kind === "us" ? (cpPlaces.entries[index] as { athleteId: string | null }).athleteId : null);
-        const place = athleteId && cpPlaces.place.get(athleteId) ? cpPlaces.place.get(athleteId)! : index >= 0 ? (cpPlaces.countingAll ? index + 1 : cpPlaces.entries.slice(0, index + 1).filter((e) => e.kind !== "other").length) : null;
-        if (place === null) return null;
-        const award = cpPlaces.countingAll ? awardStatus(place, race.places?.awards ?? []) : null;
-        // In numbers, not award names: "3 from top 20" works at any meet and is quick to shout.
-        const gap = award?.next ? `${award.next.places} from top ${award.next.line.through}` : award?.made ? `top ${award.made.through}` : null;
-        return (
-          // Over the race card, never the buttons; taps pass straight through it.
-          <div key={shout.key} className="pointer-events-none fixed inset-x-3 top-16 z-30 flex justify-center">
-            <div className="w-full max-w-md rounded-xl bg-brand px-4 py-3 text-brand-ink shadow-sheet">
-              <div className="flex items-baseline gap-3">
-                <span className="tnum text-5xl leading-none font-bold">{ordinal(place)}</span>
-                <span className="text-lg leading-tight font-semibold">{cpPlaces.countingAll ? gap : "of tracked teams"}</span>
-              </div>
-              {athleteId && <div className="mt-1 truncate text-base opacity-90">{athletes[athleteId] ?? ""}</div>}
+      {shoutView && (
+        // Over the race card, never the buttons; taps pass straight through it.
+        <div key={shoutView.key} className="pointer-events-none fixed inset-x-3 top-16 z-30 flex justify-center">
+          <div className="w-full max-w-md rounded-xl bg-brand px-4 py-3 text-brand-ink shadow-sheet">
+            <div className="flex items-baseline gap-3">
+              <span className="tnum text-5xl leading-none font-bold">{ordinal(shoutView.place)}</span>
+              {shoutView.time && <Time className="text-3xl leading-none font-semibold">{shoutView.time}</Time>}
+              {!shoutView.overall && <span className="text-sm font-medium opacity-90">of tracked teams</span>}
             </div>
+            {shoutView.name && <div className="mt-1 truncate text-base font-medium">{shoutView.name}</div>}
+            {shoutView.gap && <div className="mt-0.5 text-sm opacity-90">{shoutView.gap}</div>}
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {/* Read-only: taps go straight through it to the tiles beneath. Undo lives in the bar. */}
-      {toast && (
-        <div className={`pointer-events-none fixed inset-x-0 z-20 flex justify-center px-3 [&>*]:pointer-events-none ${placesMode === "names" ? "bottom-36" : shout ? "top-52" : "top-36"}`}>
+      {/* The shout card already says what was recorded; no toast on top of it. */}
+      {toast && !shoutView && (
+        <div className={`pointer-events-none fixed inset-x-0 z-20 flex justify-center px-3 [&>*]:pointer-events-none ${placesMode === "names" ? "bottom-36" : "top-36"}`}>
           <Toast title={toast} />
         </div>
       )}
