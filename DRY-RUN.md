@@ -49,8 +49,8 @@
   splits: Switch → "Count places in …", for coaches and managers). The race
   card then shows "Places · ML, KEW". Tracked teams
   (up to 6; names suggested from past results, labels and colors kept for
-  next time), award lines (All-conference: 10 / 20 / 30), and "Show places to
-  everyone" (off: only coaches and managers see them).
+  next time) and "Show places to everyone" (off: only coaches and managers
+  see them).
 - Each phone picks its job in Switch ("Your job here"), with the race and
   checkpoint: Times, Times + places, or Places. The header shows it.
   - One phone: Times + places. Tap our names as now and a team button for
@@ -61,7 +61,8 @@
     up to 3 teams get a full-width row each, more go two to a row, and Other
     has +2 / +3 / +4 beside it (no hold needed there).
   - Each button shows how many of that team have been counted; Scores opens
-    the head to head, estimate and award lines for that checkpoint.
+    the head to head and estimate for that checkpoint (only with tracked
+    teams).
   - The line above the buttons shows the last tap (it flashes on each tap)
     and the next place. Fix lists the last 30 (newest first) to correct one
     between packs. On Places, Done locks the buttons (remembered through a
