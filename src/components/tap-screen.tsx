@@ -564,6 +564,7 @@ function RaceTapper({
 
   const [lastAction, setLastAction] = useState<LastAction | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [toastTone, setToastTone] = useState<"success" | "danger">("success");
   const [flashId, setFlashId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   /** When the Replace/Keep card opened, so the second half of a double tap can't hit Replace. */
@@ -632,8 +633,9 @@ function RaceTapper({
   const shownSlots = useMemo(() => (cp?.slots ?? []).filter((x) => x.athleteIds.length === 0 || nowMs === 0 || nowMs + offset - x.timeMs < CHIP_TTL_MS), [cp, nowMs, offset]);
   const selectedSlot = selectedSlotId ? shownSlots.find((x) => x.tapId === selectedSlotId) : undefined;
 
-  const showToast = useCallback((text: string) => {
+  const showToast = useCallback((text: string, tone: "success" | "danger" = "success") => {
     setToast(text);
+    setToastTone(tone);
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
   }, []);
@@ -1057,7 +1059,7 @@ function RaceTapper({
       {/* Read-only: taps go straight through it to the tiles beneath. Undo lives in the bar. */}
       {toast && (
         <div className={`pointer-events-none fixed inset-x-0 z-20 flex justify-center px-3 [&>*]:pointer-events-none ${placesMode === "names" ? "bottom-36" : "top-36"}`}>
-          <Toast title={toast} />
+          <Toast title={toast} tone={toastTone} />
         </div>
       )}
 

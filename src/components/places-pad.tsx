@@ -54,7 +54,7 @@ export function PlacesPad({
   onPointer: () => void;
   /** For Undo: the taps this action sent, newest action wins. */
   onAction: (a: { tapIds: string[]; label: string }) => void;
-  onToast: (text: string) => void;
+  onToast: (text: string, tone?: "success" | "danger") => void;
   /** Opens the scores at this checkpoint. */
   onScores: () => void;
   /** Done counting at this checkpoint (remembered on this phone, so a reload doesn't unlock it). */
@@ -115,6 +115,8 @@ export function PlacesPad({
     const tapId = send({ ...base, type: "tick", team, deviceTimeMs: at });
     buzz();
     flashNow();
+    // More of ours than are running: still counted (an earlier one may have been another team), but say so.
+    if (team === "us" && countOf("us") + 1 > ourExpected) onToast(`That's more of ours than are running (${countOf("us") + 1} of ${ourExpected}). Was an earlier one another team? Tap Fix.`, "danger");
     onAction({ tapIds: [tapId], label: `${ordinal(counted + 1)} ${label(team)}` });
   };
   // A clump of untracked runners: n Others at once, a few ms apart so they keep their order.
@@ -163,7 +165,7 @@ export function PlacesPad({
     >
       {/* How many of them have passed here; for ours, of how many are coming (still waiting on some = don't stop yet). */}
       {(countOf(team) > 0 || team === "us") && (
-        <span className="tnum absolute top-1 right-1 rounded-md bg-black/35 px-1.5 py-px text-sm leading-tight font-bold text-white">
+        <span className={`tnum absolute top-1 right-1 rounded-md px-1.5 py-px text-sm leading-tight font-bold ${team === "us" && countOf("us") > ourExpected ? "bg-gold text-ink" : "bg-black/35 text-white"}`}>
           {team === "us" ? `${countOf("us")} of ${ourExpected}` : countOf(team)}
         </span>
       )}
