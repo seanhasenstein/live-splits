@@ -70,7 +70,7 @@
     people count places (or time) at the same checkpoint; the Switch button
     turns red if it happens anyway.
   - Each time one of ours is tapped, a big green card shows their place and
-    the award gap for 5 s ("23rd · 3 from second team · Eddy") for the coach
+    the award gap for 5 s ("23rd · 3 from top 20 · Eddy") for the coach
     beside the counter to shout; it never covers the buttons. Tiles on Times +
     places show the place in bold after they pass.
   - Tapping Other means counting everyone: places become overall, the
