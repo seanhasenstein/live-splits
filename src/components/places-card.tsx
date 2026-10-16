@@ -108,20 +108,23 @@ export function PlacesCard({
                 ? `${cp.entries.length} counted: ours and the tracked teams. Places are among those teams.`
                 : `${cp.entries.length} counted.`}
           </p>
-          {/* Scores need someone to score against: none without tracked teams. */}
-          {config.teams.length > 0 && (
-            <>
-              <p className="px-3 pt-2 text-[11px] font-semibold tracking-wide text-ink-3 uppercase">Head to head</p>
-              {scoreRows(cp.scores)}
-            </>
-          )}
-          {cp.estimate && config.teams.length > 0 && (
-            <>
-              <p className="px-3 pt-3 text-[11px] font-semibold tracking-wide text-ink-3 uppercase">Whole meet, estimated</p>
-              {scoreRows(cp.estimate, { approx: true, only: (t) => t !== "*" })}
-              <p className="px-3 pt-1 text-[11px] text-ink-3">Counts every Other runner as scoring; teams with under five runners don&rsquo;t, so the real scores are a little lower.</p>
-            </>
-          )}
+          {/* One table, never two that disagree. Counting everyone: the whole meet, estimated (it has the
+              tracked teams in it, in real-meet terms). Otherwise only the tracked teams: exact as a dual
+              meet, but the real meet can differ (other teams' runners land between ours and theirs). */}
+          {config.teams.length > 0 &&
+            (cp.estimate ? (
+              <>
+                <p className="px-3 pt-2 text-[11px] font-semibold tracking-wide text-ink-3 uppercase">Whole meet, estimated</p>
+                {scoreRows(cp.estimate, { approx: true, only: (t) => t !== "*" })}
+                <p className="px-3 pt-1 text-[11px] text-ink-3">Counts every Other runner as scoring; teams with under five runners don&rsquo;t, so the real scores are a little lower.</p>
+              </>
+            ) : (
+              <>
+                <p className="px-3 pt-2 text-[11px] font-semibold tracking-wide text-ink-3 uppercase">Tracked teams only</p>
+                {scoreRows(cp.scores)}
+                <p className="px-3 pt-1 text-[11px] text-ink-3">As if only these teams were racing. The real meet can differ.</p>
+              </>
+            ))}
         </>
       ) : (
         <>

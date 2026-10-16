@@ -61,8 +61,7 @@
     up to 3 teams get a full-width row each, more go two to a row, and Other
     has +2 / +3 / +4 beside it (no hold needed there).
   - Each button shows how many of that team have been counted; Scores opens
-    the head to head and estimate for that checkpoint (only with tracked
-    teams).
+    that checkpoint's scores (only with tracked teams).
   - The line above the buttons shows the last tap (it flashes on each tap)
     and the next place. Fix lists the last 30 (newest first) to correct one
     between packs. On Places, Done locks the buttons (remembered through a
@@ -77,13 +76,20 @@
     time here and name for 5 s ("23rd place in 6:02 · Eddy", whole seconds) for the coach beside the
     counter to shout; it never covers the buttons. Tiles on Times +
     places show the place in bold after they pass.
-  - Tapping Other means counting everyone: places become overall and the
-    whole-meet estimate shows. Without Other, places are
+  - Scores: one table. Counting everyone (Other tapped): "Whole meet,
+    estimated" (≈), which includes the tracked teams. Otherwise "Tracked teams
+    only": as if only those teams raced, which can differ from the real meet
+    (a team with a big 4–5 gap looks better than it is).
+  - Tapping Other means counting everyone: places become overall. Without Other, places are
     among our runners and the tracked teams only (marked *).
-  - Mistakes: tap a chip in the strip (who it was, swap with the one ahead,
-    someone missed before it, remove), or Undo. Done locks the buttons.
+  - Scores: one table. Counting everyone: "Whole meet, estimated" (≈), which
+    includes the tracked teams. Otherwise "Tracked teams only": as if only
+    those teams raced, which can differ from the real meet (a team with a big
+    gap to its 5th runner looks better than it is).
+  - Mistakes: Fix (who it was, swap with the one ahead, someone missed before
+    it, remove), or Undo.
 - Live results: place and ▲/▼ under each time, and below the table the
-  Places card (head to head, estimate), and at the finish real team scores from the live
+  Places card, and at the finish real team scores from the live
   feed or imported results. Meets that score only declared runners (more than
   7 entered) can differ by a few points below the top teams.
 
