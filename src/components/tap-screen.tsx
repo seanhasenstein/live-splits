@@ -1235,8 +1235,9 @@ function RaceTapper({
             type="button"
             onPointerDown={notePointerDown}
             onClick={capture}
-            className={`flex h-16 flex-1 flex-col items-center justify-center rounded-lg shadow-card select-none ${
-              flashId === "capture" ? "bg-brand text-brand-ink" : "bg-ink text-bg active:bg-ink/80"
+            // Filled but softened, with a crisp edge: still unmistakably not the outlined Other.
+            className={`flex h-16 flex-1 flex-col items-center justify-center rounded-lg border-2 shadow-card transition-transform duration-75 select-none active:scale-[0.98] ${
+              flashId === "capture" ? "border-brand bg-brand text-brand-ink" : "border-ink bg-ink/85 text-bg"
             }`}
           >
             <span className="text-xl leading-tight font-semibold tracking-wide">
