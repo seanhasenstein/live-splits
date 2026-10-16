@@ -816,7 +816,6 @@ function RaceTapper({
       )}
       {placesMode === "places" ? (
         <div className="flex min-h-0 flex-1 flex-col pb-28">
-          <p className="px-3 pt-3 text-[13px] text-ink-2">One tap per runner as they pass.</p>
           <PlacesPad
               mode={placesMode}
               teams={race.places?.teams ?? []}
