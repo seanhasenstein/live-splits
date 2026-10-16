@@ -614,7 +614,14 @@ function RaceBoard({
                               <span className="tnum block text-[11px] font-medium text-ink-2" title={p.overall ? "Place overall" : "Place among the tracked teams"}>
                                 {placeText(p.place)}
                                 {!p.overall && "*"}
-                                {p.gained !== null && p.gained !== 0 && <span className={p.gained > 0 ? "text-brand-text" : "text-danger"}>{p.gained > 0 ? ` ▲${p.gained}` : ` ▼${-p.gained}`}</span>}
+                                {p.gained !== null &&
+                                  (p.gained === 0 ? (
+                                    <span className="text-ink-3" title="Same place as the last checkpoint">
+                                      {" "}=
+                                    </span>
+                                  ) : (
+                                    <span className={p.gained > 0 ? "text-brand-text" : "text-danger"}>{p.gained > 0 ? ` ▲${p.gained}` : ` ▼${-p.gained}`}</span>
+                                  ))}
                               </span>
                             );
                           })()}
@@ -1006,7 +1013,8 @@ function AthleteSheet({
                     <span className="tnum block text-xs font-normal text-ink-2">
                       {placeText(p.place)}
                       {p.overall ? " place" : " among tracked teams"}
-                      {p.gained !== null && p.gained !== 0 && <span className={p.gained > 0 ? "text-brand-text" : "text-danger"}>{p.gained > 0 ? ` · up ${p.gained}` : ` · down ${-p.gained}`}</span>}
+                      {p.gained !== null &&
+                        (p.gained === 0 ? <span className="text-ink-3"> · same place</span> : <span className={p.gained > 0 ? "text-brand-text" : "text-danger"}>{p.gained > 0 ? ` · up ${p.gained}` : ` · down ${-p.gained}`}</span>)}
                     </span>
                   );
                 })()}
