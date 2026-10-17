@@ -1090,10 +1090,16 @@ function AthleteSheet({
   // Tags a row can wear in the lists, today's run included: the fastest ever, the fastest this season, the same course as today.
   // Nothing about records applies on a meet marked as not counting for them.
   const records = !race.recordsExcluded && !status;
-  const todayIsPR = records && finish !== null && (finishes.length === 0 || finish <= finishes[0].ms);
-  const todayIsSB = records && finish !== null && (season.length === 0 || finish <= Math.min(...season.map((f) => f.ms)));
-  const prRaceId = todayIsPR ? null : (finishes[0]?.raceId ?? null);
-  const sbRaceId = todayIsSB ? null : ([...season].sort((a, b) => a.ms - b.ms)[0]?.raceId ?? null);
+  // Still the record now: nothing faster since (a PR beaten in a later season isn't tagged PR here either).
+  const laterPr = bests?.later.pr ?? null;
+  const laterSb = bests?.later.sb ?? null;
+  const todayIsPR = records && finish !== null && (finishes.length === 0 || finish <= finishes[0].ms) && (laterPr === null || finish <= laterPr);
+  const todayIsSB = records && finish !== null && (season.length === 0 || finish <= Math.min(...season.map((f) => f.ms))) && (laterSb === null || finish <= laterSb);
+  // An earlier race wears PR / SB only if it's still the record (nothing faster since, this race included).
+  const stillBest = (ms: number | undefined, later: number | null) => ms !== undefined && (later === null || ms <= later) && (finish === null || ms <= finish);
+  const bestSeason = [...season].sort((a, b) => a.ms - b.ms)[0];
+  const prRaceId = !todayIsPR && stillBest(finishes[0]?.ms, laterPr) ? (finishes[0]?.raceId ?? null) : null;
+  const sbRaceId = !todayIsSB && stillBest(bestSeason?.ms, laterSb) ? (bestSeason?.raceId ?? null) : null;
   const tagsFor = (f: PriorFinish) => [...(f.raceId === prRaceId ? ["PR"] : []), ...(f.raceId === sbRaceId ? ["SB"] : []), ...(f.sameCourse ? ["this course"] : [])];
   // "This race", not "today": the sheet is read again long after the meet.
   const todayTags = [...(todayIsPR && finishes.length > 0 ? ["PR"] : []), ...(todayIsSB && season.length > 0 ? ["SB"] : []), "this race"];

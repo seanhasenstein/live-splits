@@ -8,6 +8,11 @@ export type BestsIn = {
   sb: { ms: number } | null;
   course: { ms: number } | null;
   meet: { ms: number } | null;
+  /**
+   * The runner's best of each kind in races after this one (SB: later in the same season). A record
+   * badge shows only while it's still the record: a 2023 PR beaten in 2025 gets none.
+   */
+  later?: Record<RecordKind, number | null>;
 };
 
 export type RecordKind = "pr" | "sb" | "course" | "meet";
@@ -46,7 +51,8 @@ export function recordBadge(finishMs: number | null, bests: BestsIn | undefined,
   if (finishMs === null || !bests) return null;
   const all = ORDER.filter((k) => {
     const b = bests[k];
-    return b !== null && finishMs <= b.ms;
+    const after = bests.later?.[k] ?? null;
+    return b !== null && finishMs <= b.ms && (after === null || finishMs <= after);
   });
   if (all.length === 0) return null;
   const kind = all[0];

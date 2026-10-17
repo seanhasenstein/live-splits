@@ -15,7 +15,8 @@ import { normalizeName } from "./match";
  * not counting for records (a short course, a wrong turn), when the race was
  * a different distance, or when it was run below the program's records grade.
  * Only results from other, earlier (or same-day) meets count: this race is
- * what's being judged.
+ * what's being judged. Later meets only say whether this race is still a
+ * runner's record (`later`): looking back, a PR since beaten shows no badge.
  */
 export type Best = { ms: number; precision: Precision; meetName: string; date: string };
 
@@ -41,6 +42,8 @@ export type AthleteBests = {
   meet: Best | null;
   /** Every counting finish at this distance, fastest first. */
   finishes: PriorFinish[];
+  /** Their best of each kind in later meets (SB: later in the same season), so a badge shows only while it's still the record. */
+  later: Record<"pr" | "sb" | "course" | "meet", number | null>;
 };
 
 export type LineupBests = Record<string, AthleteBests>;
@@ -51,11 +54,12 @@ const seriesKey = (m: Pick<Meet, "meetSeriesId" | "name">) => m.meetSeriesId ?? 
 export async function getLineupBests(meet: Meet, race: Pick<Race, "lineup" | "distanceId">, program: Pick<Program, "settings"> | null): Promise<LineupBests> {
   const db = await getDb();
   const athleteIds = race.lineup.map((l) => l.athleteId);
-  const out: LineupBests = Object.fromEntries(athleteIds.map((id) => [id, { pr: null, sb: null, course: null, meet: null, finishes: [] }]));
+  const out: LineupBests = Object.fromEntries(athleteIds.map((id) => [id, { pr: null, sb: null, course: null, meet: null, finishes: [], later: { pr: null, sb: null, course: null, meet: null } }]));
   if (athleteIds.length === 0) return out;
 
   const meets = await collection(db, "meets")
-    .find({ schoolId: meet.schoolId, programId: meet.programId, _id: { $ne: meet._id }, date: { $lte: meet.date }, deletedAt: null, recordsExclusion: null }, { projection: { _id: 1, name: 1, date: 1, courseId: 1, seasonId: 1, meetSeriesId: 1 } })
+    // Later meets too: only to know whether this race is still a runner's record (see `later`).
+    .find({ schoolId: meet.schoolId, programId: meet.programId, _id: { $ne: meet._id }, deletedAt: null, recordsExclusion: null }, { projection: { _id: 1, name: 1, date: 1, courseId: 1, seasonId: 1, meetSeriesId: 1 } })
     .toArray();
   if (meets.length === 0) return out;
   const meetById = new Map(meets.map((m) => [m._id, m]));
@@ -81,8 +85,17 @@ export async function getLineupBests(meet: Meet, race: Pick<Race, "lineup" | "di
     if (r.gradeSnapshot !== null && r.gradeSnapshot < minGrade) continue;
     if (r.mark?.type !== "time") continue;
     const m = meetById.get(race.meetId)!;
-    const best: Best = { ms: r.mark.value, precision: r.mark.precision, meetName: m.name, date: m.date };
     const b = out[r.athleteId!];
+    if (m.date > meet.date) {
+      // After this race: doesn't change what they had to beat, only whether this is still the record.
+      const lower = (cur: number | null) => (cur === null || r.mark!.value < cur ? r.mark!.value : cur);
+      b.later.pr = lower(b.later.pr);
+      if (m.seasonId === meet.seasonId) b.later.sb = lower(b.later.sb);
+      if (!!meet.courseId && m.courseId === meet.courseId) b.later.course = lower(b.later.course);
+      if (seriesKey(m) === thisSeries) b.later.meet = lower(b.later.meet);
+      continue;
+    }
+    const best: Best = { ms: r.mark.value, precision: r.mark.precision, meetName: m.name, date: m.date };
     b.pr = better(b.pr, best);
     const thisSeason = m.seasonId === meet.seasonId;
     const sameCourse = !!meet.courseId && m.courseId === meet.courseId;
