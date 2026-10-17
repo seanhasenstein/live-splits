@@ -752,18 +752,18 @@ function RaceBoard({
                         <span
                           // With places on, ▲ / ▼ are the color in the cell; the split stays gray (its pace change
                           // is in the checkpoint view's Pace ± column and the runner's sheet).
-                          className={`block text-xs leading-5 ${race.places || paceChange === null || Math.abs(paceChange) < 1000 ? "text-ink-3" : paceChange < 0 ? "text-brand-text" : "text-danger"}`}
+                          className={`block text-[13px] leading-5 ${race.places || paceChange === null || Math.abs(paceChange) < 1000 ? "text-ink-2" : paceChange < 0 ? "text-brand-text" : "text-danger"}`}
                           title={paceChange !== null ? `${paceChange <= 0 ? "−" : "+"}${formatElapsed(Math.abs(paceChange)).replace(/\.\d$/, "")} per mile vs the previous segment` : undefined}
                         >
                           <Time>{ft(split)}</Time>
                         </span>
                       )}
                       {/* The first checkpoint has no split (it is the time): an empty line keeps its place level with the others. */}
-                      {i === 0 && place && <span aria-hidden className="block text-xs leading-5">&nbsp;</span>}
+                      {i === 0 && place && <span aria-hidden className="block text-[13px] leading-5">&nbsp;</span>}
                       {/* The place in a fixed-width slot, so down a column the ▲ / ▼ / ↔ beside it line up. */}
                       {place && (
-                        <span className="tnum flex text-xs leading-5 font-medium text-ink-2">
-                          <span className="min-w-8 shrink-0 pr-1">
+                        <span className="tnum flex text-[13px] leading-5 font-medium text-ink-2">
+                          <span className="min-w-9 shrink-0 pr-1">
                             {placeText(place.place)}
                             {!place.overall && "*"}
                           </span>
