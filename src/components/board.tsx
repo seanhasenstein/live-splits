@@ -831,7 +831,8 @@ function RaceBoard({
         </div>
       )}
 
-      {pendingTotal > 0 && (
+      {/* Times captured without a name yet: a job for coaches and managers, noise for the public. */}
+      {pendingTotal > 0 && staff && (
         <div className="mt-3">
           <Alert tone="gold" title={`${pendingTotal} unassigned capture${pendingTotal === 1 ? "" : "s"}`}>
             {race.checkpoints.map((c) => {
