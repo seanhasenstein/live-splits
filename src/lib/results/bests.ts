@@ -31,6 +31,8 @@ export type PriorFinish = {
   date: string;
   thisSeason: boolean;
   sameCourse: boolean;
+  /** An earlier running of this meet (same series), on whatever course it was held. */
+  sameMeet: boolean;
   /** Official mat splits, cumulative ms by checkpoint meters (whole meters). */
   splits: Record<string, number>;
 };
@@ -109,7 +111,7 @@ export async function getLineupBests(meet: Meet, race: Pick<Race, "lineup" | "di
       const key = s.source === "mat" ? metersOf.get(s.checkpointId) : undefined;
       if (key) splits[key] = s.cumulativeMs;
     }
-    b.finishes.push({ ms: r.mark.value, precision: r.mark.precision, meetId: m._id, meetName: m.name, raceId: race._id, raceName: race.name, date: m.date, thisSeason, sameCourse, splits });
+    b.finishes.push({ ms: r.mark.value, precision: r.mark.precision, meetId: m._id, meetName: m.name, raceId: race._id, raceName: race.name, date: m.date, thisSeason, sameCourse, sameMeet: seriesKey(m) === thisSeries, splits });
   }
   for (const b of Object.values(out)) b.finishes.sort((x, y) => x.ms - y.ms || y.date.localeCompare(x.date));
   return out;

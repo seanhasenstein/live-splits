@@ -1125,6 +1125,16 @@ function AthleteSheet({
       : records && finish !== null && !row?.record && bests && seasonRank !== null && seasonRank <= 3 && season.length >= 2 && bests.sb
         ? `${seasonRank}${ordinal(seasonRank)} fastest this season, behind the season best of ${ft(bests.sb.ms, bests.sb.precision)} at ${bests.sb.meetName} on ${formatDateWithYear(bests.sb.date)}.`
         : null;
+  // The last time they ran this meet, in an earlier season: "Last year at Big East Conference: 21:40 · 1:05 faster".
+  const lastHere = finishes.filter((f) => f.sameMeet && !f.thisSeason).sort((a, b) => b.date.localeCompare(a.date))[0];
+  const lastHereText = lastHere
+    ? (() => {
+        const years = Number(meetDate.slice(0, 4)) - Number(lastHere.date.slice(0, 4));
+        const when = years === 1 ? "Last year" : `In ${lastHere.date.slice(0, 4)}`;
+        return `${when} at ${lastHere.meetName}: ${ft(lastHere.ms, lastHere.precision)}${lastHere.sameCourse ? "" : ", on a different course"}`;
+      })()
+    : null;
+  const lastHereDiff = lastHere && finish !== null ? finish - lastHere.ms : null;
   // "5Ks" reads; "3 mis" doesn't.
   const plural = /[A-Za-z]$/.test(race.distanceLabel) && !/ mi$/.test(race.distanceLabel) ? `${race.distanceLabel}s` : `${race.distanceLabel} races`;
   const raceLink = (f: { meetId: string; raceId: string }) => `/meets/${f.meetId}/results?race=${f.raceId}&athlete=${row?.athleteId ?? ""}`;
@@ -1195,8 +1205,12 @@ function AthleteSheet({
               {(() => {
                 const prev = bests[row.record.kind]!;
                 const what = { pr: "personal best", sb: "season best", course: "best on this course", meet: "best at this meet" }[row.record.kind];
-                const by = row.record.unofficial && row.record.uncertain && row.record.previousMs > finish! ? `, beaten by ${Math.max(1, Math.round((row.record.previousMs - finish!) / 1000))}s` : row.record.unofficial && row.record.uncertain ? ", matched" : "";
-                return `Previous ${what} was ${ft(prev.ms, prev.precision)} at ${prev.meetName} on ${formatDateWithYear(prev.date)}${by}.`;
+                // Lead with the improvement: "25s faster than the previous personal best, 18:20 at …". Under a second, tenths.
+                const gain = prev.ms - finish!;
+                const gainText = gain < 1000 ? `${(gain / 1000).toFixed(1)}s` : gapText(gain);
+                const previous = `the previous ${what}, ${ft(prev.ms, prev.precision)} at ${prev.meetName} on ${formatDateWithYear(prev.date)}`;
+                const tapped = row.record.unofficial && row.record.uncertain ? " From taps, so official results could change it." : "";
+                return `${gain <= 0 ? `Matches ${previous}` : `${gainText} faster than ${previous}`}.${tapped}`;
               })()}
             </span>
           ) : nearMiss ? (
@@ -1207,6 +1221,19 @@ function AthleteSheet({
             </span>
           ) : (
             avgPace !== null && <Time className="block text-[13px] text-ink-2">{formatElapsed(avgPace).replace(/\.\d$/, "")}/mi average</Time>
+          )}
+          {lastHereText && (
+            <span className="mt-0.5 block text-[13px] text-ink-2">
+              {lastHereText}
+              {lastHereDiff !== null && Math.round(lastHereDiff / 1000) !== 0 && (
+                <>
+                  {" · "}
+                  <span className={`font-medium ${lastHereDiff < 0 ? "text-brand-bright" : "text-danger"}`}>
+                    {gapText(Math.abs(lastHereDiff))} {lastHereDiff < 0 ? "faster" : "slower"}
+                  </span>
+                </>
+              )}
+            </span>
           )}
         </div>
       )}
