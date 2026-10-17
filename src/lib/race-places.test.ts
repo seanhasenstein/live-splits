@@ -126,10 +126,20 @@ describe("racePlaces", () => {
     expect(places([...base, remove, undo, redo])!.place.get("emma")).toBe(1);
   });
 
+  it("doesn't shift later runners when the counter missed one of ours", () => {
+    // A was named but the counter missed A; B and C each have their own Us tap.
+    const p = places([tick("other", 5_000), name("a", 10_000), tick("other", 20_000), name("b", 25_000), tick("us", 25_500), name("c", 40_000), tick("us", 40_500)])!;
+    expect(p.place.get("a")).toBe(2);
+    expect(p.place.get("b")).toBe(4);
+    expect(p.place.get("c")).toBe(5);
+  });
+
   it("keeps a place for an Us tap whose name nobody tapped", () => {
     const p = places([tick("us", 1000), tick("us", 1100), name("emma", 2000)])!;
-    expect(p.entries[1]).toMatchObject({ kind: "us", athleteId: null });
-    expect(p.place.get("emma")).toBe(1);
+    // Two of ours passed, one was named: both keep a place, one stays nameless.
+    expect(p.entries).toHaveLength(2);
+    expect(p.entries.filter((e) => e.kind === "us" && e.athleteId === null)).toHaveLength(1);
+    expect([1, 2]).toContain(p.place.get("emma"));
   });
 
   it("re-places everyone when a tap is undone, moved or relabeled", () => {

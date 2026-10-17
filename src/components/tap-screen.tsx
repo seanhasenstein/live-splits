@@ -1238,7 +1238,7 @@ function RaceTapper({
         {/* On Times + places the chip row keeps its height even when empty: a chip appearing or expiring
             must never move the team buttons above it under a thumb. */}
         {placesMode !== "places" && (
-          <div className={placesMode === "both" ? "min-h-[38px]" : ""}>
+          <div className={placesMode === "both" ? "min-h-10" : ""}>
             <CaptureChips
               slots={shownSlots}
               selectedId={selectedSlot?.tapId ?? null}

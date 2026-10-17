@@ -470,9 +470,11 @@ function RaceBoard({
               </tr>
             )}
             {list.map(({ r, cell, here, out, projected }) => {
-              const prev = i > 0 ? timeOf(r.cells[i - 1]) : here !== null ? 0 : null;
+              // From the gun, the first split starts at 0; with only clock times there's no start to count from.
+              const start = gunTimeMs !== null || hasOfficial ? 0 : null;
+              const prev = i > 0 ? timeOf(r.cells[i - 1]) : here !== null ? start : null;
               const split = here !== null && prev !== null ? here - prev : null;
-              const before = i > 1 ? timeOf(r.cells[i - 2]) : i === 1 ? 0 : null;
+              const before = i > 1 ? timeOf(r.cells[i - 2]) : i === 1 ? start : null;
               const prevSplit = i > 0 && prev !== null && before !== null ? prev - before : null;
               const paceChange = split !== null && prevSplit !== null && segMeters > 0 && prevSegMeters > 0 ? paceMsPerMile(split, segMeters) - paceMsPerMile(prevSplit, prevSegMeters) : null;
               const m = cell.mark;

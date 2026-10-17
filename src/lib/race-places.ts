@@ -85,6 +85,40 @@ const OTHER = "*";
 const US_LEAD_MS = 5_000;
 /** After that, a name and an Us tap this far apart, either way, can be the same runner (a counter working through a pack). */
 const US_WINDOW_MS = 30_000;
+/** What leaving a name or an Us tap unpaired costs, in ms of time difference: pairs closer than this win. */
+const US_SKIP_COST_MS = 15_000;
+
+/**
+ * Pair names (times, in order) with Us taps (times, in order), keeping both orders, so the total time
+ * difference plus US_SKIP_COST_MS for each one left unpaired is smallest. A pair can be at most
+ * US_WINDOW_MS apart. Small (our runners at one checkpoint), so a full table is fine.
+ * Returns name index → Us tap index.
+ */
+export function alignUs(names: number[], us: number[]): Map<number, number> {
+  const n = names.length;
+  const m = us.length;
+  const cost: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
+  for (let i = n; i >= 0; i--) {
+    for (let j = m; j >= 0; j--) {
+      if (i === n && j === m) continue;
+      let best = Infinity;
+      if (i < n) best = Math.min(best, US_SKIP_COST_MS + cost[i + 1][j]);
+      if (j < m) best = Math.min(best, US_SKIP_COST_MS + cost[i][j + 1]);
+      if (i < n && j < m && Math.abs(names[i] - us[j]) <= US_WINDOW_MS) best = Math.min(best, Math.abs(names[i] - us[j]) + cost[i + 1][j + 1]);
+      cost[i][j] = best;
+    }
+  }
+  const pairs = new Map<number, number>();
+  let i = 0;
+  let j = 0;
+  while (i < n || j < m) {
+    if (i < n && j < m && Math.abs(names[i] - us[j]) <= US_WINDOW_MS && cost[i][j] === Math.abs(names[i] - us[j]) + cost[i + 1][j + 1]) {
+      pairs.set(i++, j++);
+    } else if (i < n && cost[i][j] === US_SKIP_COST_MS + cost[i + 1][j]) i++;
+    else j++;
+  }
+  return pairs;
+}
 
 /**
  * Places at each checkpoint where someone counted (a checkpoint with no place taps has none).
@@ -107,23 +141,28 @@ export function racePlaces(
     const ours = [...(state.get(id)?.byAthlete.values() ?? [])]
       .filter((m) => !m.missed && m.timeMs !== null && !(gunTimeMs !== null && m.timeMs < gunTimeMs))
       .sort((a, b) => a.timeMs! - b.timeMs! || a.assignedAt - b.assignedAt);
-    // A places-only phone's Us taps are our runners, matched in order to the names tapped here. Names
-    // from before counting started (well before the first place tap: a phone switched to places
-    // partway) slot in by time. After that the two
-    // phones can be well apart (the counter works through a pack button by button), so a name and an
-    // Us tap up to US_WINDOW_MS apart match; a name with no Us tap that close (the counter missed one)
-    // slots in by its own time rather than taking the next runner's place. Names after the last Us
-    // tap (it stopped counting) get no place.
+    // A places-only phone's Us taps are our runners: each is paired with a name tapped here (the names
+    // phone gives who and when), in order, by the best fit in time (alignUs). Names from before counting
+    // started (well before the first place tap: a phone switched to places partway) slot in by time.
+    // A name with no Us tap near it (the counter missed that runner) slots in by its own time; an Us
+    // tap with no name near it stays nameless. Names after the counter stopped get no place.
     const usTicks = list.filter((t) => t.team === "us");
     const byTime: typeof ours = usTicks.length === 0 ? ours : [];
     const matched = new Map<string, string | null>();
     if (usTicks.length > 0) {
-      let k = 0;
-      while (k < ours.length && ours[k].timeMs! < list[0].timeMs - US_LEAD_MS) byTime.push(ours[k++]);
-      for (const t of usTicks) {
-        while (k < ours.length && ours[k].timeMs! < t.timeMs - US_WINDOW_MS) byTime.push(ours[k++]);
-        matched.set(t.tapId, k < ours.length && ours[k].timeMs! <= t.timeMs + US_WINDOW_MS ? ours[k++].athleteId : null);
-      }
+      const counting = ours.filter((m) => m.timeMs! >= list[0].timeMs - US_LEAD_MS);
+      byTime.push(...ours.filter((m) => m.timeMs! < list[0].timeMs - US_LEAD_MS));
+      const pairs = alignUs(
+        counting.map((m) => m.timeMs!),
+        usTicks.map((t) => t.timeMs),
+      );
+      const lastUs = usTicks.at(-1)!.timeMs;
+      counting.forEach((m, i) => {
+        const j = pairs.get(i);
+        if (j !== undefined) matched.set(usTicks[j].tapId, m.athleteId);
+        // Unpaired: placed by its own time, unless the counter had already stopped.
+        else if (m.timeMs! <= lastUs + US_WINDOW_MS) byTime.push(m);
+      });
     }
     const tapped: PlaceEntry[] = list.map((t) =>
       t.team === "us" ? { kind: "us", athleteId: matched.get(t.tapId) ?? null, tapId: t.tapId, timeMs: t.timeMs } : t.team === "other" ? { kind: "other", tapId: t.tapId, timeMs: t.timeMs, by: t.by } : { kind: "team", teamId: t.team, tapId: t.tapId, timeMs: t.timeMs, by: t.by },

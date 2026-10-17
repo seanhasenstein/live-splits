@@ -66,8 +66,25 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
   let taps = rawTaps;
   // (A race that never had places set up has no place taps: the record screen only offers them once on.)
   if (!showPlaces && race.places) {
-    const tickIds = new Set((await collection(db, "taps").find({ raceId, type: "tick" }, { projection: { clientTapId: 1 } }).toArray()).map((t) => t.clientTapId));
-    taps = rawTaps.filter((t) => t.type !== "tick" && !(t.targetTapId && tickIds.has(t.targetTapId)));
+    if (rawTaps.some((t) => t.targetTapId)) {
+      // Everything aimed at a place tap, however deep: an edit of it, an undo of that edit, an undo of a remove…
+      const chain = await collection(db, "taps")
+        .find({ raceId, type: { $in: ["tick", "edit", "void"] } }, { projection: { clientTapId: 1, targetTapId: 1, type: 1 } })
+        .toArray();
+      const hidden = new Set(chain.filter((t) => t.type === "tick").map((t) => t.clientTapId));
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const t of chain) {
+          if (t.targetTapId && hidden.has(t.targetTapId) && !hidden.has(t.clientTapId)) {
+            hidden.add(t.clientTapId);
+            grew = true;
+          }
+        }
+      }
+      taps = rawTaps.filter((t) => !hidden.has(t.clientTapId));
+    } else {
+      taps = rawTaps.filter((t) => t.type !== "tick");
+    }
   }
   const field: FieldEntry[] | undefined = !showPlaces || official === undefined ? undefined : live ? await getLiveField(meet, race) : await getOfficialField(race);
 
