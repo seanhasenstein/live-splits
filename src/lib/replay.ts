@@ -17,6 +17,8 @@ export type TapLike = {
   estimate: boolean;
   missed: boolean;
   status?: AthleteRaceStatus | null;
+  /** tick: who passed; an edit of a tick: the corrected team. */
+  team?: string | null;
   createdBy?: { name: string };
 };
 

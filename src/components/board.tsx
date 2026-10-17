@@ -2,16 +2,20 @@
 
 import Link from "next/link";
 import { Fragment, type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, History as HistoryIcon, Info, Pencil, Share } from "lucide-react";
+import { ChevronLeft, ChevronRight, History as HistoryIcon, Info, MoveHorizontal, Pencil, Share } from "lucide-react";
+import { PlacesCard } from "@/components/places-card";
+import { TeamCard, type TeamRow } from "@/components/team-card";
 import { CheckpointCounts, DeltaText, RaceStatusBar, RecordPill, RunningClock } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
 import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, LiveDot, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
+import { useLocalValue } from "@/lib/client/use-local-value";
 import { useTimeFormat } from "@/lib/client/time-format";
 import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type AthleteStatus, type CheckpointState, expectedAt, type Mark, replay, replayStatuses, type Slot, STATUS_LABEL, STATUS_LONG } from "@/lib/replay";
-import type { AthleteRaceStatus, Precision } from "@/lib/db/schema";
-import { METERS_PER_MILE, paceMsPerMile, projectElapsed } from "@/lib/pace";
+import type { AthleteRaceStatus, Precision, RacePlaces } from "@/lib/db/schema";
+import { type CheckpointPlaces, fieldScores, ordinal as placeText, type OurTeam, racePlaces, replayTicks } from "@/lib/race-places";
+import { paceMsPerMile, projectElapsed } from "@/lib/pace";
 import { RECORD_LABEL, recordBadge } from "@/lib/records";
 import type { LineupBests, PriorFinish } from "@/lib/results/bests";
 import { formatClock, formatDateWithYear, formatElapsed, formatLocalDate, parseTypedTime } from "@/lib/time";
@@ -33,6 +37,10 @@ type RaceInfo = {
   distanceLabel: string;
   /** The meet is marked as not counting for records (short course…): no badges. */
   recordsExcluded: boolean;
+  /** Place counting, when the race has it on and this viewer may see it. */
+  places: RacePlaces | null;
+  /** Our school, as places show it. */
+  ourTeam: OurTeam;
 };
 
 type Props = {
@@ -125,7 +133,7 @@ function RaceBoard({
   meetId,
   meetName,
   meetDate,
-  race,
+  race: raceIn,
   timeZone,
   athletes,
   genders,
@@ -149,7 +157,10 @@ function RaceBoard({
   canTap: boolean;
 }) {
   const clock = useClock();
-  const { taps, gunTimeMs, official, officialLive, finished, longRunning, staleMinutes, send, online, loaded, recording, seenAt } = useRaceTaps(race.id, race.gunTimeMs);
+  const { taps, gunTimeMs, official, field, places: livePlaces, officialLive, finished, longRunning, staleMinutes, send, online, loaded, recording, seenAt } = useRaceTaps(raceIn.id, raceIn.gunTimeMs);
+  // Places as of the last poll (on and visible to this viewer, as the page had it): turning places off
+  // mid-race clears them here within seconds, and turning them on shows them.
+  const race = useMemo(() => (livePlaces === undefined ? raceIn : { ...raceIn, places: livePlaces?.on ? livePlaces : null }), [raceIn, livePlaces]);
   const isFinished = race.finished || finished;
   const hasOfficial = Object.keys(official).length > 0;
   const state = useMemo(
@@ -157,6 +168,34 @@ function RaceBoard({
     [race, taps],
   );
   const statuses = useMemo(() => replayStatuses(taps), [taps]);
+  const placesByCp = useMemo(
+    () => (race.places ? racePlaces(race.checkpoints.map((c) => c.id), state, replayTicks(taps), gunTimeMs) : new Map<string, CheckpointPlaces>()),
+    [race, state, taps, gunTimeMs],
+  );
+  const officialPlaces = useMemo(() => {
+    // A division race's official places are the app's ranking within our division: not comparable with
+    // counted overall places, and the field may hold several divisions. No team scores from it either.
+    if (!race.places || field.length === 0 || race.placesDerived) return null;
+    const place = new Map(Object.entries(official).flatMap(([id, o]) => (o.place !== null && o.status === "finished" ? [[id, o.place] as const] : [])));
+    return { ...fieldScores(field), place };
+  }, [race.places, race.placesDerived, field, official]);
+  /** A runner's place at checkpoint i, and the change since the last checkpoint counted the same way (+ = passed people). */
+  const placeAt = (athleteId: string, i: number): { place: number; overall: boolean; gained: number | null } | null => {
+    const c = race.checkpoints[i];
+    const here = placesByCp.get(c.id);
+    const official = c.kind === "finish" && officialPlaces?.place.has(athleteId) ? officialPlaces.place.get(athleteId)! : null;
+    const place = official ?? here?.place.get(athleteId) ?? null;
+    if (place === null) return null;
+    // With no tracked teams everyone else is Other, so the places are overall.
+    const overall = official !== null || !!here?.countingAll || (race.places?.teams.length ?? 0) === 0;
+    let gained: number | null = null;
+    for (let j = i - 1; j >= 0 && gained === null; j--) {
+      const before = placesByCp.get(race.checkpoints[j].id);
+      const p = before?.place.get(athleteId);
+      if (p !== undefined && (before!.countingAll || (race.places?.teams.length ?? 0) === 0) === overall) gained = p - place;
+    }
+    return { place, overall, gained };
+  };
   const [fix, setFix] = useState<{ athleteId: string; cpIndex: number } | null>(null);
   const [statusFor, setStatusFor] = useState<string | null>(null);
   // The open runner's sheet is in the URL (?athlete=) so it can be shared and reopened.
@@ -206,7 +245,6 @@ function RaceBoard({
     return at !== undefined && localNow > 0 && localNow - at < FRESH_MS;
   };
   const [editing, setEditing] = useState(false);
-  const [view, setView] = useState<"splits" | "both">("both");
   // A combined race (boys and girls together) gets a filter; the counts follow it.
   const combined = race.athleteIds.some((id) => genders[id] === "F") && race.athleteIds.some((id) => genders[id] === "M");
   const [who, setWho] = useState<"all" | "F" | "M">("all");
@@ -289,12 +327,27 @@ function RaceBoard({
     };
   });
 
+  // Which checkpoint the table shows: All (the overview), or one checkpoint with everything at it.
+  // Remembered on this phone once picked; until then it follows the race (the latest checkpoint
+  // with times while it runs) and shows All once it's over.
+  const [focusPref, setFocusPref] = useLocalValue(`ls_board_focus_${race.id}`);
+  // The latest checkpoint about half the field has reached: jumping at the leader would empty the table.
+  const latestWithTimes = counts.reduce((last, c, i) => (c.n > 0 && c.n * 2 >= shownIds.length ? i : last), -1);
+  const pickedIndex = focusPref && focusPref !== "all" ? race.checkpoints.findIndex((c) => c.id === focusPref) : -1;
+  const focusIndex: number | null =
+    focusPref === "all"
+      ? null
+      : pickedIndex >= 0
+        ? pickedIndex
+        : !isFinished && !editing && race.checkpoints.length > 1 && gunTimeMs !== null && latestWithTimes >= 0
+          ? latestWithTimes
+          : null;
+
   // Elapsed-from-gun time at a checkpoint (official beats app), for projections and the team line.
   const elapsedAt = (row: Row, i: number): number | null => {
     const c = row.cells[i];
     return c ? (c.official ?? c.elapsedMs) : null;
   };
-  const finishIndex = race.checkpoints.findIndex((c) => c.kind === "finish");
   /**
    * While the race runs: when they'd reach checkpoint `i` at their last segment's pace.
    * Only for checkpoints after their last real time, and never for anyone out of the race.
@@ -315,20 +368,202 @@ function RaceBoard({
     return n !== null && gunTimeMs !== null && n - gunTimeMs - projected > OVERDUE_MS;
   };
   // Finish times of runners still in the race, for the team line (a combined race needs the Girls/Boys filter first).
-  const finishTimes =
-    finishIndex < 0 || (combined && who === "all")
-      ? []
-      : rows
-          .filter((r) => !(r.status || (r.officialStatus && r.officialStatus !== "finished")))
-          .map((r) => elapsedAt(r, finishIndex))
-          .filter((t): t is number => t !== null)
-          .sort((a, b) => a - b);
-  const teamLine =
-    finishTimes.length >= 5
-      ? `Top 5 avg ${ft(Math.round(finishTimes.slice(0, 5).reduce((a, b) => a + b, 0) / 5))} · 1–5 spread ${ft(finishTimes[4] - finishTimes[0])} · ${finishTimes.length} finished`
-      : finishTimes.length > 0
-        ? `${finishTimes.length} finished`
-        : null;
+  // Our team checkpoint by checkpoint (a combined race needs the Girls/Boys filter first): the scorers'
+  // places, the team's points and place when places were counted, and the 1–5 spread and top-five average.
+  const teamRows: TeamRow[] = race.checkpoints.map((c, i) => {
+    const inRace = rows.filter((r) => !(r.status || (r.officialStatus && r.officialStatus !== "finished")));
+    const times = inRace
+      .map((r) => elapsedAt(r, i))
+      .filter((t): t is number => t !== null)
+      .sort((a, b) => a - b);
+    const top5 = times.length >= 5 ? times.slice(0, 5) : null;
+    let places: number[] = [];
+    let overall = true;
+    let points: number | null = null;
+    let teamPlace: number | null = null;
+    let approx = false;
+    const rank = (scores: { team: string; points: number | null }[]) => {
+      const scored = scores.filter((x) => x.points !== null);
+      const k = scored.findIndex((x) => x.team === "us");
+      return k >= 0 ? k + 1 : null;
+    };
+    if (race.places) {
+      if (c.kind === "finish" && officialPlaces && !combined && inRace.some((r) => officialPlaces.place.has(r.athleteId))) {
+        // Official results: real places and real team scores.
+        // The scoring places (incomplete teams and 8th+ runners taken out), so the five add up to the points.
+        const us = officialPlaces.scores.find((x) => x.team === "us");
+        places = us?.places.length ? [...us.places] : inRace.flatMap((r) => (officialPlaces.place.has(r.athleteId) ? [officialPlaces.place.get(r.athleteId)!] : []));
+        points = us?.points ?? null;
+        teamPlace = rank(officialPlaces.scores);
+      } else {
+        const cp = placesByCp.get(c.id);
+        if (cp) {
+          places = inRace.flatMap((r) => (cp.place.has(r.athleteId) ? [cp.place.get(r.athleteId)!] : []));
+          overall = cp.countingAll || race.places.teams.length === 0;
+          // Points need someone to score against (the whole-meet estimate, or the tracked teams), and a
+          // single-gender field: a boys-and-girls race's counted taps mix both, so no team points there.
+          const table = combined ? null : (cp.estimate ?? (race.places.teams.length > 0 ? cp.scores : null));
+          if (table) {
+            const us = table.find((x) => x.team === "us");
+            points = us?.points ?? null;
+            teamPlace = rank(table.filter((x) => x.team !== "*"));
+            approx = !!cp.estimate;
+            // The scoring places that make up those points.
+            if (us?.places.length) places = [...us.places];
+          }
+        }
+      }
+    }
+    return {
+      label: c.label,
+      timed: times.length,
+      avgMs: top5 ? Math.round(top5.reduce((a, b) => a + b, 0) / 5) : null,
+      spreadMs: top5 ? top5[4] - top5[0] : null,
+      places: places.sort((a, b) => a - b).slice(0, 7),
+      overall,
+      points,
+      teamPlace,
+      approx,
+    };
+  });
+
+  /**
+   * One checkpoint with everything at it, a column each: time from the gun, split, the pace change
+   * from the previous segment, and the place with its change. In order at that checkpoint; anyone
+   * not there yet follows with a projection, anyone out of the race last.
+   */
+  const checkpointTable = (i: number) => {
+    const c = race.checkpoints[i];
+    // From the gun; with no gun recorded, the clock times (splits between them still work).
+    const timeOf = (cell: Cell | undefined) => (cell ? (cell.official ?? cell.elapsedMs ?? (gunTimeMs === null ? cell.absoluteMs : null)) : null);
+    const segMeters = c.meters - (i > 0 ? race.checkpoints[i - 1].meters : 0);
+    const prevSegMeters = i > 0 ? race.checkpoints[i - 1].meters - (i > 1 ? race.checkpoints[i - 2].meters : 0) : 0;
+    const list = rows.map((r) => {
+      const cell = r.cells[i];
+      const here = timeOf(cell);
+      const out = here === null && !cell.missed && ((!!r.status && !expectedAt(r.status, i, race.checkpoints)) || (!!r.officialStatus && r.officialStatus !== "finished"));
+      const projected = here === null && !cell.missed && !out ? projectAt(r, i) : null;
+      return { r, cell, here, out, projected };
+    });
+    list.sort((a, b) => Number(a.out) - Number(b.out) || Number(a.here === null) - Number(b.here === null) || (a.here ?? a.projected ?? Infinity) - (b.here ?? b.projected ?? Infinity));
+    // Tight padding and no wrapping in the number columns, so the five columns fit a narrow phone.
+    const th = "px-1.5 py-2 text-right font-semibold whitespace-nowrap";
+    return (
+      <Card className="overflow-hidden">
+        {/* A very narrow phone scrolls the table sideways inside its card instead of cutting off the last column. */}
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-line text-left text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
+              <th className="px-3 py-2 font-semibold sm:px-4">Athlete</th>
+              <th className={th}>Time</th>
+              {i > 0 && <th className={th}>Split</th>}
+              <th className={`${th} ${race.places ? "" : "pr-3 sm:pr-4"}`} title={i > 0 ? "Pace change from the previous segment (+ slower, − faster)" : "Pace per mile"}>
+                {i > 0 ? "Pace ±" : "Pace"}
+              </th>
+              {race.places && <th className="py-2 pr-3 pl-2 text-left font-semibold sm:pr-4">Place</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {!loaded && (
+              <tr>
+                <td colSpan={5} className="px-4 py-4 text-ink-3">
+                  Loading…
+                </td>
+              </tr>
+            )}
+            {list.map(({ r, cell, here, out, projected }) => {
+              // From the gun, the first split starts at 0; with only clock times there's no start to count from.
+              const start = gunTimeMs !== null || hasOfficial ? 0 : null;
+              const prev = i > 0 ? timeOf(r.cells[i - 1]) : here !== null ? start : null;
+              const split = here !== null && prev !== null ? here - prev : null;
+              const before = i > 1 ? timeOf(r.cells[i - 2]) : i === 1 ? start : null;
+              const prevSplit = i > 0 && prev !== null && before !== null ? prev - before : null;
+              const paceChange = split !== null && prevSplit !== null && segMeters > 0 && prevSegMeters > 0 ? paceMsPerMile(split, segMeters) - paceMsPerMile(prevSplit, prevSegMeters) : null;
+              const m = cell.mark;
+              const flag = cell.official !== null ? "" : m && !cell.missed && here !== null ? (m.estimate ? "~" : m.edited ? "*" : "") : "";
+              const place = race.places && (cell.official !== null || cell.absoluteMs !== null) ? placeAt(r.athleteId, i) : null;
+              const timeNode =
+                projected !== null ? (
+                  <span className={staff && overdue(projected) ? "text-gold-text/80" : "text-ink-3"}>
+                    <Time>~{formatElapsed(projected).replace(/\.\d$/, "")}</Time>
+                    {staff && overdue(projected) && <span className="block text-[11px]">overdue</span>}
+                  </span>
+                ) : (
+                  <Time className={cell.missed || cell.beforeGun ? "text-ink-3 italic" : here !== null ? "font-semibold text-ink" : "text-ink-3"}>
+                    {cell.missed ? "missed" : cell.beforeGun ? "before gun" : here === null ? "—" : cell.official === null && cell.elapsedMs === null && cell.absoluteMs !== null ? fmt(cell.absoluteMs) : ft(here, cell.precision)}
+                    {flag}
+                  </Time>
+                );
+              return (
+                <tr key={r.athleteId} onClick={editing ? undefined : () => setAthleteSheet(r.athleteId)} className={`${here === null ? "text-ink-3" : ""} ${editing ? "" : "cursor-pointer hover:bg-surface-2 active:bg-surface-2"}`}>
+                  <td className={`px-3 py-2.5 align-top font-medium sm:px-4 ${here === null ? "" : "text-ink"}`}>
+                    {editing ? (
+                      <button type="button" onClick={() => setStatusFor(r.athleteId)} className="-mx-1.5 rounded px-1.5 py-0.5 text-left hover:bg-gold-soft" title="Set DNS / DNR / DNF">
+                        {athletes[r.athleteId]}
+                      </button>
+                    ) : (
+                      <span>
+                        <NameWithPill name={athletes[r.athleteId] ?? "?"} pill={c.kind === "finish" && r.record ? <RecordPill badge={r.record} className="ml-1.5 align-[2px]" /> : null} />
+                      </span>
+                    )}
+                    {out && (
+                      <span className="mt-0.5 block">
+                        <Badge tone="neutral">{r.status ? STATUS_LABEL[r.status.status] : (r.officialStatus ?? "").toUpperCase()}</Badge>
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-1.5 py-2.5 text-right align-top whitespace-nowrap">
+                    {editing && cell.official === null ? (
+                      <button type="button" onClick={() => setFix({ athleteId: r.athleteId, cpIndex: i })} className="rounded-md border border-dashed border-line-strong px-1.5 py-0.5 hover:bg-surface-2 active:bg-brand-soft">
+                        {timeNode}
+                      </button>
+                    ) : (
+                      <span className={`rounded-md px-1 py-0.5 transition-colors duration-1000 ${isFresh(m?.tapId) ? "bg-brand-soft" : ""}`}>{timeNode}</span>
+                    )}
+                  </td>
+                  {i > 0 && <td className="px-1.5 py-2.5 text-right align-top whitespace-nowrap">{split !== null ? <Time>{ft(split)}</Time> : ""}</td>}
+                  <td className={`px-1.5 py-2.5 text-right align-top whitespace-nowrap ${race.places ? "" : "pr-3 sm:pr-4"}`}>
+                    {i > 0 ? (
+                      paceChange !== null && (
+                        <Time>
+                          <DeltaText ms={paceChange} />
+                        </Time>
+                      )
+                    ) : (
+                      split !== null && segMeters > 0 && <Time className="text-ink-2">{formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}</Time>
+                    )}
+                  </td>
+                  {race.places && (
+                    // Left-aligned, the place a fixed width so ▲ / ▼ / = line up beside it.
+                    <td className="tnum py-2.5 pr-3 pl-2 text-left align-top whitespace-nowrap sm:pr-4">
+                      {place && (
+                        <>
+                          <span className="inline-block w-9">
+                            {placeText(place.place)}
+                            {!place.overall && "*"}
+                          </span>
+                          {place.gained !== null &&
+                            (place.gained === 0 ? (
+                              <span className="text-ink-3" title="Same place as the last checkpoint">
+                                <MoveHorizontal className="inline size-3.5 align-[-2px]" aria-label="same place" />
+                              </span>
+                            ) : (
+                              <span className={place.gained > 0 ? "text-brand-text" : "text-danger"}>{place.gained > 0 ? `▲${place.gained}` : `▼${-place.gained}`}</span>
+                            ))}
+                        </>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        </div>
+      </Card>
+    );
+  };
 
   return (
     <>
@@ -379,36 +614,37 @@ function RaceBoard({
               className="w-full sm:w-64"
             />
           )}
-          <Segmented
-            value={view}
-            onChange={setView}
-            options={[
-              { value: "both", label: "Cumulative + splits" },
-              { value: "splits", label: "Splits only" },
-            ]}
-            className="w-full sm:w-80"
-          />
         </div>
       </div>
 
-      {teamLine && <p className="mb-3 text-[13px] text-ink-2">{teamLine}</p>}
 
-      {recording.length > 0 && !isFinished && (
-        <p className="mb-3 text-[13px] text-ink-2">
-          <span className="font-medium text-ink">Recording now</span>
-          {race.checkpoints
-            .map((c) => ({ c, who: [...new Set(recording.filter((r) => r.checkpointId === c.id).map((r) => r.name))] }))
-            .filter(({ who }) => who.length > 0)
-            .map(({ c, who }) => (
-              <span key={c.id}>
-                {" · "}
-                {c.label}: {who.join(", ")}
-              </span>
-            ))}
-        </p>
+      {/* Coaches and managers only (the server doesn't send it to anyone else): who is at each checkpoint, doing what. */}
+      {staff && recording.length > 0 && !isFinished && (
+        <div className="mb-3 rounded-lg border border-line bg-surface px-3 py-2 text-[13px]">
+          <span className="font-medium text-ink">Who&rsquo;s where</span>
+          <ul className="mt-1 space-y-0.5">
+            {race.checkpoints.map((c) => {
+              const here = recording.filter((r) => r.checkpointId === c.id);
+              const byName = new Map(here.map((r) => [r.name, r.job]));
+              const placing = here.filter((r) => r.job === "places" || r.job === "both");
+              return (
+                <li key={c.id} className="flex gap-2">
+                  <span className="w-16 shrink-0 text-ink-2">{c.label}</span>
+                  <span className={here.length === 0 ? "text-ink-3" : "text-ink"}>
+                    {here.length === 0
+                      ? "nobody"
+                      : [...byName].map(([name, job]) => (race.places ? `${name} (${job === "both" ? "times + places" : job})` : name)).join(", ")}
+                    {race.places && placing.length > 1 && <span className="ml-1 text-danger">· two counting places</span>}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
 
-      {longRunning && (
+      {/* Only for the people who can act on it (marking a race finished is staff-only). */}
+      {longRunning && staff && (
         <div className="mb-3">
           <Alert tone="gold">This race has been running for over 90 minutes. Mark it finished (meet page → Options → Adjust) to stop live updates.</Alert>
         </div>
@@ -420,24 +656,30 @@ function RaceBoard({
         </div>
       )}
 
+      {race.checkpoints.length > 1 && (
+        <Segmented
+          size="sm"
+          scroll
+          className="mb-3"
+          value={focusIndex === null ? "all" : race.checkpoints[focusIndex].id}
+          onChange={(v) => setFocusPref(v)}
+          options={[{ value: "all", label: "All" }, ...race.checkpoints.map((c) => ({ value: c.id, label: c.label }))]}
+        />
+      )}
+      {focusIndex !== null ? (
+        checkpointTable(focusIndex)
+      ) : (
       <Card className="overflow-hidden">
+        {/* A very narrow phone scrolls the table sideways inside its card instead of cutting off the last column. */}
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line text-left text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
-              <th className="px-3 py-2 font-semibold sm:px-4">{hasOfficial ? (race.placesDerived ? "Division place · Athlete" : "Place · Athlete") : "Athlete"}</th>
-              {race.checkpoints.map((c, i) => (
-                <th key={c.id} className="px-2 py-2 text-right font-semibold last:px-3 sm:last:px-4">
+              <th className="px-3 py-2 font-semibold sm:px-4">{hasOfficial ? (race.placesDerived ? "Division place · Athlete" : "Finish place · Athlete") : "Athlete"}</th>
+              {race.checkpoints.map((c) => (
+                // Left-aligned like the cells. No sub-label: the cells read themselves (time, colored split, place).
+                <th key={c.id} className="px-2 py-2 text-left font-semibold last:pr-3 sm:last:pr-4">
                   {c.label}
-                  {view === "both" && <span className="hidden text-[10px] font-normal tracking-normal normal-case text-ink-3 min-[420px]:block">cumulative · split</span>}
-                  {view === "splits" && (
-                    <span className="hidden text-[10px] font-normal tracking-normal normal-case text-ink-3 min-[420px]:block">
-                      {(() => {
-                        const prev = i > 0 ? race.checkpoints[i - 1].meters : 0;
-                        const mi = (c.meters - prev) / METERS_PER_MILE;
-                        return `${Number.isInteger(+mi.toFixed(2)) ? mi.toFixed(0) : mi.toFixed(2)} mi`;
-                      })()}
-                    </span>
-                  )}
                 </th>
               ))}
             </tr>
@@ -456,10 +698,10 @@ function RaceBoard({
                 onClick={editing ? undefined : () => setAthleteSheet(row.athleteId)}
                 className={`${row.reached < 0 ? "text-ink-3" : ""} ${editing ? "" : "cursor-pointer hover:bg-surface-2 active:bg-surface-2"}`}
               >
-                <td className={`px-3 py-2 align-top font-medium sm:px-4 ${row.reached < 0 ? "" : "text-ink"}`}>
+                <td className={`px-3 py-2.5 align-top font-medium sm:px-4 ${row.reached < 0 ? "" : "text-ink"}`}>
                   {/* Place in its own column so a wrapped name hangs under its first line, not under the number. */}
                   <span className="flex items-start gap-2">
-                    {hasOfficial && <span className="tnum w-6 shrink-0 py-1 text-right text-ink-3">{row.officialPlace ?? ""}</span>}
+                    {hasOfficial && <span className="tnum w-8 shrink-0 py-1 text-right text-ink-3">{row.officialPlace ?? ""}</span>}
                     <span className="min-w-0">
                       {editing ? (
                         <button type="button" onClick={() => setStatusFor(row.athleteId)} className="-mx-1.5 rounded px-1.5 py-1 text-left hover:bg-gold-soft" title="Set DNS / DNR / DNF">
@@ -467,8 +709,7 @@ function RaceBoard({
                         </button>
                       ) : (
                         <button type="button" onClick={() => setAthleteSheet(row.athleteId)} className="-mx-1.5 rounded px-1.5 py-1 text-left">
-                          {athletes[row.athleteId]}
-                          {row.record && <RecordPill badge={row.record} className="ml-2 align-[2px]" />}
+                          <NameWithPill name={athletes[row.athleteId] ?? "?"} pill={row.record ? <RecordPill badge={row.record} className="ml-1.5 align-[2px]" /> : null} />
                         </button>
                       )}
                       {row.status ? (
@@ -489,7 +730,7 @@ function RaceBoard({
                 {row.cells.map((cell, i) => {
                   if (row.status && !expectedAt(row.status, i, race.checkpoints) && cell.official === null && cell.absoluteMs === null && !cell.missed) {
                     return (
-                      <td key={race.checkpoints[i].id} className="px-1 py-1 text-right align-top text-ink-3 last:pr-2 sm:last:pr-3">
+                      <td key={race.checkpoints[i].id} className="px-1 py-1 text-left align-top text-ink-3 last:pr-2 sm:last:pr-3">
                         <span className="block px-1.5 py-1.5">—</span>
                       </td>
                     );
@@ -500,67 +741,74 @@ function RaceBoard({
                   const here = t(cell);
                   const prev = i > 0 ? t(row.cells[i - 1]) : here !== null ? 0 : null;
                   const split = here !== null && prev !== null ? here - prev : null;
-                  const segMeters = race.checkpoints[i].meters - (i > 0 ? race.checkpoints[i - 1].meters : 0);
-                  const prevHere = i > 0 ? t(row.cells[i - 1]) : null;
-                  const prevPrev = i > 1 ? t(row.cells[i - 2]) : i === 1 ? 0 : null;
-                  const prevSplit = prevHere !== null && prevPrev !== null ? prevHere - prevPrev : null;
-                  const prevPace = prevSplit !== null ? paceMsPerMile(prevSplit, race.checkpoints[i - 1].meters - (i > 1 ? race.checkpoints[i - 2].meters : 0)) : null;
-                  const last = i === row.cells.length - 1;
                   const cumulative = cell.official !== null ? ft(cell.official, cell.precision) : cell.absoluteMs !== null ? fmt(cell.absoluteMs) : "—";
-                  const shown = cell.missed ? "missed" : cell.beforeGun ? "before gun" : view === "splits" && i > 0 ? (split === null ? "—" : ft(split)) : cumulative;
+                  const shown = cell.missed ? "missed" : cell.beforeGun ? "before gun" : cumulative;
                   const flag = cell.official !== null ? "" : m && !cell.missed && shown !== "—" ? (m.estimate ? "~" : m.edited ? "*" : "") : "";
                   const projected = here === null && !cell.missed ? projectAt(row, i) : null;
                   const fresh = isFresh(m?.tapId);
+                  // Three short lines, one job each: the time from the gun (bold where they are now); the split
+                  // and its pace change from the previous segment; the place and its change (when counting
+                  // places). A projection is just a light "~" time ("overdue" for staff).
+                  const place = race.places && (cell.official !== null || cell.absoluteMs !== null) ? placeAt(row.athleteId, i) : null;
+                  const segMeters = race.checkpoints[i].meters - (i > 0 ? race.checkpoints[i - 1].meters : 0);
+                  const prevSegMeters = i > 0 ? race.checkpoints[i - 1].meters - (i > 1 ? race.checkpoints[i - 2].meters : 0) : 0;
+                  const before = i > 1 ? t(row.cells[i - 2]) : i === 1 ? 0 : null;
+                  const prevSplit = i > 0 && prev !== null && before !== null ? prev - before : null;
+                  const paceChange = split !== null && prevSplit !== null && segMeters > 0 && prevSegMeters > 0 ? paceMsPerMile(split, segMeters) - paceMsPerMile(prevSplit, prevSegMeters) : null;
                   const cellNode = (
                     <>
                       {projected !== null ? (
-                        <span className={`block ${staff && overdue(projected) ? "text-gold-text/75" : "text-ink-3"}`}>
+                        <span className={`block ${staff && overdue(projected) ? "text-gold-text/80" : "text-ink-3"}`}>
                           <Time className="block">~{formatElapsed(projected).replace(/\.\d$/, "")}</Time>
-                          <span className="block text-[10px] tracking-wide uppercase">{staff && overdue(projected) ? "overdue" : "projected"}</span>
+                          {staff && overdue(projected) && <span className="block text-[11px]">overdue</span>}
                         </span>
                       ) : (
-                        <Time className={`block ${cell.missed || cell.beforeGun ? "italic" : last && here !== null && view !== "splits" ? "font-semibold" : ""}`}>
+                        <Time className={`block ${cell.missed || cell.beforeGun ? "italic" : i === row.reached && here !== null ? "font-semibold text-ink" : ""}`}>
                           {shown}
                           {flag}
                         </Time>
                       )}
-                      {view === "both" && i > 0 && split !== null && (
-                        <Time className="block text-[11px] text-ink-3">
-                          {ft(split)}
-                          {prevPace !== null && segMeters > 0 && (
-                            <>
-                              {" "}
-                              <DeltaText ms={paceMsPerMile(split, segMeters) - prevPace} suffix="/mi" />
-                            </>
-                          )}
-                        </Time>
+                      {/* The split, colored by its pace against the segment before: green faster, red slower, gray
+                          within a second. The exact change is in the checkpoint view and the runner's sheet. */}
+                      {i > 0 && split !== null && (
+                        <span
+                          // With places on, ▲ / ▼ are the color in the cell; the split stays gray (its pace change
+                          // is in the checkpoint view's Pace ± column and the runner's sheet).
+                          className={`block text-[13px] leading-5 ${place || paceChange === null || Math.abs(paceChange) < 1000 ? "text-ink-2" : paceChange < 0 ? "text-brand-text" : "text-danger"}`}
+                          title={paceChange !== null ? `${paceChange <= 0 ? "−" : "+"}${formatElapsed(Math.abs(paceChange)).replace(/\.\d$/, "")} per mile vs the previous segment` : undefined}
+                        >
+                          <Time>{ft(split)}</Time>
+                        </span>
                       )}
-                      {view === "splits" && split !== null && (
-                        <Time className="block text-[11px] text-ink-3">
-                          {formatElapsed(paceMsPerMile(split, segMeters)).replace(/\.\d$/, "")}/mi
-                          {prevPace !== null && (
-                            <>
-                              {" · "}
-                              <DeltaText ms={paceMsPerMile(split, segMeters) - prevPace} />
-                            </>
-                          )}
-                        </Time>
-                      )}
-                      {view === "splits" && last && i > 0 && here !== null && !cell.missed && (
-                        <Time className="block text-[11px] font-semibold text-ink">
-                          {cumulative}
-                          {flag}
-                        </Time>
+                      {/* The first checkpoint has no split (it is the time): an empty line keeps its place level with the others. */}
+                      {i === 0 && place && <span aria-hidden className="block text-[13px] leading-5">&nbsp;</span>}
+                      {/* The place in a fixed-width slot, so down a column the ▲ / ▼ / ↔ beside it line up. */}
+                      {place && (
+                        <span className="tnum flex text-[13px] leading-5 font-medium text-ink-2">
+                          <span className="min-w-9 shrink-0 pr-1">
+                            {placeText(place.place)}
+                            {!place.overall && "*"}
+                          </span>
+                          <span className="shrink-0">
+                            {place.gained === null ? null : place.gained === 0 ? (
+                              <span className="text-ink-3" title="Same place as the last checkpoint">
+                                <MoveHorizontal className="inline size-3.5 align-[-2px]" aria-label="same place" />
+                              </span>
+                            ) : (
+                              <span className={place.gained > 0 ? "text-brand-text" : "text-danger"}>{place.gained > 0 ? `▲${place.gained}` : `▼${-place.gained}`}</span>
+                            )}
+                          </span>
+                        </span>
                       )}
                     </>
                   );
                   return (
-                    <td key={race.checkpoints[i].id} className="px-1 py-1 text-right align-top last:pr-2 sm:last:pr-3">
+                    <td key={race.checkpoints[i].id} className="px-1 py-1.5 text-left align-top last:pr-2 sm:last:pr-3">
                       {editing && cell.official === null ? (
                         <button
                           type="button"
                           onClick={() => setFix({ athleteId: row.athleteId, cpIndex: i })}
-                          className="w-full rounded-md border border-dashed border-line-strong px-1.5 py-1 text-right hover:bg-surface-2 active:bg-brand-soft"
+                          className="w-full rounded-md border border-dashed border-line-strong px-1.5 py-1 text-left hover:bg-surface-2 active:bg-brand-soft"
                         >
                           {cellNode}
                         </button>
@@ -576,9 +824,37 @@ function RaceBoard({
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
+      )}
 
-      {pendingTotal > 0 && (
+      {/* Below the splits (the table is what most people come for): our team, then everyone's scores. */}
+      <div className="mt-3">
+        <TeamCard
+          name={race.ourTeam.name}
+          rows={teamRows}
+          ft={(ms) => ft(ms)}
+          note={combined && who === "all" ? "Pick Girls or Boys above to see the team." : null}
+        />
+      </div>
+
+      {/* A boys-and-girls race's counted places mix both: no scores card for it. */}
+      {race.places && !combined && (
+        <div className="mt-3">
+          <PlacesCard
+            config={race.places}
+            checkpoints={race.checkpoints}
+            places={placesByCp}
+            ourTeam={race.ourTeam}
+            // A boys-and-girls race's field mixes both: no team scores from it.
+            official={officialPlaces && !combined ? officialPlaces : null}
+            focus={focusIndex === null ? null : race.checkpoints[focusIndex].id}
+          />
+        </div>
+      )}
+
+      {/* Times captured without a name yet: a job for coaches and managers, noise for the public. */}
+      {pendingTotal > 0 && staff && (
         <div className="mt-3">
           <Alert tone="gold" title={`${pendingTotal} unassigned capture${pendingTotal === 1 ? "" : "s"}`}>
             {race.checkpoints.map((c) => {
@@ -595,11 +871,18 @@ function RaceBoard({
       )}
 
       <p className="mt-3 text-xs text-ink-3">
-        {!editing && "Tap a runner for their splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a ~ time marked projected is a guess from the runner's last split${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : race.placesDerived ? "Official times replace app taps where imported; the timing company scored the divisions as one field, so places here are ranked by the app within our division. " : "Official times replace app taps where imported. ")}{" "}
-        {view === "splits"
-          ? "Splits are the time since the previous checkpoint; beneath each, the pace per mile and the change from the previous segment (+ slower, − faster). The finish column also shows the finish time."
-          : "Cumulative time from the gun, with the split beneath and the pace change from the previous segment (+ slower, − faster)."}{" "}
+        {!editing && "Tap a runner for their splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a light ~ time is a projection from the runner's last split${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : race.placesDerived ? "Official times replace app taps where imported; the timing company scored the divisions as one field, so places here are ranked by the app within our division. " : "Official times replace app taps where imported. ")}{" "}
+        {focusIndex === null
+          ? race.places
+            ? "Time from the gun, the split beneath it, then the place. Pick a checkpoint above the table for each split's pace change."
+            : "Time from the gun; beneath it the split, green when that segment was faster than the one before, red when slower (the exact change is in the checkpoint view)."
+          : "Time from the gun, the split for this segment, and Pace ±: the change in pace per mile from the previous segment (+ slower, − faster)."}{" "}
         Updates every few seconds.
+        {race.places && placesByCp.size > 0 && (
+          <span className="mt-1 block">
+            Places: ▲ places gained since the last checkpoint · ▼ places lost · ↔ same place · * among our runners and the tracked teams only, not everyone.
+          </span>
+        )}
       </p>
 
       {toast && (
@@ -627,6 +910,7 @@ function RaceBoard({
             const r = allRows.find((x) => x.athleteId === openAthlete);
             return r ? projectAt(r, i) : null;
           }}
+          placeAt={(i) => (race.places ? placeAt(openAthlete, i) : null)}
           overdue={staff ? overdue : () => false}
           teamRank={(() => {
             // Position within the runner's own group (same gender and level), in race order: `rows` is
@@ -699,6 +983,7 @@ function AthleteSheet({
   neighbors,
   onPick,
   projectAt,
+  placeAt,
   overdue,
   teamRank,
   raceClockMs,
@@ -718,6 +1003,8 @@ function AthleteSheet({
   onPick: (id: string) => void;
   /** Projected elapsed time at checkpoint i while the race runs, else null. */
   projectAt: (i: number) => number | null;
+  /** Their place at checkpoint i when places were counted there (null otherwise). */
+  placeAt: (i: number) => { place: number; overall: boolean; gained: number | null } | null;
   overdue: (projected: number) => boolean;
   /** Position within the runner's gender + level group, e.g. { rank: 3, of: 7, team: "girls varsity team" }. */
   teamRank: { rank: number; of: number; team: string } | null;
@@ -944,6 +1231,28 @@ function AthleteSheet({
                 {c.label}
                 {officialCount > 0 && officialCount < timedCount && cell?.official !== null && cell?.official !== undefined && <span className="ml-1.5 text-[10px] font-semibold tracking-wide text-brand-text uppercase">official</span>}
                 {cell?.mark?.estimate && cell.official === null && <span className="ml-1.5 text-xs text-ink-3">estimate</span>}
+                {(() => {
+                  const p = placeAt(i);
+                  if (!p) return null;
+                  return (
+                    <span className="tnum block text-xs font-normal text-ink-2">
+                      {placeText(p.place)}
+                      {p.overall ? " place" : " among tracked teams"}
+                      {p.gained !== null &&
+                        // ▲ / ▼ as in the table, spelled out on hover; the same place gets a quiet ↔.
+                        (p.gained === 0 ? (
+                          <span className="text-ink-3" title="Same place as the last checkpoint">
+                            {" "}
+                            <MoveHorizontal className="inline size-3.5 align-[-2px]" aria-label="same place" />
+                          </span>
+                        ) : (
+                          <span className={p.gained > 0 ? "text-brand-text" : "text-danger"} title={`${p.gained > 0 ? "Up" : "Down"} ${Math.abs(p.gained)} place${Math.abs(p.gained) === 1 ? "" : "s"} since the last checkpoint`}>
+                            {p.gained > 0 ? ` ▲${p.gained}` : ` ▼${-p.gained}`}
+                          </span>
+                        ))}
+                    </span>
+                  );
+                })()}
               </span>
               {(() => {
                 const p = here === null && !cell?.missed ? projectAt(i) : null;
@@ -1564,5 +1873,24 @@ function Notes({ lines }: { lines: string[] }) {
         ))}
       </ul>
     </div>
+  );
+}
+
+/**
+ * A name with a PR / SB pill that never ends up on a line of its own: the pill is glued to the last
+ * word, so a long name in a narrow column wraps as "Elanore / Faucher [PR]".
+ */
+function NameWithPill({ name, pill }: { name: string; pill: ReactNode }) {
+  if (!pill) return <>{name}</>;
+  const words = name.split(" ");
+  const last = words.pop() ?? "";
+  return (
+    <>
+      {words.length > 0 && `${words.join(" ")} `}
+      <span className="whitespace-nowrap">
+        {last}
+        {pill}
+      </span>
+    </>
   );
 }

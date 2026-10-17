@@ -9,7 +9,7 @@ export const TapType = z.enum([
   "edit", // correct an earlier tap (targetTapId): move athlete, change time, mark missed
   "void", // cancel an earlier tap (targetTapId): undo, delete
   "status", // athlete didn't start / didn't run / dropped out (status; checkpointId = last one passed for dnf)
-  "tick", // future place-counter mode
+  "tick", // a runner passing a checkpoint, counted for places (team: "us", "other" or a tracked team's id)
 ]);
 export type TapType = z.infer<typeof TapType>;
 
@@ -56,6 +56,11 @@ export const Tap = z.object({
   missed: z.boolean(),
   /** status only. Older taps lack the field. */
   status: AthleteRaceStatus.nullable().default(null),
+  /**
+   * tick: who passed ("us" = one of ours, "other" = anyone untracked, else a tracked team's id).
+   * edit of a tick: the corrected team. Older taps lack the field.
+   */
+  team: z.string().min(1).max(40).nullable().default(null),
   note: z.string().nullable(),
 
   /** When the server stored it (taps can arrive late from the local queue). */

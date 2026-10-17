@@ -1,0 +1,147 @@
+"use client";
+
+import { useState } from "react";
+import { Card, Segmented } from "@/components/ui";
+import type { RacePlaces } from "@/lib/db/schema";
+import { type CheckpointPlaces, type OurTeam, placeColor, type TeamScore, trackedTeamFor } from "@/lib/race-places";
+
+type View = { id: string; label: string };
+
+/**
+ * Places on Live results: for a checkpoint where someone counted, the head-to-head score
+ * with the tracked teams, a guess at the whole meet when everyone was counted, and where our
+ * runners stand against the award lines. At the finish, real team scores from the timing
+ * company's results once they post.
+ */
+export function PlacesCard({
+  config,
+  checkpoints,
+  places,
+  official,
+  ourTeam,
+  inSheet = false,
+  focus = null,
+}: {
+  config: RacePlaces;
+  checkpoints: { id: string; label: string; kind?: "split" | "finish" }[];
+  places: Map<string, CheckpointPlaces>;
+  /** Team scores from the official results (every team), and our runners' official places. */
+  official: { scores: TeamScore[]; names: Map<string, string>; place: Map<string, number> } | null;
+  ourTeam: OurTeam;
+  /** Shown in a sheet that already has a title: no heading of its own. */
+  inSheet?: boolean;
+  /** The checkpoint the results table is on: the card shows the same one, with no switch of its own. */
+  focus?: string | null;
+}) {
+  const views: View[] = [...checkpoints.filter((c) => places.has(c.id)), ...(official && official.scores.length > 0 ? [{ id: "official", label: "Official" }] : [])];
+  const [picked, setPicked] = useState<string | null>(null);
+  if (views.length === 0) return null;
+  // Nothing to show without tracked teams, until official team scores post.
+  if (config.teams.length === 0 && !views.some((v) => v.id === "official")) return null;
+  // Following the table: its checkpoint (the finish means the official scores once they're in).
+  // Nothing counted there yet: nothing to show.
+  const focused = focus ? (checkpoints.find((c) => c.id === focus)?.kind === "finish" && views.some((v) => v.id === "official") ? "official" : focus) : null;
+  if (focused && !views.some((v) => v.id === focused)) return null;
+  // On its own: the latest checkpoint with places, until someone picks one.
+  const viewId = focused ?? (picked && views.some((v) => v.id === picked) ? picked : views.at(-1)!.id);
+
+  const tracked = new Map(config.teams.map((t) => [t.id, t]));
+  // The button's chip (so it matches the record screen) and the full name (so anyone can read it).
+  const teamChip = (key: string, name?: string) => {
+    const t = tracked.get(key);
+    const chip = (label: string, bg: string, ink: string) => (
+      <span className="mr-2 inline-block min-w-9 rounded px-1.5 py-0.5 text-center text-xs font-bold" style={{ background: bg, color: ink }}>
+        {label}
+      </span>
+    );
+    const full = (text: string) => <span className="text-[13px] text-ink">{text}</span>;
+    if (key === "us")
+      return (
+        <span className="flex items-center">
+          {chip(ourTeam.short, "var(--color-brand)", "var(--color-brand-ink)")}
+          {full(ourTeam.name)}
+        </span>
+      );
+    if (t)
+      return (
+        <span className="flex items-center">
+          {chip(t.short, placeColor(t.color).bg, placeColor(t.color).ink)}
+          {full(t.name)}
+        </span>
+      );
+    return full(name ?? key);
+  };
+  const scoreRows = (scores: TeamScore[], opts: { approx?: boolean; names?: Map<string, string>; only?: (team: string) => boolean } = {}) => (
+    <table className="w-full text-sm">
+      <tbody className="divide-y divide-line">
+        {scores
+          .filter((s) => !opts.only || opts.only(s.team))
+          .map((s, i) => {
+            const mine = s.team === "us";
+            // Official results key teams by name; a tracked one gets its button chip.
+            const trackedId = opts.names ? trackedTeamFor(opts.names.get(s.team) ?? null, config.teams)?.id : undefined;
+            return (
+              <tr key={s.team} className={mine ? "bg-brand-soft/60" : ""}>
+                <td className="tnum w-8 py-1.5 pl-3 text-ink-3">{s.points !== null ? i + 1 : ""}</td>
+                <td className="py-1.5">{teamChip(trackedId ?? s.team, opts.names?.get(s.team))}</td>
+                <td className="tnum py-1.5 pr-3 text-right font-semibold text-ink sm:pr-0">{s.points !== null ? `${opts.approx ? "≈" : ""}${s.points}` : <span className="font-normal text-ink-3">{s.runners} counted</span>}</td>
+                <td className="tnum hidden py-1.5 pr-3 pl-4 text-right text-xs text-ink-3 sm:table-cell">
+                  {s.places.slice(0, 5).join("-")}
+                  {s.places.length > 5 && ` (${s.places.slice(5).join(", ")})`}
+                </td>
+              </tr>
+            );
+          })}
+      </tbody>
+    </table>
+  );
+
+  const cp = viewId === "official" ? null : places.get(viewId)!;
+
+  return (
+    <Card className="mb-3 overflow-hidden">
+      {!inSheet && (
+        <div className="space-y-2 border-b border-line px-3 py-2">
+          <span className="block text-sm font-semibold text-ink">
+            Places{focused && <span className="font-normal text-ink-2"> · {focused === "official" ? "official results" : checkpoints.find((c) => c.id === focused)?.label}</span>}
+          </span>
+          {views.length > 1 && !focused && <Segmented size="sm" scroll value={viewId} onChange={setPicked} options={views.map((v) => ({ value: v.id, label: v.label }))} />}
+        </div>
+      )}
+      {cp ? (
+        <>
+          <p className="px-3 pt-2 text-xs text-ink-2">
+            {cp.countingAll
+              ? `${cp.entries.length} counted, everyone. Places are overall.`
+              : config.teams.length > 0
+                ? `${cp.entries.length} counted: ours and the tracked teams. Places are among those teams.`
+                : `${cp.entries.length} counted.`}
+          </p>
+          {/* One table, never two that disagree. Counting everyone: the whole meet, estimated (it has the
+              tracked teams in it, in real-meet terms). Otherwise only the tracked teams: exact as a dual
+              meet, but the real meet can differ (other teams' runners land between ours and theirs). */}
+          {config.teams.length > 0 &&
+            (cp.estimate ? (
+              <>
+                <p className="px-3 pt-2 text-[11px] font-semibold tracking-wide text-ink-3 uppercase">Whole meet, estimated</p>
+                {scoreRows(cp.estimate, { approx: true, only: (t) => t !== "*" })}
+                <p className="px-3 pt-1 text-[11px] text-ink-3">Counts every Other runner as scoring; teams with under five runners don&rsquo;t, so the real scores are a little lower.</p>
+              </>
+            ) : (
+              <>
+                <p className="px-3 pt-2 text-[11px] font-semibold tracking-wide text-ink-3 uppercase">Tracked teams only</p>
+                {scoreRows(cp.scores)}
+                <p className="px-3 pt-1 text-[11px] text-ink-3">As if only these teams were racing. The real meet can differ.</p>
+              </>
+            ))}
+        </>
+      ) : (
+        <>
+          <p className="px-3 pt-2 text-xs text-ink-2">From the timing company&rsquo;s results, every team.</p>
+          {scoreRows(official!.scores, { names: official!.names })}
+        </>
+      )}
+      <div className="h-2" />
+    </Card>
+  );
+}

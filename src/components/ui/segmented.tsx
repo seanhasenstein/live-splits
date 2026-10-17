@@ -46,7 +46,8 @@ export function Segmented<T extends string>({
     );
   }
   return (
-    <div role="radiogroup" className={`flex rounded-lg bg-surface-2 ${size === "sm" ? "p-0.5" : "p-1"} ${scroll ? "[scrollbar-width:none] overflow-x-auto" : ""} ${className}`}>
+    // The same inset around the buttons at both sizes, so the selected one never crowds the track's edge.
+    <div role="radiogroup" className={`flex gap-0.5 rounded-lg bg-surface-2 p-1 ${scroll ? "[scrollbar-width:none] overflow-x-auto" : ""} ${className}`}>
       {options.map((o) => {
         const active = o.value === value;
         return (

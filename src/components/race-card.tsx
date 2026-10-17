@@ -1,9 +1,11 @@
 "use client";
 
-import { ChevronRight, CircleCheck, Download, Flag, GitCompare, MoreHorizontal, Pencil, Radio, Timer } from "lucide-react";
+import { ChevronRight, CircleCheck, Download, Flag, GitCompare, ListOrdered, MoreHorizontal, Pencil, Radio, Timer } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { PlacesSetupSheet } from "@/components/places-setup";
 import { StartRaceControl } from "@/components/start-race";
+import type { RacePlaces } from "@/lib/db/schema";
 import { clearGunTimeAction, findLiveFeedsAction, gunFromOfficialPreviewAction, type LiveFeedOption, setGunFromOfficialAction, setGunTimeAction, setLiveFeedAction, setRaceFinishedAction } from "@/app/actions/races";
 import { Alert, Badge, Button, Field, Input, Sheet, Time, RaceStateBadge } from "@/components/ui";
 import { RunningClock } from "@/components/race-status";
@@ -32,6 +34,10 @@ type Props = {
   hasOfficial: boolean;
   /** The timing company's live feed, polled while the race runs. */
   liveFeed: { url: string; contestName: string | null } | null;
+  /** Place counting (tracked teams), if set up. Coaches and managers only. */
+  places: RacePlaces | null;
+  /** Coaches and managers: the gun's exact time and who fired it. The public sees when it started. */
+  staff: boolean;
   /** Record splits / Live results, rendered inside the card; one version per race state so it can match. */
   actions?: Record<RaceState, React.ReactNode>;
 };
@@ -41,7 +47,7 @@ type Props = {
  * Start race…), in progress (big elapsed time; changes live behind "Adjust"),
  * finished (frozen). Nothing destructive is a single tap.
  */
-export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref, compareHref, gunTimeMs: initialGun, finishedAt: initialFinished, firedBy, timeZone, canGun, hasOfficial, liveFeed, actions }: Props) {
+export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref, compareHref, gunTimeMs: initialGun, finishedAt: initialFinished, firedBy, timeZone, canGun, hasOfficial, liveFeed, places, staff, actions }: Props) {
   const router = useRouter();
   const clock = useClock();
   const [gunTimeMs, setGunTimeMs] = useState(initialGun);
@@ -50,6 +56,7 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
   const [armed, setArmed] = useState(false);
   const [adjusting, setAdjusting] = useState(false);
   const [options, setOptions] = useState(false);
+  const [placesOpen, setPlacesOpen] = useState(false);
 
   // Server data changed underneath us (someone else set the gun): adopt it.
   if (initialGun !== seen.initialGun || initialFinished !== seen.initialFinished) {
@@ -97,6 +104,13 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
         )}
       </div>
       <div className="mt-0.5 text-[13px] text-ink-2">{details}</div>
+      {staff && places?.on && (
+        <div className="mt-0.5 text-[13px] text-ink-2">
+          <span className="font-medium text-ink">Places</span>
+          {places.teams.length > 0 ? ` · ${places.teams.map((t) => t.short).join(", ")}` : " · no tracked teams"}
+          {places.public && " · shown to everyone"}
+        </div>
+      )}
 
       {gunTimeMs !== null ? (
         <div className="mt-3">
@@ -104,12 +118,20 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
               the race "took" is when the last runner finished, which is nobody's result. */}
           {!finishedAt && <RunningClock gunTimeMs={gunTimeMs} now={clock.now} className="text-3xl font-semibold tracking-tight text-ink" />}
           <div className="mt-0.5 text-[13px] text-ink-2">
-            Gun <Time>{formatClock(gunTimeMs, timeZone)}</Time>
-            {firedBy && ` · by ${firedBy}`}
-            {finishedAt && (
+            {staff ? (
               <>
-                {" · finished "}
-                <Time>{formatClock(new Date(finishedAt).getTime(), timeZone, false)}</Time>
+                Gun <Time>{formatClock(gunTimeMs, timeZone)}</Time>
+                {firedBy && ` · by ${firedBy}`}
+                {finishedAt && (
+                  <>
+                    {" · finished "}
+                    <Time>{formatClock(new Date(finishedAt).getTime(), timeZone, false)}</Time>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                Started <Time>{new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", minute: "2-digit" }).format(gunTimeMs)}</Time>
               </>
             )}
           </div>
@@ -148,11 +170,35 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
                 }}
               />
             )}
+            {canGun && (
+              <OptionRow
+                icon={<ListOrdered className="size-4" />}
+                label={places?.on ? `Places · ${places.teams.length ? places.teams.map((t) => t.short).join(", ") : "no teams yet"}` : "Count places…"}
+                hint={places?.on ? "Tracked teams, who sees places." : "Team buttons on Record splits: places and scores at each checkpoint."}
+                onClick={() => {
+                  setOptions(false);
+                  setPlacesOpen(true);
+                }}
+              />
+            )}
             {editHref && <OptionRow icon={<Pencil className="size-4" />} label="Edit race" hint="Name, checkpoints, lineup and running order." href={editHref} />}
             {csvHref && <OptionRow icon={<Download className="size-4" />} label="Download CSV" hint="Split-workbook layout, one row per athlete." href={csvHref} download />}
             {compareHref && <OptionRow icon={<GitCompare className="size-4" />} label="App vs official" hint="How close the taps were to the mats." href={compareHref} />}
           </div>
         </Sheet>
+      )}
+
+      {placesOpen && (
+        <PlacesSetupSheet
+          raceId={raceId}
+          raceName={name}
+          initial={places}
+          onClose={() => setPlacesOpen(false)}
+          onSaved={() => {
+            setPlacesOpen(false);
+            router.refresh();
+          }}
+        />
       )}
 
       {adjusting && (
@@ -469,7 +515,8 @@ function OptionRow({ icon, label, hint, href, download, onClick }: { icon: React
       <ChevronRight className="size-4 text-ink-3" />
     </>
   );
-  const cls = "flex h-14 w-full items-center gap-3 rounded-lg border border-line bg-surface px-4 text-left hover:bg-surface-2";
+  // A minimum height, not a fixed one: a hint that wraps to two lines keeps its room.
+  const cls = "flex min-h-14 w-full items-center gap-3 rounded-lg border border-line bg-surface px-4 py-2.5 text-left hover:bg-surface-2";
   if (href)
     return (
       <a href={href} download={download} className={cls}>

@@ -197,6 +197,18 @@ async function writeImport(db: Awaited<ReturnType<typeof getDb>>, session: Clien
   return { importId: importDoc._id };
 }
 
+/** One runner of the whole field, any team: enough to score teams. */
+export type FieldEntry = { team: string | null; place: number | null; status: string; ours: boolean };
+
+/** The imported field for a race (every team), for team scores. Empty when nothing was imported. */
+export async function getOfficialField(race: Race): Promise<FieldEntry[]> {
+  if (!race.officialImportId) return [];
+  const entries = await collection(await getDb(), "raceEntries")
+    .find({ raceId: race._id, deletedAt: null }, { projection: { teamName: 1, place: 1, status: 1, athleteId: 1 } })
+    .toArray();
+  return entries.map((e) => ({ team: e.teamName, place: e.place, status: e.status, ours: !!e.athleteId }));
+}
+
 export type OfficialTimes = Record<string, { finishMs: number | null; status: string; place: number | null; byCheckpoint: Record<string, number>; precision: Precision }>;
 
 /** Official (mat) times per athlete for a race, keyed by athleteId → checkpointId. Empty when nothing was imported. */

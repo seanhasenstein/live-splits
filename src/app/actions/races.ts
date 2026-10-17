@@ -4,11 +4,12 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { generateCode } from "@/lib/auth/crypto";
 import { can, getSession, sessionActor } from "@/lib/auth/session";
-import { getMeet, getProgram, getRace, listAthletes, listDistances } from "@/lib/data";
+import { getMeet, getProgram, getRace, getSchool, listAthletes, listDistances } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
 import { collection, COLLECTIONS } from "@/lib/db/collections";
 import { newId } from "@/lib/db/client";
-import { Id } from "@/lib/db/schema";
+import { Id, RacePlaces } from "@/lib/db/schema";
+import { teamKey } from "@/lib/race-places";
 import { RacePayload } from "@/lib/race-form";
 import { distanceValue } from "@/lib/distance";
 import { getOfficialTimes, gunFromOfficial } from "@/lib/results/import";
@@ -318,4 +319,69 @@ export async function setLiveFeedAction(raceId: string, feed: { url: string; con
   if (parsed.data && !isLiveFeedUrl(parsed.data.url)) return { error: "Only RACE RESULT feeds (api.raceresult.com) and Arrow Live Results pages (arrowliveresults.com) can be polled live." };
   await collection(await getDb(), "races").updateOne({ _id: race._id }, { $set: { liveFeed: parsed.data, updatedAt: new Date(), updatedBy: sessionActor(session!) } });
   return {};
+}
+
+/** Turn place counting on or off for a race, with its tracked teams and award lines. */
+export async function setRacePlacesAction(raceId: string, places: RacePlaces): Promise<FormState> {
+  const session = await getSession();
+  const race = await getRace(raceId);
+  const meet = race && (await getMeet(race.meetId));
+  if (!race || !meet || !can(session, "gun", meet)) return { error: "Not allowed" };
+  const parsed = RacePlaces.safeParse(places);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const ids = parsed.data.teams.map((t) => t.id);
+  if (new Set(ids).size !== ids.length) return { error: "Two teams share an id" };
+  const keys = parsed.data.teams.map((t) => teamKey(t.name));
+  if (new Set(keys).size !== keys.length) return { error: "A team is listed twice" };
+  // Our runners are counted by name (or the school's own button); tracking the school too would count them twice.
+  const school = await getSchool(meet.schoolId);
+  const own = parsed.data.teams.find((t) => school && [school.name, school.shortName].some((n) => teamKey(n) === teamKey(t.name)));
+  if (own) return { error: `${own.name} is your school. It's always counted; track the other teams.` };
+  const lines = parsed.data.awards.map((a) => a.through);
+  if (new Set(lines).size !== lines.length) return { error: "Two award lines end at the same place" };
+  await collection(await getDb(), "races").updateOne({ _id: race._id }, { $set: { places: parsed.data, updatedAt: new Date(), updatedBy: sessionActor(session!) } });
+  return {};
+}
+
+export type TeamSuggestion = { name: string; short: string | null; color: string | null; aliases: string[]; tracked: boolean };
+
+/**
+ * Team names to offer when picking teams to track: teams this school tracked before
+ * (with their labels and colors), then every team in results imported so far, most seen first.
+ */
+export async function teamSuggestionsAction(raceId: string): Promise<TeamSuggestion[]> {
+  const session = await getSession();
+  const race = await getRace(raceId);
+  const meet = race && (await getMeet(race.meetId));
+  if (!race || !meet || !can(session, "gun", meet)) return [];
+  const db = await getDb();
+  const [tracked, seen] = await Promise.all([
+    collection(db, "races")
+      .find({ schoolId: meet.schoolId, deletedAt: null, "places.teams.0": { $exists: true } }, { projection: { places: 1, updatedAt: 1 } })
+      .sort({ updatedAt: -1 })
+      .limit(50)
+      .toArray(),
+    collection(db, "raceEntries")
+      .aggregate<{ _id: string; n: number }>([
+        { $match: { schoolId: meet.schoolId, deletedAt: null, teamName: { $type: "string" } } },
+        { $group: { _id: "$teamName", n: { $sum: 1 } } },
+        { $sort: { n: -1 } },
+        { $limit: 300 },
+      ])
+      .toArray(),
+  ]);
+  const school = await getSchool(meet.schoolId);
+  const ownKeys = new Set(school ? [teamKey(school.name), teamKey(school.shortName)] : []);
+  const out = new Map<string, TeamSuggestion>();
+  for (const r of tracked) {
+    for (const t of r.places?.teams ?? []) {
+      const k = teamKey(t.name);
+      if (!out.has(k) && !ownKeys.has(k)) out.set(k, { name: t.name, short: t.short, color: t.color, aliases: t.aliases, tracked: true });
+    }
+  }
+  for (const e of seen) {
+    const k = teamKey(e._id);
+    if (k && !out.has(k) && !ownKeys.has(k)) out.set(k, { name: e._id, short: null, color: null, aliases: [], tracked: false });
+  }
+  return [...out.values()];
 }
