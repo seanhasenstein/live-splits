@@ -27,3 +27,13 @@ test("an app-tapped finish is unofficial, and uncertain inside two seconds of th
   expect(recordBadge(m(17, 9), bests, false)).toMatchObject({ unofficial: true, uncertain: true }); // 1 s under the PR
   expect(recordBadge(m(17, 9), bests, true)).toMatchObject({ unofficial: false, uncertain: false }); // the mats said so
 });
+
+test("a record since beaten shows no badge; one still standing does", () => {
+  const later = { pr: m(16, 50), sb: null, course: null, meet: null };
+  // Was a PR when run, beaten in a later season: no PR, and nothing else it still holds.
+  expect(recordBadge(m(17, 5), { ...bests, later: { pr: m(16, 50), sb: m(17, 0), course: m(17, 0), meet: m(17, 0) } }, true)).toBeNull();
+  // Beaten later as a PR, but still the season's best: shows SB.
+  expect(recordBadge(m(17, 5), { ...bests, later }, true)).toMatchObject({ kind: "sb" });
+  // Nothing faster since: PR as before.
+  expect(recordBadge(m(17, 5), { ...bests, later: { pr: m(17, 20), sb: null, course: null, meet: null } }, true)).toMatchObject({ kind: "pr" });
+});
