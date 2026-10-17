@@ -753,7 +753,7 @@ function RaceBoard({
                       {/* The place in a fixed-width slot, so down a column the ▲ / ▼ / ↔ beside it line up. */}
                       {place && (
                         <span className="tnum flex text-xs leading-5 font-medium text-ink-2">
-                          <span className="w-10 shrink-0">
+                          <span className="min-w-8 shrink-0 pr-1">
                             {placeText(place.place)}
                             {!place.overall && "*"}
                           </span>
