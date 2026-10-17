@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CalendarDays, History, Plus } from "lucide-react";
+import { CalendarDays, ChevronDown, History, Plus } from "lucide-react";
 import { redirect } from "next/navigation";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { SectionTabs } from "@/components/section-tabs";
@@ -47,8 +47,13 @@ export default async function MeetsPage() {
   for (const m of meets) groups[statusOf(m, racesOf(m), todayIn(m.timeZone))].push(m);
   groups.upcoming.sort((a, b) => a.date.localeCompare(b.date)); // soonest first; past stays newest first
   const anyLive = groups.live.length > 0;
+  // Finished meets by season (its year), newest season first; within one, newest meet first.
+  const pastSeasons = [...new Set(groups.past.map((m) => m.date.slice(0, 4)))]
+    .sort((a, b) => b.localeCompare(a))
+    .map((year) => ({ year, meets: groups.past.filter((m) => m.date.startsWith(year)) }));
 
-  const row = (m: Meet, status: MeetStatus) => {
+  // `withYear` for older seasons, where a long open list can scroll its heading away.
+  const row = (m: Meet, status: MeetStatus, withYear = false) => {
     const rs = racesOf(m);
     const live = rs.filter((r) => r.gunTimeMs !== null && !r.finishedAt);
     const next = rs.find((r) => r.gunTimeMs === null);
@@ -82,6 +87,7 @@ export default async function MeetsPage() {
           </span>
           <span className="block truncate text-[13px] text-ink-2">
             {formatLocalDate(m.date)}
+            {withYear && `, ${m.date.slice(0, 4)}`}
             {detail && ` · ${detail}`}
           </span>
         </span>
@@ -124,10 +130,10 @@ export default async function MeetsPage() {
           </Card>
         ) : (
           <div className="space-y-5">
-            {(["live", "upcoming", "past"] as const).map((status) =>
+            {(["live", "upcoming"] as const).map((status) =>
               groups[status].length ? (
                 <section key={status}>
-                  <SectionLabel className="mb-1.5">{status === "live" ? "Happening now" : status === "upcoming" ? "Upcoming" : "Past meets"}</SectionLabel>
+                  <SectionLabel className="mb-1.5">{status === "live" ? "Happening now" : "Upcoming"}</SectionLabel>
                   {/* Happening now gets the running-race tint from the meet page: red means running, on both.
                       overflow-hidden keeps a hovered first or last row inside the rounded corners. */}
                   <Card className={`overflow-hidden ${status === "live" ? "border-danger/40! bg-danger-soft/70!" : ""}`}>
@@ -135,6 +141,29 @@ export default async function MeetsPage() {
                   </Card>
                 </section>
               ) : null,
+            )}
+            {/* Past meets by season (a cross-country season is one fall): the newest open, older ones a tap away. */}
+            {pastSeasons.map(({ year, meets: list }, i) =>
+              i === 0 ? (
+                <section key={year}>
+                  <SectionLabel className="mb-1.5">{year} season</SectionLabel>
+                  <Card className="overflow-hidden">
+                    <div className="divide-y divide-line">{list.map((m) => row(m, "past"))}</div>
+                  </Card>
+                </section>
+              ) : (
+                // One card: the season row is its header, and the meets open inside it below a divider.
+                <details key={year} className="group overflow-hidden rounded-lg border border-line bg-surface shadow-card">
+                  <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 hover:bg-surface-2 [&::-webkit-details-marker]:hidden">
+                    <span className="text-sm font-semibold text-ink">{year} season</span>
+                    <span className="flex items-center gap-2 text-[13px] text-ink-2">
+                      {list.length} meet{list.length === 1 ? "" : "s"}
+                      <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
+                    </span>
+                  </summary>
+                  <div className="divide-y divide-line border-t border-line">{list.map((m) => row(m, "past", true))}</div>
+                </details>
+              ),
             )}
           </div>
         )}

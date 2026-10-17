@@ -85,3 +85,24 @@ test("a 'Mile 3' last column is a 5K", () => {
   const meets = parseSplitsHistory(["Sample Invite, September 10th 2025", "Boys \tMile 1 \tMile 2 \tMile 3 \tFinish \tPlace", "Eddy Giebler \t5:46 \t5:48 \t6:21 \t17:55 \t6th"].join("\n"));
   expect(meets[0].distanceMeters).toBe(5000);
 });
+
+test("this season's MEET SPLITS sheets read like the older ones: levels from the sections, letters, DNFs, no DNRs", () => {
+  const sheet = readFileSync(`${process.cwd()}/src/lib/results/fixtures/meet-splits-2026.txt`, "utf8");
+  const meets = parseSplitsHistory(sheet);
+  expect(meets).toHaveLength(1);
+  const m = meets[0];
+  expect(m).toMatchObject({ name: "Lakeside Invitational", date: "2026-09-05", distanceMeters: 5000 });
+  expect(m.checkpoints.map((c) => c.label)).toEqual(["Mile 1", "Mile 2"]);
+  expect(m.summaries).toEqual([
+    "Boys Varsity - 61 Pts. 3rd Place. 9 Teams. 60 Runners. Letter standard 40th · 22:07.",
+    "Boys JV - 88 Pts. 4th Place. 6 Teams. 52 Runners.",
+    "Girls Varsity - 100 Pts. 3rd Place. 7 Teams. 51 Runners.",
+  ]);
+  expect(m.rows.map((r) => r.name)).toEqual(["Avery Abbott", "Blake Barlow", "Casey Cole", "Drew Dalton", "Ellis Evans", "Gray Garner", "Harper Hale"]);
+  expect(m.rows.find((r) => r.name === "Avery Abbott")).toMatchObject({ gender: "M", level: "varsity", finishMs: 17 * 60_000 + 31_000, place: 1, letter: true, status: "finished" });
+  expect(m.rows.find((r) => r.name === "Avery Abbott")!.splits).toEqual({ "Mile 1": 5 * 60_000 + 19_000, "Mile 2": 11 * 60_000 });
+  expect(m.rows.find((r) => r.name === "Drew Dalton")).toMatchObject({ level: "jv", place: 3, letter: true });
+  expect(m.rows.find((r) => r.name === "Ellis Evans")).toMatchObject({ level: "jv", place: 47, letter: false });
+  expect(m.rows.find((r) => r.name === "Casey Cole")).toMatchObject({ status: "dnf", finishMs: null, splits: {} });
+  expect(m.rows.find((r) => r.name === "Harper Hale")).toMatchObject({ gender: "F", level: "jv" });
+});
