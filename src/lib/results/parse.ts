@@ -231,6 +231,73 @@ export function parseResultsText(text: string, contestName = "Pasted results"): 
   return { name: contestName, distanceMeters: null, splitLabels: splitLabels ?? [], entries, source: { kind: "text" }, precision: precisionOf(timeStrings) };
 }
 
+/** A column-per-cell header ("Place Points Bib Name School Gender Grade Time Pace"), told apart from the "… Finish" layouts above. */
+export const COLUMN_HEADER_RE = /^\s*Place\b(?=.*\bName\b)(?=.*\b(?:School|Team)\b)(?=.*\bTime\b)(?!.*\bFinish\b).*$/im;
+
+const RACE_HEADING_RE = /\b(boys|girls|men|women|varsity|jv|junior|open|middle|elementary)\b/i;
+
+/**
+ * Column-per-cell results: Trackside Timing's "All Contests" PDF (AthleticLIVE). One header row of
+ * column names, then a heading line ("Boys Varsity") before each race's rows. The text must have a
+ * tab between the PDF's text items: without them a name and a school run together with no way to
+ * tell where one ends ("Eddy Giebler Sheboygan Area Lutheran"). One contest per heading.
+ */
+export function parseColumnResults(text: string, fallbackName: string): ParsedContest[] {
+  const contests: ParsedContest[] = [];
+  let cols: { place: number; name: number; team: number; grade: number; time: number; bib: number; points: number; count: number } | null = null;
+  let current: { name: string; entries: ParsedEntry[]; times: string[] } | null = null;
+  const close = () => {
+    if (current && current.entries.length > 0)
+      contests.push({ name: current.name, distanceMeters: null, splitLabels: [], entries: current.entries, source: { kind: "text" }, precision: precisionOf(current.times) });
+  };
+
+  for (const line of text.split(/\r?\n/)) {
+    const cells = line.split("\t").map((c) => c.trim()).filter(Boolean);
+    if (cells.length === 0) continue;
+    const lower = cells.map((c) => c.toLowerCase());
+    if (lower.includes("name") && lower.includes("time") && lower.includes("place")) {
+      const at = (...names: string[]) => lower.findIndex((c) => names.includes(c));
+      cols = { place: at("place"), name: at("name"), team: at("school", "team"), grade: at("grade", "gr", "yr", "year"), time: at("time"), bib: at("bib"), points: at("points", "pts"), count: cells.length };
+      continue;
+    }
+    if (!cols) continue;
+    // A race heading: one cell naming a race. Page footers ("Overall Results", the meet name) aren't.
+    if (cells.length === 1 && RACE_HEADING_RE.test(cells[0]) && placeAndStatus(cells[0]).place === null) {
+      close();
+      current = { name: cells[0], entries: [], times: [] };
+      continue;
+    }
+    // A non-scorer's points can be blank rather than "(n/a)".
+    const row = cells.length === cols.count - 1 && cols.points >= 0 ? [...cells.slice(0, cols.points), "", ...cells.slice(cols.points)] : cells;
+    if (row.length !== cols.count) continue;
+    const { place, status } = placeAndStatus(row[cols.place]);
+    if (place === null && status === "finished") continue;
+    const timeText = row[cols.time] ?? "";
+    // A walker's hour-plus finish ("1:14:38.4") counts too.
+    const finishMs = /^\d{1,2}(?::\d{2}){1,2}(?:\.\d{1,3})?$/.test(timeText) ? parseElapsed(timeText) : null;
+    if (status === "finished" && finishMs === null) continue;
+    const nameWords = (row[cols.name] ?? "").split(/\s+/).filter(Boolean);
+    if (nameWords.length === 0) continue;
+    current ??= { name: fallbackName, entries: [], times: [] };
+    if (finishMs !== null) current.times.push(timeText);
+    const [firstName, ...lastParts] = nameWords;
+    current.entries.push({
+      firstName,
+      lastName: lastParts.join(" "),
+      name: nameWords.join(" "),
+      team: cols.team >= 0 ? row[cols.team] || null : null,
+      grade: cols.grade >= 0 ? toGrade(row[cols.grade]) : null,
+      bib: cols.bib >= 0 ? row[cols.bib]?.replace(/^#/, "") || null : null,
+      place,
+      status,
+      finishMs: status === "finished" ? finishMs : null,
+      splits: {},
+    });
+  }
+  close();
+  return contests;
+}
+
 export const stripTags = (html: string) =>
   html
     .replace(/<[^>]+>/g, " ")

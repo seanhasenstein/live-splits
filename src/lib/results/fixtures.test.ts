@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, expect, test, vi } from "vitest";
 import { isOurTeam } from "./match";
-import { parseArrowResultsHtml, parseRaceResultJson, parseResultsText } from "./parse";
+import { COLUMN_HEADER_RE, parseArrowResultsHtml, parseColumnResults, parseRaceResultJson, parseResultsText } from "./parse";
 import { fromUrl, SourceError } from "./sources";
 
 const F = `${process.cwd()}/src/lib/results/fixtures`;
@@ -59,6 +59,23 @@ test("hand-split division PDF text: ordinals, OVR column, class years, displacer
   expect(c.entries.every((e) => e.grade !== null && e.team && e.finishMs !== null)).toBe(true);
   expect(c.splitLabels).toEqual([]);
   expect(c.precision).toBe("seconds"); // whole seconds on the sheet: shown as "16:16", never "16:16.0"
+});
+
+test("Trackside every-race PDF (read with a tab per text item): one contest per race, name and school apart", () => {
+  const text = read("trackside-all-contests-pdf-text.txt");
+  expect(COLUMN_HEADER_RE.test(text.replace(/\t/g, " "))).toBe(true);
+  const cs = parseColumnResults(text, "fallback");
+  expect(cs.map((c) => [c.name, c.entries.length])).toEqual([["Boys Varsity", 143], ["Girls Varsity", 123], ["Boys JV", 75], ["Girls JV", 60]]);
+  for (const c of cs) expect(c.entries.map((e) => e.place)).toEqual(c.entries.map((_, i) => i + 1)); // across page breaks
+  expect(cs[0].entries[0]).toMatchObject({ name: "Eddy Giebler", team: "Sheboygan Area Lutheran", grade: 11, bib: "1834", place: 1, status: "finished", finishMs: 16 * 60_000 + 52_200, splits: {} });
+  expect(cs[1].entries.at(-1)).toMatchObject({ place: 123, finishMs: 3600_000 + 14 * 60_000 + 38_400 }); // an hour-plus finish
+  expect(cs.flatMap((c) => c.entries).filter((e) => isOurTeam(e.team, ALIASES))).toHaveLength(26);
+  expect(cs.every((c) => c.precision === "tenths" && c.entries.every((e) => e.team && e.grade !== null && e.finishMs !== null))).toBe(true);
+});
+
+test("the column layout's header doesn't claim the Finish-column PDFs", () => {
+  expect(COLUMN_HEADER_RE.test(read("badger-pdf-text.txt"))).toBe(false);
+  expect(COLUMN_HEADER_RE.test(read("hand-split-pdf-text.txt"))).toBe(false);
 });
 
 // ---- The fetch chain, with the network replaced by fixtures.

@@ -1,0 +1,476 @@
+Place	 	Points	 	Bib	 	Name	 	School	 	Gender	 	Grade	 	Time	 	Pace		
+	Boys Varsity		
+	1	 	1	 	1834	 	Eddy Giebler	 	Sheboygan Area Lutheran	 	M	 	11	 	16:52.2	 	5:25	
+	2	 	2	 	1522	 	Alex Abbott	 	North Academy	 	M	 	12	 	17:19.2	 	5:34	
+	3	 	3	 	1521	 	Blake Hale	 	North Academy	 	M	 	12	 	17:19.3	 	5:34	
+	4	 	4	 	1518	 	Casey Owens	 	North Academy	 	M	 	11	 	17:19.4	 	5:34	
+	5	 	5	 	1748	 	Drew Young	 	South Academy	 	M	 	12	 	17:34.7	 	5:39	
+	6	 	(n/a)	 	1777	 	Ellis Gates	 	East Academy	 	M	 	12	 	17:36.1	 	5:39	
+	7	 	6	 	1671	 	Finley Nash	 	West Academy	 	M	 	09	 	17:43.8	 	5:42	
+	8	 	7	 	1743	 	Gray Wells	 	South Academy	 	M	 	10	 	17:46.8	 	5:43	
+	9	 	8	 	1639	 	Harper Ford	 	Lake Academy	 	M	 	11	 	17:48.9	 	5:44	
+	10	 	9	 	1929	 	Indy Mason	 	River Academy	 	M	 	12	 	17:50.5	 	5:44	
+	11	 	10	 	1835	 	Titus Gottschalk	 	Sheboygan Area Lutheran	 	M	 	12	 	17:54.1	 	5:45	
+	12	 	11	 	1925	 	Jules Vance	 	River Academy	 	M	 	12	 	18:03.2	 	5:48	
+	13	 	12	 	1673	 	Kai Evans	 	West Academy	 	M	 	12	 	18:15.5	 	5:52	
+	14	 	13	 	1747	 	Logan Lowe	 	South Academy	 	M	 	10	 	18:24.4	 	5:55	
+	15	 	14	 	1650	 	Morgan Tate	 	Pine Academy	 	M	 	10	 	18:25.4	 	5:55	
+	16	 	15	 	1653	 	Noel Dalton	 	Pine Academy	 	M	 	09	 	18:33.8	 	5:58	
+	17	 	16	 	1927	 	Oakley Keller	 	River Academy	 	M	 	11	 	18:34.5	 	5:58	
+	18	 	17	 	1838	 	Oliver Leibham	 	Sheboygan Area Lutheran	 	M	 	12	 	18:36.9	 	5:59	
+	19	 	18	 	1668	 	Parker Stone	 	West Academy	 	M	 	11	 	18:41.7	 	6:01	
+	20	 	19	 	1926	 	Quinn Cole	 	River Academy	 	M	 	11	 	18:48.1	 	6:03	
+	21	 	20	 	1860	 	Reese Jensen	 	Oak Academy	 	M	 	11	 	18:48.7	 	6:03	
+	22	 	21	 	1672	 	Sage Reed	 	West Academy	 	M	 	11	 	18:51.5	 	6:04	
+	23	 	22	 	1524	 	Tatum Barlow	 	North Academy	 	M	 	09	 	18:53.1	 	6:04	
+	24	 	23	 	1568	 	Alex Irwin	 	Cedar Academy	 	M	 	10	 	18:55.6	 	6:05	
+	25	 	24	 	1924	 	Blake Price	 	River Academy	 	M	 	11	 	18:55.8	 	6:05	
+	26	 	25	 	1745	 	Casey Abbott	 	South Academy	 	M	 	10	 	18:56.1	 	6:05	
+	27	 	26	 	1536	 	Drew Hale	 	Maple Academy	 	M	 	12	 	18:59.0	 	6:06	
+	28	 	27	 	1674	 	Ellis Owens	 	West Academy	 	M	 	09	 	19:00.8	 	6:07	
+	29	 	(n/a)	 	1910	 	Finley Young	 	Elm Academy	 	M	 	11	 	19:03.2	 	6:07	
+	30	 	28	 	1749	 	Gray Gates	 	South Academy	 	M	 	12	 	19:04.2	 	6:08	
+	31	 	29	 	1836	 	Isaac Hasler	 	Sheboygan Area Lutheran	 	M	 	11	 	19:13.2	 	6:11	
+	32	 	30	 	1796	 	Harper Nash	 	Birch Academy	 	M	 	12	 	19:16.0	 	6:12	
+	33	 	(31)	 	1670	 	Indy Wells	 	West Academy	 	M	 	10	 	19:17.2	 	6:12	
+	34	 	32	 	1839	 	Isaiah Niles	 	Sheboygan Area Lutheran	 	M	 	11	 	19:20.2	 	6:13	
+	35	 	(n/a)	 	1914	 	Jules Ford	 	Elm Academy	 	M	 	11	 	19:23.2	 	6:14	
+	36	 	33	 	1900	 	Kai Mason	 	Hill Academy	 	M	 	11	 	19:26.3	 	6:15	
+	37	 	(34)	 	1840	 	Joe Vanic	 	Sheboygan Area Lutheran	 	M	 	12	 	19:27.5	 	6:15	
+	38	 	(35)	 	1837	 	Ajani Laster	 	Sheboygan Area Lutheran	 	M	 	11	 	19:31.4	 	6:17	
+	39	 	36	 	1702	 	Logan Vance	 	Valley Academy	 	M	 	11	 	19:32.4	 	6:17	
+	40	 	37	 	1795	 	Morgan Evans	 	Birch Academy	 	M	 	10	 	19:33.5	 	6:17	
+	41	 	(38)	 	1669	 	Noel Lowe	 	West Academy	 	M	 	11	 	19:43.6	 	6:20	
+	42	 	(39)	 	1930	 	Oakley Tate	 	River Academy	 	M	 	12	 	19:47.1	 	6:22	
+	43	 	40	 	1959	 	Parker Dalton	 	Prairie Academy	 	M	 	11	 	19:47.9	 	6:22	
+	44	 	41	 	1725	 	Quinn Keller	 	Ridge Academy	 	M	 	11	 	19:48.8	 	6:22	
+	45	 	42	 	1705	 	Reese Stone	 	Valley Academy	 	M	 	10	 	19:50.9	 	6:23	
+	46	 	(n/a)	 	1774	 	Sage Cole	 	East Academy	 	M	 	12	 	19:58.3	 	6:25	
+	47	 	43	 	1858	 	Tatum Jensen	 	Oak Academy	 	M	 	09	 	19:58.9	 	6:25	
+	48	 	44	 	1897	 	Alex Reed	 	Hill Academy	 	M	 	10	 	20:00.0	 	6:26	
+	49	 	(45)	 	1746	 	Blake Barlow	 	South Academy	 	M	 	11	 	20:07.5	 	6:28	
+	50	 	(46)	 	1928	 	Casey Irwin	 	River Academy	 	M	 	10	 	20:09.4	 	6:29	
+	51	 	(n/a)	 	1553	 	Drew Price	 	Grove Academy	 	M	 	11	 	20:09.9	 	6:29		
+	Sample Invitational 2026		
+	Overall Results		
+	Results at www.TrackSideTiming.com	 	1
+
+-- 1 of 10 --
+
+Place	 	Points	 	Bib	 	Name	 	School	 	Gender	 	Grade	 	Time	 	Pace		
+	52	 	47	 	1798	 	Ellis Abbott	 	Birch Academy	 	M	 	09	 	20:13.4	 	6:30	
+	53	 	48	 	1708	 	Finley Hale	 	Valley Academy	 	M	 	10	 	20:13.8	 	6:30	
+	54	 	(n/a)	 	1879	 	Gray Owens	 	Bay Academy	 	M	 	11	 	20:14.4	 	6:30	
+	55	 	49	 	1793	 	Harper Young	 	Birch Academy	 	M	 	09	 	20:14.6	 	6:30	
+	56	 	(n/a)	 	1770	 	Indy Gates	 	Harbor Academy	 	M	 	11	 	20:17.1	 	6:31	
+	57	 	50	 	1569	 	Jules Nash	 	Cedar Academy	 	M	 	11	 	20:20.2	 	6:32	
+	58	 	51	 	1704	 	Kai Wells	 	Valley Academy	 	M	 	10	 	20:23.9	 	6:33	
+	59	 	52	 	1792	 	Logan Ford	 	Birch Academy	 	M	 	11	 	20:24.8	 	6:34	
+	60	 	53	 	1586	 	Morgan Mason	 	Bluff Academy	 	M	 	10	 	20:24.9	 	6:34	
+	61	 	(n/a)	 	1820	 	Noel Vance	 	Summit Academy	 	M	 	12	 	20:26.0	 	6:34	
+	62	 	(54)	 	1744	 	Oakley Evans	 	South Academy	 	M	 	11	 	20:29.4	 	6:35	
+	63	 	55	 	1520	 	Parker Lowe	 	North Academy	 	M	 	09	 	20:36.0	 	6:37	
+	64	 	56	 	1588	 	Quinn Tate	 	Bluff Academy	 	M	 	12	 	20:41.1	 	6:39	
+	65	 	57	 	1703	 	Reese Dalton	 	Valley Academy	 	M	 	09	 	20:48.8	 	6:41	
+	66	 	58	 	1652	 	Sage Keller	 	Pine Academy	 	M	 	10	 	20:49.1	 	6:42	
+	67	 	59	 	1726	 	Tatum Stone	 	Ridge Academy	 	M	 	12	 	20:51.8	 	6:42	
+	68	 	60	 	1636	 	Alex Cole	 	Lake Academy	 	M	 	11	 	20:52.7	 	6:43	
+	69	 	61	 	1622	 	Blake Jensen	 	Glen Academy	 	M	 	12	 	20:54.2	 	6:43	
+	70	 	62	 	1729	 	Casey Reed	 	Ridge Academy	 	M	 	10	 	20:56.0	 	6:44	
+	71	 	(63)	 	1706	 	Drew Barlow	 	Valley Academy	 	M	 	10	 	20:59.3	 	6:45	
+	72	 	64	 	1590	 	Ellis Irwin	 	Bluff Academy	 	M	 	10	 	20:59.7	 	6:45	
+	73	 	65	 	1591	 	Finley Price	 	Bluff Academy	 	M	 	10	 	20:59.9	 	6:45	
+	74	 	66	 	1896	 	Gray Abbott	 	Hill Academy	 	M	 	10	 	21:06.5	 	6:47	
+	75	 	67	 	1895	 	Harper Hale	 	Hill Academy	 	M	 	11	 	21:08.7	 	6:48	
+	76	 	(68)	 	1707	 	Indy Owens	 	Valley Academy	 	M	 	11	 	21:08.9	 	6:48	
+	77	 	(69)	 	1797	 	Jules Young	 	Birch Academy	 	M	 	10	 	21:19.2	 	6:51	
+	78	 	(n/a)	 	1821	 	Kai Gates	 	Summit Academy	 	M	 	09	 	21:21.5	 	6:52	
+	79	 	70	 	1727	 	Logan Nash	 	Ridge Academy	 	M	 	12	 	21:21.7	 	6:52	
+	80	 	71	 	1619	 	Morgan Wells	 	Glen Academy	 	M	 	10	 	21:24.6	 	6:53	
+	81	 	72	 	1899	 	Noel Ford	 	Hill Academy	 	M	 	11	 	21:27.0	 	6:54	
+	82	 	73	 	1649	 	Oakley Mason	 	Pine Academy	 	M	 	11	 	21:28.6	 	6:54	
+	83	 	74	 	1567	 	Parker Vance	 	Cedar Academy	 	M	 	09	 	21:30.1	 	6:55	
+	84	 	75	 	1638	 	Quinn Evans	 	Lake Academy	 	M	 	11	 	21:40.2	 	6:58	
+	85	 	(76)	 	1794	 	Reese Lowe	 	Birch Academy	 	M	 	12	 	21:40.4	 	6:58	
+	86	 	(n/a)	 	1878	 	Sage Tate	 	Bay Academy	 	M	 	11	 	21:40.4	 	6:58	
+	87	 	77	 	1537	 	Tatum Dalton	 	Maple Academy	 	M	 	11	 	21:46.1	 	7:00	
+	88	 	(78)	 	1519	 	Alex Keller	 	North Academy	 	M	 	12	 	21:47.7	 	7:00	
+	89	 	(n/a)	 	1768	 	Blake Stone	 	Harbor Academy	 	M	 	09	 	21:49.1	 	7:01	
+	90	 	(n/a)	 	1552	 	Casey Cole	 	Grove Academy	 	M	 	11	 	21:54.3	 	7:03	
+	91	 	79	 	1857	 	Drew Jensen	 	Oak Academy	 	M	 	09	 	21:54.4	 	7:03	
+	92	 	80	 	1953	 	Ellis Reed	 	Prairie Academy	 	M	 	11	 	21:56.3	 	7:03	
+	93	 	(n/a)	 	1767	 	Finley Barlow	 	Harbor Academy	 	M	 	09	 	21:57.9	 	7:04	
+	94	 	81	 	1587	 	Gray Irwin	 	Bluff Academy	 	M	 	09	 	22:03.0	 	7:05	
+	95	 	82	 	1957	 	Harper Price	 	Prairie Academy	 	M	 	10	 	22:04.8	 	7:06	
+	96	 	83	 	1956	 	Indy Abbott	 	Prairie Academy	 	M	 	10	 	22:08.3	 	7:07	
+	97	 	84	 	1651	 	Jules Hale	 	Pine Academy	 	M	 	10	 	22:11.6	 	7:08	
+	98	 	(n/a)	 	1877	 	Kai Owens	 	Bay Academy	 	M	 	10	 	22:13.3	 	7:09	
+	99	 	85	 	1616	 	Logan Young	 	Glen Academy	 	M	 	12	 	22:14.5	 	7:09	
+	100	 	(86)	 	1592	 	Morgan Gates	 	Bluff Academy	 	M	 	12	 	22:18.5	 	7:10	
+	101	 	(n/a)	 	1819	 	Noel Nash	 	Summit Academy	 	M	 	09	 	22:20.1	 	7:11	
+	102	 	(n/a)	 	1502	 	Oakley Wells	 	Brook Academy	 	M	 	09	 	22:38.0	 	7:17	
+	103	 	(87)	 	1599	 	Parker Ford	 	Bluff Academy	 	M	 	11	 	22:41.7	 	7:18	
+	104	 	88	 	1728	 	Quinn Mason	 	Ridge Academy	 	M	 	12	 	22:45.0	 	7:19		
+	Sample Invitational 2026		
+	Overall Results		
+	Results at www.TrackSideTiming.com	 	2
+
+-- 2 of 10 --
+
+Place	 	Points	 	Bib	 	Name	 	School	 	Gender	 	Grade	 	Time	 	Pace		
+	105	 	(n/a)	 	1912	 	Reese Vance	 	Elm Academy	 	M	 	09	 	22:47.0	 	7:20	
+	106	 	(n/a)	 	1696	 	Sage Evans	 	Field Academy	 	M	 	11	 	22:47.1	 	7:20	
+	107	 	(n/a)	 	1551	 	Tatum Lowe	 	Grove Academy	 	M	 	12	 	22:49.2	 	7:20	
+	108	 	(89)	 	1730	 	Alex Tate	 	Ridge Academy	 	M	 	10	 	22:49.5	 	7:20	
+	109	 	(n/a)	 	1761	 	Blake Dalton	 	Spring Academy	 	M	 	11	 	22:53.1	 	7:21	
+	110	 	90	 	1621	 	Casey Keller	 	Glen Academy	 	M	 	10	 	22:55.8	 	7:22	
+	111	 	(n/a)	 	1531	 	Drew Stone	 	Stone Academy	 	M	 	09	 	22:58.4	 	7:23	
+	112	 	(n/a)	 	1554	 	Ellis Cole	 	Grove Academy	 	M	 	11	 	23:00.0	 	7:24	
+	113	 	91	 	1566	 	Finley Jensen	 	Cedar Academy	 	M	 	10	 	23:01.7	 	7:24	
+	114	 	92	 	1617	 	Gray Reed	 	Glen Academy	 	M	 	10	 	23:05.9	 	7:26	
+	115	 	(93)	 	1618	 	Harper Barlow	 	Glen Academy	 	M	 	11	 	23:10.7	 	7:27	
+	116	 	(94)	 	1620	 	Indy Irwin	 	Glen Academy	 	M	 	10	 	23:20.3	 	7:30	
+	117	 	(n/a)	 	1776	 	Jules Price	 	East Academy	 	M	 	10	 	23:28.2	 	7:33	
+	118	 	95	 	1958	 	Kai Abbott	 	Prairie Academy	 	M	 	10	 	23:29.0	 	7:33	
+	119	 	(n/a)	 	1694	 	Logan Hale	 	Field Academy	 	M	 	11	 	23:29.1	 	7:33	
+	120	 	96	 	1641	 	Morgan Owens	 	Lake Academy	 	M	 	09	 	23:33.3	 	7:34	
+	121	 	97	 	1855	 	Noel Young	 	Oak Academy	 	M	 	11	 	23:40.6	 	7:37	
+	122	 	(98)	 	1523	 	Oakley Gates	 	North Academy	 	M	 	12	 	23:41.5	 	7:37	
+	123	 	99	 	1535	 	Parker Nash	 	Maple Academy	 	M	 	11	 	23:51.4	 	7:40	
+	124	 	(n/a)	 	1766	 	Quinn Wells	 	Harbor Academy	 	M	 	09	 	23:51.8	 	7:40	
+	125	 	100	 	1856	 	Reese Ford	 	Oak Academy	 	M	 	09	 	23:58.7	 	7:43	
+	126	 	101	 	1540	 	Sage Mason	 	Maple Academy	 	M	 	10	 	23:59.1	 	7:43	
+	127	 	(102)	 	1654	 	Tatum Vance	 	Pine Academy	 	M	 	09	 	24:07.9	 	7:46	
+	128	 	(103)	 	1859	 	Alex Evans	 	Oak Academy	 	M	 	09	 	24:09.7	 	7:46	
+	129	 	(n/a)	 	1695	 	Blake Lowe	 	Field Academy	 	M	 	12	 	24:26.6	 	7:52	
+	130	 	(104)	 	1954	 	Casey Tate	 	Prairie Academy	 	M	 	10	 	24:27.5	 	7:52	
+	131	 	(105)	 	1902	 	Drew Dalton	 	Hill Academy	 	M	 	10	 	24:48.2	 	7:59	
+	132	 	(106)	 	1898	 	Ellis Keller	 	Hill Academy	 	M	 	11	 	24:48.2	 	7:59	
+	133	 	107	 	1635	 	Finley Stone	 	Lake Academy	 	M	 	10	 	24:53.9	 	8:00	
+	134	 	108	 	1571	 	Gray Cole	 	Cedar Academy	 	M	 	10	 	24:55.1	 	8:01	
+	135	 	(n/a)	 	1530	 	Harper Jensen	 	Stone Academy	 	M	 	09	 	25:03.7	 	8:04	
+	136	 	109	 	1541	 	Indy Reed	 	Maple Academy	 	M	 	09	 	25:31.8	 	8:13	
+	137	 	(n/a)	 	1501	 	Jules Barlow	 	Brook Academy	 	M	 	09	 	25:45.6	 	8:17	
+	138	 	(n/a)	 	1913	 	Kai Irwin	 	Elm Academy	 	M	 	11	 	26:00.7	 	8:22	
+	139	 	(110)	 	1637	 	Logan Price	 	Lake Academy	 	M	 	10	 	26:45.4	 	8:36	
+	140	 	(111)	 	1655	 	Morgan Abbott	 	Pine Academy	 	M	 	09	 	26:58.8	 	8:41	
+	141	 	(n/a)	 	1529	 	Noel Hale	 	Stone Academy	 	M	 	12	 	29:52.6	 	9:36	
+	142	 	(112)	 	1642	 	Oakley Owens	 	Lake Academy	 	M	 	09	 	30:09.4	 	9:42	
+	143	 	(113)	 	1542	 	Parker Young	 	Maple Academy	 	M	 	09	 	31:20.0	 	10:05		
+	Sample Invitational 2026		
+	Overall Results		
+	Results at www.TrackSideTiming.com	 	3
+
+-- 3 of 10 --
+
+Place	 	Points	 	Bib	 	Name	 	School	 	Gender	 	Grade	 	Time	 	Pace		
+	Girls Varsity		
+	1	 	1	 	1916	 	Quinn Gates	 	River Academy	 	F	 	10	 	19:33.0	 	6:17	
+	2	 	(n/a)	 	1905	 	Reese Nash	 	Elm Academy	 	F	 	12	 	20:00.3	 	6:26	
+	3	 	2	 	1869	 	Sage Wells	 	Bay Academy	 	F	 	10	 	20:24.1	 	6:33	
+	4	 	3	 	1714	 	Tatum Ford	 	Ridge Academy	 	F	 	12	 	20:59.9	 	6:45	
+	5	 	4	 	1882	 	Alex Mason	 	Hill Academy	 	F	 	11	 	21:04.6	 	6:47	
+	6	 	5	 	1717	 	Blake Vance	 	Ridge Academy	 	F	 	10	 	21:25.6	 	6:53	
+	7	 	6	 	1809	 	Casey Evans	 	Summit Academy	 	F	 	10	 	21:31.1	 	6:55	
+	8	 	7	 	1887	 	Drew Lowe	 	Hill Academy	 	F	 	11	 	21:32.4	 	6:56	
+	9	 	8	 	1827	 	Ella Heronymus	 	Sheboygan Area Lutheran	 	F	 	12	 	21:34.3	 	6:56	
+	10	 	9	 	1699	 	Ellis Tate	 	Valley Academy	 	F	 	12	 	21:41.7	 	6:58	
+	11	 	10	 	1698	 	Finley Dalton	 	Valley Academy	 	F	 	11	 	21:48.2	 	7:01	
+	12	 	11	 	1630	 	Gray Keller	 	Lake Academy	 	F	 	09	 	21:51.1	 	7:02	
+	13	 	(n/a)	 	1788	 	Harper Stone	 	Birch Academy	 	F	 	11	 	21:54.6	 	7:03	
+	14	 	12	 	1944	 	Indy Cole	 	Prairie Academy	 	F	 	09	 	21:54.6	 	7:03	
+	15	 	13	 	1731	 	Jules Jensen	 	South Academy	 	F	 	12	 	22:00.7	 	7:05	
+	16	 	14	 	1644	 	Kai Reed	 	Pine Academy	 	F	 	12	 	22:03.2	 	7:05	
+	17	 	15	 	1606	 	Logan Barlow	 	Glen Academy	 	F	 	11	 	22:07.3	 	7:07	
+	18	 	16	 	1659	 	Morgan Irwin	 	West Academy	 	F	 	10	 	22:10.7	 	7:08	
+	19	 	17	 	1733	 	Noel Price	 	South Academy	 	F	 	09	 	22:16.2	 	7:10	
+	20	 	18	 	1945	 	Oakley Abbott	 	Prairie Academy	 	F	 	11	 	22:18.8	 	7:10	
+	21	 	(n/a)	 	1528	 	Parker Hale	 	Stone Academy	 	F	 	10	 	22:27.7	 	7:13	
+	22	 	19	 	1715	 	Quinn Owens	 	Ridge Academy	 	F	 	09	 	22:29.8	 	7:14	
+	23	 	20	 	1605	 	Reese Young	 	Glen Academy	 	F	 	11	 	22:29.9	 	7:14	
+	24	 	21	 	1508	 	Sage Gates	 	North Academy	 	F	 	10	 	22:30.2	 	7:14	
+	25	 	(n/a)	 	1755	 	Tatum Nash	 	Spring Academy	 	F	 	09	 	22:35.6	 	7:16	
+	26	 	22	 	1943	 	Alex Wells	 	Prairie Academy	 	F	 	10	 	22:38.2	 	7:17	
+	27	 	23	 	1732	 	Blake Ford	 	South Academy	 	F	 	09	 	22:40.7	 	7:17	
+	28	 	24	 	1825	 	Elanore Faucher	 	Sheboygan Area Lutheran	 	F	 	10	 	22:40.8	 	7:18	
+	29	 	25	 	1915	 	Casey Mason	 	River Academy	 	F	 	09	 	22:49.0	 	7:20	
+	30	 	26	 	1716	 	Drew Vance	 	Ridge Academy	 	F	 	11	 	22:50.6	 	7:21	
+	31	 	27	 	1942	 	Ellis Evans	 	Prairie Academy	 	F	 	12	 	23:01.5	 	7:24	
+	32	 	28	 	1824	 	Julia Detlaff	 	Sheboygan Area Lutheran	 	F	 	09	 	23:12.8	 	7:28	
+	33	 	29	 	1735	 	Finley Lowe	 	South Academy	 	F	 	10	 	23:13.0	 	7:28	
+	34	 	30	 	1656	 	Gray Tate	 	West Academy	 	F	 	11	 	23:19.6	 	7:30	
+	35	 	31	 	1946	 	Harper Dalton	 	Prairie Academy	 	F	 	11	 	23:23.7	 	7:31	
+	36	 	32	 	1549	 	Indy Keller	 	Grove Academy	 	F	 	12	 	23:26.4	 	7:32	
+	37	 	33	 	1868	 	Jules Stone	 	Bay Academy	 	F	 	11	 	23:29.7	 	7:33	
+	38	 	34	 	1865	 	Kai Cole	 	Bay Academy	 	F	 	12	 	23:33.0	 	7:34	
+	39	 	(35)	 	1941	 	Logan Jensen	 	Prairie Academy	 	F	 	09	 	23:35.0	 	7:35	
+	40	 	36	 	1509	 	Morgan Reed	 	North Academy	 	F	 	12	 	23:36.3	 	7:35	
+	41	 	37	 	1628	 	Noel Barlow	 	Lake Academy	 	F	 	11	 	23:38.0	 	7:36	
+	42	 	38	 	1885	 	Oakley Irwin	 	Hill Academy	 	F	 	09	 	23:39.9	 	7:37	
+	43	 	39	 	1867	 	Parker Price	 	Bay Academy	 	F	 	10	 	23:41.1	 	7:37	
+	44	 	40	 	1737	 	Quinn Abbott	 	South Academy	 	F	 	09	 	23:43.4	 	7:38	
+	45	 	(41)	 	1947	 	Reese Hale	 	Prairie Academy	 	F	 	10	 	23:47.5	 	7:39	
+	46	 	42	 	1866	 	Sage Owens	 	Bay Academy	 	F	 	11	 	23:52.0	 	7:40	
+	47	 	43	 	1505	 	Tatum Young	 	North Academy	 	F	 	09	 	23:54.8	 	7:41	
+	48	 	44	 	1829	 	Lucy Leibham	 	Sheboygan Area Lutheran	 	F	 	10	 	23:59.7	 	7:43	
+	49	 	45	 	1658	 	Alex Gates	 	West Academy	 	F	 	11	 	24:04.2	 	7:44	
+	50	 	46	 	1604	 	Blake Nash	 	Glen Academy	 	F	 	10	 	24:04.7	 	7:45	
+	51	 	(47)	 	1864	 	Casey Wells	 	Bay Academy	 	F	 	12	 	24:08.1	 	7:46		
+	Sample Invitational 2026		
+	Overall Results		
+	Results at www.TrackSideTiming.com	 	4
+
+-- 4 of 10 --
+
+Place	 	Points	 	Bib	 	Name	 	School	 	Gender	 	Grade	 	Time	 	Pace		
+	52	 	48	 	1828	 	Emma Krueger	 	Sheboygan Area Lutheran	 	F	 	12	 	24:13.1	 	7:47	
+	53	 	49	 	1712	 	Drew Ford	 	Ridge Academy	 	F	 	12	 	24:13.1	 	7:47	
+	54	 	(50)	 	1736	 	Ellis Mason	 	South Academy	 	F	 	12	 	24:14.7	 	7:48	
+	55	 	51	 	1560	 	Finley Vance	 	Cedar Academy	 	F	 	11	 	24:16.5	 	7:48	
+	56	 	52	 	1808	 	Gray Evans	 	Summit Academy	 	F	 	12	 	24:19.5	 	7:49	
+	57	 	53	 	1888	 	Harper Lowe	 	Hill Academy	 	F	 	11	 	24:26.3	 	7:51	
+	58	 	(54)	 	1826	 	Estelle Giebler	 	Sheboygan Area Lutheran	 	F	 	09	 	24:27.2	 	7:52	
+	59	 	(n/a)	 	1789	 	Indy Tate	 	Birch Academy	 	F	 	11	 	24:29.1	 	7:52	
+	60	 	55	 	1920	 	Jules Dalton	 	River Academy	 	F	 	09	 	24:29.6	 	7:53	
+	61	 	(n/a)	 	1757	 	Kai Keller	 	Spring Academy	 	F	 	09	 	24:29.7	 	7:53	
+	62	 	(56)	 	1718	 	Logan Stone	 	Ridge Academy	 	F	 	12	 	24:31.0	 	7:53	
+	63	 	(57)	 	1734	 	Morgan Cole	 	South Academy	 	F	 	09	 	24:33.3	 	7:54	
+	64	 	(58)	 	1863	 	Noel Jensen	 	Bay Academy	 	F	 	09	 	24:33.5	 	7:54	
+	65	 	59	 	1917	 	Oakley Reed	 	River Academy	 	F	 	09	 	24:33.6	 	7:54	
+	66	 	60	 	1504	 	Parker Barlow	 	North Academy	 	F	 	10	 	24:40.7	 	7:56	
+	67	 	61	 	1886	 	Quinn Irwin	 	Hill Academy	 	F	 	11	 	24:42.1	 	7:57	
+	68	 	(62)	 	1713	 	Reese Price	 	Ridge Academy	 	F	 	09	 	24:43.6	 	7:57	
+	69	 	63	 	1561	 	Sage Abbott	 	Cedar Academy	 	F	 	11	 	24:50.1	 	7:59	
+	70	 	64	 	1627	 	Tatum Hale	 	Lake Academy	 	F	 	11	 	24:53.5	 	8:00	
+	71	 	65	 	1603	 	Alex Owens	 	Glen Academy	 	F	 	09	 	24:54.5	 	8:01	
+	72	 	(n/a)	 	1771	 	Blake Young	 	East Academy	 	F	 	11	 	24:55.8	 	8:01	
+	73	 	66	 	1661	 	Casey Gates	 	West Academy	 	F	 	12	 	24:58.2	 	8:02	
+	74	 	67	 	1556	 	Drew Nash	 	Cedar Academy	 	F	 	10	 	25:00.0	 	8:02	
+	75	 	(n/a)	 	1787	 	Ellis Wells	 	Birch Academy	 	F	 	12	 	25:03.8	 	8:04	
+	76	 	(68)	 	1884	 	Finley Ford	 	Hill Academy	 	F	 	11	 	25:09.2	 	8:05	
+	77	 	(n/a)	 	1756	 	Gray Mason	 	Spring Academy	 	F	 	09	 	25:11.7	 	8:06	
+	78	 	69	 	1506	 	Harper Vance	 	North Academy	 	F	 	09	 	25:13.4	 	8:07	
+	79	 	70	 	1919	 	Indy Evans	 	River Academy	 	F	 	09	 	25:15.4	 	8:07	
+	80	 	(71)	 	1830	 	Addyson Niles	 	Sheboygan Area Lutheran	 	F	 	10	 	25:23.7	 	8:10	
+	81	 	(n/a)	 	1526	 	Jules Lowe	 	Stone Academy	 	F	 	10	 	25:26.7	 	8:11	
+	82	 	72	 	1602	 	Kai Tate	 	Glen Academy	 	F	 	09	 	25:27.5	 	8:11	
+	83	 	73	 	1546	 	Logan Dalton	 	Grove Academy	 	F	 	10	 	25:35.2	 	8:14	
+	84	 	(74)	 	1883	 	Morgan Keller	 	Hill Academy	 	F	 	11	 	25:46.0	 	8:17	
+	85	 	75	 	1697	 	Noel Stone	 	Valley Academy	 	F	 	12	 	25:51.0	 	8:19	
+	86	 	(76)	 	1918	 	Oakley Cole	 	River Academy	 	F	 	11	 	25:52.5	 	8:19	
+	87	 	77	 	1700	 	Parker Jensen	 	Valley Academy	 	F	 	12	 	25:55.2	 	8:20	
+	88	 	(78)	 	1608	 	Quinn Reed	 	Glen Academy	 	F	 	12	 	25:59.2	 	8:21	
+	89	 	(n/a)	 	1790	 	Reese Barlow	 	Birch Academy	 	F	 	11	 	26:00.0	 	8:22	
+	90	 	79	 	1807	 	Sage Irwin	 	Summit Academy	 	F	 	12	 	26:02.6	 	8:22	
+	91	 	(n/a)	 	1525	 	Tatum Price	 	Stone Academy	 	F	 	10	 	26:12.5	 	8:26	
+	92	 	80	 	1548	 	Alex Abbott	 	Grove Academy	 	F	 	10	 	26:21.8	 	8:29	
+	93	 	(81)	 	1510	 	Blake Hale	 	North Academy	 	F	 	09	 	26:27.2	 	8:30	
+	94	 	82	 	1557	 	Casey Owens	 	Cedar Academy	 	F	 	12	 	26:27.4	 	8:30	
+	95	 	83	 	1648	 	Drew Young	 	Pine Academy	 	F	 	11	 	26:36.3	 	8:33	
+	96	 	(n/a)	 	1532	 	Ellis Gates	 	Maple Academy	 	F	 	12	 	26:37.7	 	8:34	
+	97	 	84	 	1813	 	Finley Nash	 	Summit Academy	 	F	 	12	 	26:41.4	 	8:35	
+	98	 	85	 	1812	 	Gray Wells	 	Summit Academy	 	F	 	09	 	26:41.7	 	8:35	
+	99	 	86	 	1646	 	Harper Ford	 	Pine Academy	 	F	 	12	 	26:54.9	 	8:39	
+	100	 	(n/a)	 	1772	 	Indy Mason	 	East Academy	 	F	 	10	 	27:02.8	 	8:42	
+	101	 	87	 	1543	 	Jules Vance	 	Grove Academy	 	F	 	10	 	27:03.3	 	8:42	
+	102	 	(n/a)	 	1693	 	Kai Evans	 	Field Academy	 	F	 	12	 	27:15.6	 	8:46	
+	103	 	88	 	1701	 	Logan Lowe	 	Valley Academy	 	F	 	09	 	27:16.9	 	8:46	
+	104	 	89	 	1558	 	Morgan Tate	 	Cedar Academy	 	F	 	12	 	27:18.4	 	8:47		
+	Sample Invitational 2026		
+	Overall Results		
+	Results at www.TrackSideTiming.com	 	5
+
+-- 5 of 10 --
+
+Place	 	Points	 	Bib	 	Name	 	School	 	Gender	 	Grade	 	Time	 	Pace		
+	105	 	(90)	 	1516	 	Noel Dalton	 	North Academy	 	F	 	11	 	27:25.7	 	8:49	
+	106	 	91	 	1660	 	Oakley Keller	 	West Academy	 	F	 	10	 	27:31.7	 	8:51	
+	107	 	(n/a)	 	1533	 	Parker Stone	 	Maple Academy	 	F	 	09	 	27:53.2	 	8:58	
+	108	 	92	 	1633	 	Quinn Cole	 	Lake Academy	 	F	 	12	 	27:59.9	 	9:00	
+	109	 	93	 	1647	 	Reese Jensen	 	Pine Academy	 	F	 	11	 	28:29.3	 	9:10	
+	110	 	(n/a)	 	1904	 	Sage Reed	 	Elm Academy	 	F	 	12	 	28:37.2	 	9:12	
+	111	 	(94)	 	1811	 	Tatum Barlow	 	Summit Academy	 	F	 	09	 	28:38.9	 	9:13	
+	112	 	95	 	1643	 	Alex Irwin	 	Pine Academy	 	F	 	09	 	29:11.7	 	9:23	
+	113	 	96	 	1632	 	Blake Price	 	Lake Academy	 	F	 	11	 	29:22.0	 	9:27	
+	114	 	(97)	 	1810	 	Casey Abbott	 	Summit Academy	 	F	 	12	 	29:31.0	 	9:30	
+	115	 	98	 	1547	 	Drew Hale	 	Grove Academy	 	F	 	09	 	30:49.3	 	9:55	
+	116	 	(99)	 	1545	 	Ellis Owens	 	Grove Academy	 	F	 	10	 	30:55.7	 	9:57	
+	117	 	(100)	 	1634	 	Finley Young	 	Lake Academy	 	F	 	12	 	31:49.8	 	10:14	
+	118	 	(101)	 	1544	 	Gray Gates	 	Grove Academy	 	F	 	09	 	31:54.2	 	10:16	
+	119	 	(102)	 	1559	 	Harper Nash	 	Cedar Academy	 	F	 	10	 	32:05.8	 	10:19	
+	120	 	(n/a)	 	1527	 	Indy Wells	 	Stone Academy	 	F	 	11	 	34:03.6	 	10:57	
+	121	 	(n/a)	 	1692	 	Jules Ford	 	Field Academy	 	F	 	12	 	36:15.6	 	11:40	
+	122	 	(n/a)	 	1691	 	Kai Mason	 	Field Academy	 	F	 	12	 	38:33.0	 	12:24	
+	123	 	(103)	 	1562	 	Logan Vance	 	Cedar Academy	 	F	 	11	 	1:14:38.4	 	24:01		
+	Sample Invitational 2026		
+	Overall Results		
+	Results at www.TrackSideTiming.com	 	6
+
+-- 6 of 10 --
+
+Place	 	Points	 	Bib	 	Name	 	School	 	Gender	 	Grade	 	Time	 	Pace		
+	Boys JV		
+	1	 	1	 	1685	 	Morgan Evans	 	West Academy	 	M	 	11	 	19:45.0	 	6:21	
+	2	 	2	 	1686	 	Noel Lowe	 	West Academy	 	M	 	11	 	19:50.2	 	6:23	
+	3	 	3	 	1844	 	Will Leibham	 	Sheboygan Area Lutheran	 	M	 	12	 	19:59.4	 	6:26	
+	4	 	4	 	1850	 	Nate Vanic	 	Sheboygan Area Lutheran	 	M	 	10	 	20:17.5	 	6:31	
+	5	 	5	 	1803	 	Oakley Tate	 	Birch Academy	 	M	 	12	 	20:41.3	 	6:39	
+	6	 	6	 	1802	 	Parker Dalton	 	Birch Academy	 	M	 	11	 	20:44.4	 	6:40	
+	7	 	7	 	1932	 	Quinn Keller	 	River Academy	 	M	 	09	 	20:49.6	 	6:42	
+	8	 	8	 	1684	 	Reese Stone	 	West Academy	 	M	 	11	 	20:58.2	 	6:44	
+	9	 	9	 	1940	 	Sage Cole	 	River Academy	 	M	 	12	 	21:14.8	 	6:50	
+	10	 	10	 	1936	 	Tatum Jensen	 	River Academy	 	M	 	10	 	21:19.4	 	6:51	
+	11	 	(n/a)	 	1711	 	Alex Reed	 	Valley Academy	 	M	 	09	 	21:20.6	 	6:52	
+	12	 	(n/a)	 	1709	 	Blake Barlow	 	Valley Academy	 	M	 	09	 	21:21.1	 	6:52	
+	13	 	11	 	1676	 	Casey Irwin	 	West Academy	 	M	 	10	 	21:22.7	 	6:52	
+	14	 	12	 	1847	 	Patrick Stoede	 	Sheboygan Area Lutheran	 	M	 	09	 	21:26.8	 	6:54	
+	15	 	13	 	1937	 	Drew Price	 	River Academy	 	M	 	09	 	21:38.8	 	6:58	
+	16	 	14	 	1845	 	Charlie Schallock	 	Sheboygan Area Lutheran	 	M	 	11	 	21:51.4	 	7:02	
+	17	 	15	 	1800	 	Ellis Abbott	 	Birch Academy	 	M	 	12	 	21:55.1	 	7:03	
+	18	 	16	 	1754	 	Finley Hale	 	South Academy	 	M	 	09	 	22:01.2	 	7:05	
+	19	 	17	 	1938	 	Gray Owens	 	River Academy	 	M	 	10	 	22:05.3	 	7:06	
+	20	 	(18)	 	1935	 	Harper Young	 	River Academy	 	M	 	11	 	22:06.9	 	7:07	
+	21	 	19	 	1687	 	Indy Gates	 	West Academy	 	M	 	10	 	22:07.2	 	7:07	
+	22	 	(20)	 	1679	 	Jules Nash	 	West Academy	 	M	 	09	 	22:09.1	 	7:07	
+	23	 	(n/a)	 	1626	 	Kai Wells	 	Glen Academy	 	M	 	09	 	22:16.8	 	7:10	
+	24	 	(21)	 	1931	 	Logan Ford	 	River Academy	 	M	 	09	 	22:17.1	 	7:10	
+	25	 	(n/a)	 	1710	 	Morgan Mason	 	Valley Academy	 	M	 	09	 	22:35.2	 	7:16	
+	26	 	(22)	 	1675	 	Noel Vance	 	West Academy	 	M	 	12	 	22:36.4	 	7:16	
+	27	 	23	 	1804	 	Oakley Evans	 	Birch Academy	 	M	 	10	 	22:48.3	 	7:20	
+	28	 	24	 	1849	 	Robert Tock	 	Sheboygan Area Lutheran	 	M	 	12	 	22:48.7	 	7:20	
+	29	 	(n/a)	 	1682	 	Parker Lowe	 	West Academy	 	M	 	11	 	22:52.0	 	7:21	
+	30	 	(n/a)	 	1680	 	Quinn Tate	 	West Academy	 	M	 	10	 	23:00.7	 	7:24	
+	31	 	(25)	 	1842	 	Conrad Hasler	 	Sheboygan Area Lutheran	 	M	 	09	 	23:01.0	 	7:24	
+	32	 	26	 	1799	 	Reese Dalton	 	Birch Academy	 	M	 	09	 	23:15.8	 	7:29	
+	33	 	27	 	1594	 	Sage Keller	 	Bluff Academy	 	M	 	10	 	23:19.9	 	7:30	
+	34	 	(28)	 	1843	 	Emmerson Leibham	 	Sheboygan Area Lutheran	 	M	 	10	 	23:21.0	 	7:30	
+	35	 	(n/a)	 	1688	 	Tatum Stone	 	West Academy	 	M	 	10	 	23:47.0	 	7:39	
+	36	 	29	 	1600	 	Alex Cole	 	Bluff Academy	 	M	 	11	 	23:47.9	 	7:39	
+	37	 	30	 	1598	 	Blake Jensen	 	Bluff Academy	 	M	 	09	 	23:56.2	 	7:42	
+	38	 	31	 	1753	 	Casey Reed	 	South Academy	 	M	 	11	 	23:57.2	 	7:42	
+	39	 	32	 	1597	 	Drew Barlow	 	Bluff Academy	 	M	 	09	 	23:57.4	 	7:42	
+	40	 	(n/a)	 	1677	 	Ellis Irwin	 	West Academy	 	M	 	10	 	24:23.3	 	7:50	
+	41	 	(33)	 	1801	 	Finley Price	 	Birch Academy	 	M	 	09	 	24:25.9	 	7:51	
+	42	 	(n/a)	 	1765	 	Gray Abbott	 	Spring Academy	 	M	 	09	 	24:31.1	 	7:53	
+	43	 	(34)	 	1806	 	Harper Hale	 	Birch Academy	 	M	 	11	 	24:33.8	 	7:54	
+	44	 	(n/a)	 	1881	 	Indy Owens	 	Bay Academy	 	M	 	11	 	24:38.9	 	7:56	
+	45	 	(n/a)	 	1933	 	Jules Young	 	River Academy	 	M	 	09	 	24:48.0	 	7:58	
+	46	 	(n/a)	 	1778	 	Kai Gates	 	East Academy	 	M	 	10	 	24:50.4	 	7:59	
+	47	 	(n/a)	 	1572	 	Logan Nash	 	Cedar Academy	 	M	 	11	 	24:55.4	 	8:01	
+	48	 	35	 	1601	 	Morgan Wells	 	Bluff Academy	 	M	 	09	 	25:01.5	 	8:03	
+	49	 	(n/a)	 	1573	 	Noel Ford	 	Cedar Academy	 	M	 	11	 	25:11.3	 	8:06	
+	50	 	(n/a)	 	1763	 	Oakley Mason	 	Spring Academy	 	M	 	09	 	25:14.1	 	8:07	
+	51	 	36	 	1752	 	Parker Vance	 	South Academy	 	M	 	11	 	25:16.7	 	8:08		
+	Sample Invitational 2026		
+	Overall Results		
+	Results at www.TrackSideTiming.com	 	7
+
+-- 7 of 10 --
+
+Place	 	Points	 	Bib	 	Name	 	School	 	Gender	 	Grade	 	Time	 	Pace		
+	52	 	(n/a)	 	1841	 	Brandon Friedl	 	Sheboygan Area Lutheran	 	M	 	09	 	25:26.6	 	8:11	
+	53	 	(n/a)	 	1681	 	Quinn Evans	 	West Academy	 	M	 	12	 	25:30.1	 	8:12	
+	54	 	(n/a)	 	1934	 	Reese Lowe	 	River Academy	 	M	 	10	 	25:31.7	 	8:13	
+	55	 	(n/a)	 	1625	 	Sage Tate	 	Glen Academy	 	M	 	09	 	25:37.7	 	8:14	
+	56	 	(n/a)	 	1624	 	Tatum Dalton	 	Glen Academy	 	M	 	09	 	26:07.7	 	8:24	
+	57	 	(n/a)	 	1880	 	Alex Keller	 	Bay Academy	 	M	 	12	 	26:09.3	 	8:25	
+	58	 	(n/a)	 	1555	 	Blake Stone	 	Grove Academy	 	M	 	11	 	26:09.4	 	8:25	
+	59	 	(n/a)	 	1575	 	Casey Cole	 	Cedar Academy	 	M	 	11	 	26:11.0	 	8:25	
+	60	 	(n/a)	 	1862	 	Drew Jensen	 	Oak Academy	 	M	 	09	 	26:13.1	 	8:26	
+	61	 	37	 	1751	 	Ellis Reed	 	South Academy	 	M	 	09	 	26:27.6	 	8:30	
+	62	 	(n/a)	 	1861	 	Finley Barlow	 	Oak Academy	 	M	 	11	 	26:48.3	 	8:37	
+	63	 	(38)	 	1593	 	Gray Irwin	 	Bluff Academy	 	M	 	10	 	26:54.4	 	8:39	
+	64	 	(n/a)	 	1574	 	Harper Price	 	Cedar Academy	 	M	 	09	 	27:15.4	 	8:46	
+	65	 	(n/a)	 	1762	 	Indy Abbott	 	Spring Academy	 	M	 	09	 	27:26.0	 	8:49	
+	66	 	(n/a)	 	1764	 	Jules Hale	 	Spring Academy	 	M	 	11	 	28:20.5	 	9:07	
+	67	 	(n/a)	 	1690	 	Kai Owens	 	West Academy	 	M	 	11	 	29:13.4	 	9:24	
+	68	 	(n/a)	 	1848	 	Harrison Strenger	 	Sheboygan Area Lutheran	 	M	 	09	 	29:45.1	 	9:34	
+	69	 	(n/a)	 	1683	 	Logan Young	 	West Academy	 	M	 	09	 	30:25.4	 	9:47	
+	70	 	(39)	 	1596	 	Morgan Gates	 	Bluff Academy	 	M	 	09	 	31:27.7	 	10:07	
+	71	 	(n/a)	 	1623	 	Noel Nash	 	Glen Academy	 	M	 	09	 	31:55.6	 	10:16	
+	72	 	40	 	1750	 	Oakley Wells	 	South Academy	 	M	 	10	 	31:59.7	 	10:17	
+	73	 	(n/a)	 	1595	 	Parker Ford	 	Bluff Academy	 	M	 	09	 	33:51.0	 	10:53	
+	74	 	(n/a)	 	1503	 	Quinn Mason	 	Brook Academy	 	M	 	09	 	35:02.5	 	11:16	
+	75	 	(n/a)	 	1823	 	Reese Vance	 	Summit Academy	 	M	 	09	 	38:26.1	 	12:22		
+	Sample Invitational 2026		
+	Overall Results		
+	Results at www.TrackSideTiming.com	 	8
+
+-- 8 of 10 --
+
+Place	 	Points	 	Bib	 	Name	 	School	 	Gender	 	Grade	 	Time	 	Pace		
+	Girls JV		
+	1	 	1	 	1871	 	Sage Evans	 	Bay Academy	 	F	 	09	 	23:31.2	 	7:34	
+	2	 	(n/a)	 	1948	 	Tatum Lowe	 	Prairie Academy	 	F	 	12	 	24:38.5	 	7:55	
+	3	 	2	 	1664	 	Alex Tate	 	West Academy	 	F	 	10	 	24:39.7	 	7:56	
+	4	 	3	 	1579	 	Blake Dalton	 	Bluff Academy	 	F	 	10	 	25:06.0	 	8:04	
+	5	 	(n/a)	 	1891	 	Casey Keller	 	Hill Academy	 	F	 	10	 	25:16.3	 	8:08	
+	6	 	4	 	1870	 	Drew Stone	 	Bay Academy	 	F	 	11	 	25:26.4	 	8:11	
+	7	 	(n/a)	 	1893	 	Ellis Cole	 	Hill Academy	 	F	 	11	 	25:56.3	 	8:20	
+	8	 	5	 	1582	 	Finley Jensen	 	Bluff Academy	 	F	 	09	 	25:56.9	 	8:21	
+	9	 	6	 	1583	 	Gray Reed	 	Bluff Academy	 	F	 	10	 	25:58.9	 	8:21	
+	10	 	(n/a)	 	1890	 	Harper Barlow	 	Hill Academy	 	F	 	11	 	26:00.4	 	8:22	
+	11	 	(n/a)	 	1741	 	Indy Irwin	 	South Academy	 	F	 	11	 	26:06.9	 	8:24	
+	12	 	7	 	1874	 	Jules Price	 	Bay Academy	 	F	 	12	 	26:17.8	 	8:27	
+	13	 	8	 	1721	 	Kai Abbott	 	Ridge Academy	 	F	 	09	 	26:20.3	 	8:28	
+	14	 	9	 	1873	 	Logan Hale	 	Bay Academy	 	F	 	09	 	26:24.0	 	8:29	
+	15	 	10	 	1722	 	Morgan Owens	 	Ridge Academy	 	F	 	10	 	26:26.2	 	8:30	
+	16	 	(n/a)	 	1759	 	Noel Young	 	Spring Academy	 	F	 	10	 	26:34.9	 	8:33	
+	17	 	(n/a)	 	1742	 	Oakley Gates	 	South Academy	 	F	 	11	 	26:36.6	 	8:33	
+	18	 	(n/a)	 	1740	 	Parker Nash	 	South Academy	 	F	 	09	 	26:42.3	 	8:35	
+	19	 	11	 	1723	 	Quinn Wells	 	Ridge Academy	 	F	 	10	 	26:43.5	 	8:36	
+	20	 	(n/a)	 	1517	 	Reese Ford	 	North Academy	 	F	 	12	 	26:46.0	 	8:36	
+	21	 	(n/a)	 	1613	 	Sage Mason	 	Glen Academy	 	F	 	12	 	26:46.3	 	8:37	
+	22	 	12	 	1724	 	Tatum Vance	 	Ridge Academy	 	F	 	09	 	26:59.6	 	8:41	
+	23	 	(n/a)	 	1854	 	Alex Evans	 	Oak Academy	 	F	 	09	 	27:06.3	 	8:43	
+	24	 	(n/a)	 	1511	 	Blake Lowe	 	North Academy	 	F	 	09	 	27:13.1	 	8:45	
+	25	 	(n/a)	 	1852	 	Casey Tate	 	Oak Academy	 	F	 	09	 	27:40.1	 	8:54	
+	26	 	13	 	1719	 	Drew Dalton	 	Ridge Academy	 	F	 	11	 	27:51.0	 	8:57	
+	27	 	(n/a)	 	1908	 	Ellis Keller	 	Elm Academy	 	F	 	09	 	27:51.4	 	8:57	
+	28	 	14	 	1577	 	Finley Stone	 	Bluff Academy	 	F	 	09	 	27:54.3	 	8:58	
+	29	 	(n/a)	 	1739	 	Gray Cole	 	South Academy	 	F	 	10	 	27:59.3	 	9:00	
+	30	 	(n/a)	 	1513	 	Harper Jensen	 	North Academy	 	F	 	12	 	28:29.8	 	9:10	
+	31	 	15	 	1663	 	Indy Reed	 	West Academy	 	F	 	09	 	28:34.6	 	9:11	
+	32	 	16	 	1580	 	Jules Barlow	 	Bluff Academy	 	F	 	11	 	29:01.5	 	9:20	
+	33	 	17	 	1872	 	Kai Irwin	 	Bay Academy	 	F	 	11	 	29:02.1	 	9:20	
+	34	 	(n/a)	 	1833	 	Emma Winter	 	Sheboygan Area Lutheran	 	F	 	10	 	29:08.5	 	9:22	
+	35	 	(18)	 	1578	 	Logan Price	 	Bluff Academy	 	F	 	09	 	29:14.9	 	9:24	
+	36	 	(19)	 	1581	 	Morgan Abbott	 	Bluff Academy	 	F	 	10	 	29:18.0	 	9:25	
+	37	 	(n/a)	 	1512	 	Noel Hale	 	North Academy	 	F	 	12	 	29:18.4	 	9:26	
+	38	 	(n/a)	 	1760	 	Oakley Owens	 	Spring Academy	 	F	 	10	 	29:20.6	 	9:26	
+	39	 	(n/a)	 	1773	 	Parker Young	 	East Academy	 	F	 	09	 	29:21.3	 	9:26	
+	40	 	(n/a)	 	1921	 	Quinn Gates	 	River Academy	 	F	 	11	 	29:26.9	 	9:28	
+	41	 	(n/a)	 	1831	 	Natalie Begalke	 	Sheboygan Area Lutheran	 	F	 	10	 	29:55.6	 	9:37	
+	42	 	(n/a)	 	1585	 	Reese Nash	 	Bluff Academy	 	F	 	11	 	30:06.2	 	9:41	
+	43	 	(n/a)	 	1818	 	Sage Wells	 	Summit Academy	 	F	 	12	 	30:35.4	 	9:50	
+	44	 	(n/a)	 	1610	 	Tatum Ford	 	Glen Academy	 	F	 	11	 	31:03.6	 	9:59	
+	45	 	20	 	1666	 	Alex Mason	 	West Academy	 	F	 	10	 	31:04.8	 	10:00	
+	46	 	21	 	1665	 	Blake Vance	 	West Academy	 	F	 	12	 	31:15.0	 	10:03	
+	47	 	(n/a)	 	1851	 	Casey Evans	 	Oak Academy	 	F	 	09	 	31:22.7	 	10:06	
+	48	 	(n/a)	 	1758	 	Drew Lowe	 	Spring Academy	 	F	 	10	 	31:30.3	 	10:08	
+	49	 	(n/a)	 	1832	 	Mikayla Vaszily	 	Sheboygan Area Lutheran	 	F	 	12	 	31:38.2	 	10:10	
+	50	 	22	 	1667	 	Ellis Tate	 	West Academy	 	F	 	11	 	32:00.9	 	10:18	
+	51	 	(n/a)	 	1951	 	Finley Dalton	 	Prairie Academy	 	F	 	09	 	33:09.2	 	10:40		
+	Sample Invitational 2026		
+	Overall Results		
+	Results at www.TrackSideTiming.com	 	9
+
+-- 9 of 10 --
+
+Place	 	Points	 	Bib	 	Name	 	School	 	Gender	 	Grade	 	Time	 	Pace		
+	52	 	(n/a)	 	1815	 	Gray Keller	 	Summit Academy	 	F	 	11	 	33:41.2	 	10:50	
+	53	 	(n/a)	 	1907	 	Harper Stone	 	Elm Academy	 	F	 	11	 	33:48.9	 	10:53	
+	54	 	(n/a)	 	1906	 	Indy Cole	 	Elm Academy	 	F	 	10	 	33:50.4	 	10:53	
+	55	 	(n/a)	 	1550	 	Jules Jensen	 	Grove Academy	 	F	 	10	 	33:56.1	 	10:55	
+	56	 	(n/a)	 	1892	 	Kai Reed	 	Hill Academy	 	F	 	10	 	34:41.3	 	11:09	
+	57	 	(n/a)	 	1949	 	Logan Barlow	 	Prairie Academy	 	F	 	12	 	35:37.1	 	11:27	
+	58	 	(n/a)	 	1584	 	Morgan Irwin	 	Bluff Academy	 	F	 	11	 	36:50.8	 	11:51	
+	59	 	(n/a)	 	1817	 	Noel Price	 	Summit Academy	 	F	 	12	 	37:27.0	 	12:03	
+	60	 	(n/a)	 	1564	 	Oakley Abbott	 	Cedar Academy	 	F	 	09	 	38:07.4	 	12:16		
+	Number of records: 401		
+	Sample Invitational 2026		
+	Overall Results		
+	Results at www.TrackSideTiming.com	 	10
+
+-- 10 of 10 --
+
