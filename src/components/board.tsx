@@ -622,7 +622,8 @@ function RaceBoard({
         </div>
       )}
 
-      {longRunning && (
+      {/* Only for the people who can act on it (marking a race finished is staff-only). */}
+      {longRunning && staff && (
         <div className="mb-3">
           <Alert tone="gold">This race has been running for over 90 minutes. Mark it finished (meet page → Options → Adjust) to stop live updates.</Alert>
         </div>
