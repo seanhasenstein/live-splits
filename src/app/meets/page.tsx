@@ -52,7 +52,8 @@ export default async function MeetsPage() {
     .sort((a, b) => b.localeCompare(a))
     .map((year) => ({ year, meets: groups.past.filter((m) => m.date.startsWith(year)) }));
 
-  const row = (m: Meet, status: MeetStatus) => {
+  // `withYear` for older seasons, where a long open list can scroll its heading away.
+  const row = (m: Meet, status: MeetStatus, withYear = false) => {
     const rs = racesOf(m);
     const live = rs.filter((r) => r.gunTimeMs !== null && !r.finishedAt);
     const next = rs.find((r) => r.gunTimeMs === null);
@@ -86,6 +87,7 @@ export default async function MeetsPage() {
           </span>
           <span className="block truncate text-[13px] text-ink-2">
             {formatLocalDate(m.date)}
+            {withYear && `, ${m.date.slice(0, 4)}`}
             {detail && ` · ${detail}`}
           </span>
         </span>
@@ -159,7 +161,7 @@ export default async function MeetsPage() {
                       <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
                     </span>
                   </summary>
-                  <div className="divide-y divide-line border-t border-line">{list.map((m) => row(m, "past"))}</div>
+                  <div className="divide-y divide-line border-t border-line">{list.map((m) => row(m, "past", true))}</div>
                 </details>
               ),
             )}
