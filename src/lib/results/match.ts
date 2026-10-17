@@ -110,3 +110,15 @@ export function guessRace<T extends { id: string; name: string; gender?: "F" | "
   }
   return best?.id ?? null;
 }
+
+/**
+ * Whether a race runs boys and girls together, so it can take a boys contest and a girls one.
+ * The race category says so when it has no gender, but a combined race is often set up under a
+ * gendered category: its name ("Boys & Girls JV") or a lineup with both counts too, as on the board.
+ */
+export function isCombinedRace(race: { name: string; athleteIds: string[] }, categoryGender: "F" | "M" | "X" | null, genderOf: (athleteId: string) => string | undefined): boolean {
+  if (categoryGender === null || categoryGender === "X") return true;
+  if (/\b(boys?|men)\b.*\b(girls?|women)\b|\b(girls?|women)\b.*\b(boys?|men)\b|\b(combined|coed|co-ed|mixed)\b/i.test(race.name)) return true;
+  const genders = new Set(race.athleteIds.map(genderOf));
+  return genders.has("F") && genders.has("M");
+}

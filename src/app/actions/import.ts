@@ -8,6 +8,7 @@ import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
 import { Id, type Race } from "@/lib/db/schema";
 import { commitImport, type ImportPlan } from "@/lib/results/import";
+import { isCombinedRace } from "@/lib/results/match";
 import type { ParsedContest } from "@/lib/results/parse";
 import { parseResultsText } from "@/lib/results/parse";
 import { fromPdf, fromUrl, SourceError } from "@/lib/results/sources";
@@ -131,8 +132,12 @@ export async function commitImportAction(meetId: string, payloadJson: string): P
     if (!race || !contest) return { error: "A race or contest in the import no longer exists." };
     if (!p.assignments.every((a) => contest.entries[a.entryIndex])) return { error: "An assignment points at a results row that doesn't exist." };
     // Only a combined race takes more than one contest (boys + girls).
-    const gender = genderOf(race);
-    if ((gender === "F" || gender === "M") && plans.some((q) => q.race._id === race._id)) return { error: `${race.name} isn't a combined race, so it can take only one set of results.` };
+    if (plans.some((q) => q.race._id === race._id)) {
+      const ids = race.lineup.map((l) => l.athleteId);
+      const athletes = await collection(db, "athletes").find({ _id: { $in: ids } }).project<{ _id: string; gender: string }>({ gender: 1 }).toArray();
+      const genders = new Map(athletes.map((a) => [a._id, a.gender]));
+      if (!isCombinedRace({ name: race.name, athleteIds: ids }, genderOf(race), (id) => genders.get(id))) return { error: `${race.name} isn't a combined race, so it can take only one set of results.` };
+    }
     // Our runners in the results who weren't on the lineup ran anyway: add them, at their roster level.
     const lineup = new Set(race.lineup.map((l) => l.athleteId));
     const extra = [...new Set(p.assignments.map((a) => a.athleteId))].filter((id) => !lineup.has(id));
