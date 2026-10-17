@@ -774,13 +774,14 @@ function RaceBoard({
                         <span
                           // Green faster, red slower, gray within a second. With places on, ▲ / ▼ are the color in
                           // the cell and the split stays plain (its pace change is in the checkpoint view and the sheet).
-                          className={`block ${place || paceChange === null || Math.abs(paceChange) < 1000 ? "" : paceChange < 0 ? "text-brand-text" : "text-danger"}`}
+                          className={`block whitespace-nowrap ${place || paceChange === null || Math.abs(paceChange) < 1000 ? "" : paceChange < 0 ? "text-brand-text" : "text-danger"}`}
                           title={paceChange !== null ? `${paceChange <= 0 ? "−" : "+"}${formatElapsed(Math.abs(paceChange)).replace(/\.\d$/, "")} per mile vs the previous segment` : undefined}
                         >
                           <Time>{ft(split)}</Time>
+                          {/* Beside the split, not under it, so the lines below stay level with the other columns. */}
+                          {oddPace !== null && <Time className="ml-1 text-[11px] font-normal text-ink-3">{formatElapsed(oddPace).replace(/\.\d$/, "")}/mi</Time>}
                         </span>
                       )}
-                      {oddPace !== null && projected === null && <Time className="block text-[11px] leading-4 text-ink-3">{formatElapsed(oddPace).replace(/\.\d$/, "")}/mi</Time>}
                       {/* The time from the gun under the split. The first checkpoint's time is its split, so an empty
                           line keeps its place level with the others. */}
                       {projected === null && i > 0 && split !== null && (
