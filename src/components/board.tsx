@@ -902,7 +902,7 @@ function RaceBoard({
       )}
 
       <p className="mt-3 text-xs text-ink-3">
-        {!editing && "Tap a runner for their splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a light ~ time marked projected is when they should get there at their last split's pace${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : race.placesDerived ? "Official times replace app taps where imported; the timing company scored the divisions as one field, so places here are ranked by the app within our division. " : "Official times replace app taps where imported. ")}{" "}
+        {!editing && "Tap a runner for their splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a light ~ time marked projected is when they should get there at their last split's pace (before their first split, from their races earlier this season)${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : race.placesDerived ? "Official times replace app taps where imported; the timing company scored the divisions as one field, so places here are ranked by the app within our division. " : "Official times replace app taps where imported. ")}{" "}
         {focusIndex === null
           ? race.places
             ? "The split, the time from the gun beneath it, then the place. Pick a checkpoint above the table for each split's pace change."
