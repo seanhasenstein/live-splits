@@ -480,8 +480,7 @@ function RaceBoard({
                       </button>
                     ) : (
                       <span>
-                        {athletes[r.athleteId]}
-                        {c.kind === "finish" && r.record && <RecordPill badge={r.record} className="ml-2 align-[2px]" />}
+                        <NameWithPill name={athletes[r.athleteId] ?? "?"} pill={c.kind === "finish" && r.record ? <RecordPill badge={r.record} className="ml-1.5 align-[2px]" /> : null} />
                       </span>
                     )}
                     {out && (
@@ -682,8 +681,7 @@ function RaceBoard({
                         </button>
                       ) : (
                         <button type="button" onClick={() => setAthleteSheet(row.athleteId)} className="-mx-1.5 rounded px-1.5 py-1 text-left">
-                          {athletes[row.athleteId]}
-                          {row.record && <RecordPill badge={row.record} className="ml-2 align-[2px]" />}
+                          <NameWithPill name={athletes[row.athleteId] ?? "?"} pill={row.record ? <RecordPill badge={row.record} className="ml-1.5 align-[2px]" /> : null} />
                         </button>
                       )}
                       {row.status ? (
@@ -1838,5 +1836,24 @@ function Notes({ lines }: { lines: string[] }) {
         ))}
       </ul>
     </div>
+  );
+}
+
+/**
+ * A name with a PR / SB pill that never ends up on a line of its own: the pill is glued to the last
+ * word, so a long name in a narrow column wraps as "Elanore / Faucher [PR]".
+ */
+function NameWithPill({ name, pill }: { name: string; pill: ReactNode }) {
+  if (!pill) return <>{name}</>;
+  const words = name.split(" ");
+  const last = words.pop() ?? "";
+  return (
+    <>
+      {words.length > 0 && `${words.join(" ")} `}
+      <span className="whitespace-nowrap">
+        {last}
+        {pill}
+      </span>
+    </>
   );
 }
