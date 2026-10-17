@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { CalendarDays, Plus } from "lucide-react";
+import { CalendarDays, History, Plus } from "lucide-react";
 import { redirect } from "next/navigation";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { SectionTabs } from "@/components/section-tabs";
 import { SessionMenu } from "@/components/session-menu";
 import { ShareSeason } from "@/components/share-season";
 import { AppHeader, Badge, Card, EmptyState, LinkButton, LiveDot, Page, PageTitle, SectionLabel } from "@/components/ui";
@@ -31,7 +32,7 @@ function statusOf(meet: Meet, races: Race[], today: string): MeetStatus {
 export default async function MeetsPage() {
   const session = await getSession();
   if (!session) redirect("/join");
-  if (!isSchoolWide(session)) redirect(session.meetId ? `/meets/${session.meetId}` : "/join");
+  if (!isSchoolWide(session)) redirect(session.meetId ? `/meets/${session.meetId}` : session.role === "manager" ? "/workouts" : "/join");
   const coach = isSchoolCoach(session);
 
   const [meets, school] = await Promise.all([listMeets(session.schoolId), getSchool(session.schoolId)]);
@@ -66,7 +67,7 @@ export default async function MeetsPage() {
               ? `${rs.length} race${rs.length === 1 ? "" : "s"}`
               : "";
     return (
-      <a key={m._id} href={`/meets/${m._id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-2">
+      <a key={m._id} href={`/meets/${m._id}`} className={`flex items-center gap-3 px-4 py-3 ${status === "live" ? "hover:bg-danger-soft" : "hover:bg-surface-2"}`}>
         <span className={`flex size-9 shrink-0 items-center justify-center rounded-md ${status === "live" ? "bg-danger-soft text-danger" : "bg-surface-2 text-ink-2"}`}>
           {status === "live" ? <LiveDot /> : <CalendarDays className="size-4" />}
         </span>
@@ -93,6 +94,7 @@ export default async function MeetsPage() {
       <AppHeader right={<SessionMenu name={session.name} role={coach ? "coach" : "viewer"} />} />
       <Page>
         <AutoRefresh everyMs={anyLive ? 10000 : 60000} />
+        {coach && <SectionTabs active="meets" />}
         <PageTitle
           title="Meets"
           description={school?.name ?? "This season"}
@@ -103,6 +105,9 @@ export default async function MeetsPage() {
                 <LinkButton href="/meets/new" size="sm">
                   <Plus className="size-4" />
                   New meet
+                </LinkButton>
+                <LinkButton href="/meets/import-history" size="sm" variant="secondary" aria-label="Import past seasons">
+                  <History className="size-4" />
                 </LinkButton>
               </div>
             ) : undefined
@@ -123,8 +128,10 @@ export default async function MeetsPage() {
               groups[status].length ? (
                 <section key={status}>
                   <SectionLabel className="mb-1.5">{status === "live" ? "Happening now" : status === "upcoming" ? "Upcoming" : "Past meets"}</SectionLabel>
-                  <Card>
-                    <div className="divide-y divide-line">{groups[status].map((m) => row(m, status))}</div>
+                  {/* Happening now gets the running-race tint from the meet page: red means running, on both.
+                      overflow-hidden keeps a hovered first or last row inside the rounded corners. */}
+                  <Card className={`overflow-hidden ${status === "live" ? "border-danger/40! bg-danger-soft/70!" : ""}`}>
+                    <div className={`divide-y ${status === "live" ? "divide-danger/20" : "divide-line"}`}>{groups[status].map((m) => row(m, status))}</div>
                   </Card>
                 </section>
               ) : null,

@@ -18,6 +18,7 @@ pnpm dev
 ## Scripts
 
 - `pnpm dev` / `pnpm build` / `pnpm lint` / `pnpm typecheck`
+- `pnpm test` — unit tests. `src/lib/results/fixtures/` holds real vendor output (Arrow/XM, RACE RESULT, Badger State PDF text, a hand-split division PDF) with other schools' names replaced, run through the parsers and the fetch chain; regenerate a fixture from a fresh download when a vendor changes its format. Two tests on unsanitized local data (`data/results/`, git-ignored) skip where it isn't present.
 - `pnpm db:indexes` — create indexes (run again after pulling: new indexes were added Oct 8)
 - `pnpm db:seed` — create indexes and seed
 - `pnpm db:migrate` — backfill fields added since the database was seeded
@@ -70,12 +71,47 @@ Import maps each gender's results contest to that same race (places stay per
 contest), and the CSV's Race column reads "JV Girls" / "JV Boys" so the
 workbook can split them.
 
+## Records: PR, SB, course PR, meet PR
+
+A finish that beats what the runner came in with earns a badge on the
+results board and the athlete sheet: PR (best at this distance in this
+program, any course), SB (this season), Course PR (this course layout),
+Meet PR (this meet in earlier years). Only the strongest shows on the board;
+the sheet lists the rest and the previous best. Bests come from official
+results across every season the app knows, so they are only as complete as
+the history imported. While a finish rests on an app tap the badge is
+outlined and says "pending official results"; inside two seconds of the old
+mark it reads "PR?". A first race at a distance earns nothing: a record means
+beating a previous mark. A meet marked "doesn't count for records" (edit
+meet; for a short course) still shows its times but never earns or sets a
+best; the same flag exists per race and per result in the schema.
+
+## Past seasons
+
+Meets → the history button → upload the team's split-sheet PDF (one PDF for
+years of meets: "Meet, Month Dth YYYY" header, a table per gender with
+Mile 1 / Mile 2 / Mile 3.1 segment times, Finish, Place with "JV" for the JV
+race). The review lists the meets (ticked unless already in the app), lets
+you name each venue (for course bests) and decide who each unknown name is
+(an existing athlete, or a new alumni with a graduation year). Everything
+lands in one transaction: seasons, meets, races with Mile 1 / Mile 2 /
+Finish checkpoints, results with mat splits, alumni and season rosters, and
+`programs.settings.historyCompleteFromYear` moves back to the earliest
+season imported.
+
 ## Official results
 
 - **After a race:** meet page → Import results (timing company link, pasted
   text, or PDF). Official finishes and mat splits then replace app taps on
   every screen; Adjust → "Set the gun from official results" lines the app's
   splits up with the mats; the App vs official page shows the error.
+  When a sheet scored two divisions as one field, the wizard's "Pick our
+  division's teams" keeps those teams and ranks them by time; the race is
+  flagged `placesDerived` and the board says "division place".
+  Imported times keep the sheet's precision (whole seconds, tenths,
+  hundredths) and are shown no finer than that, or than the program's
+  `timePrecision` setting (whole seconds for the Crusaders). The record screen
+  and running race clocks always show tenths.
 - **During a race:** Adjust → "Live official results" links the race to the
   timing company's feed (paste their results page or a RACE RESULT contest
   link, pick the contest). While the race is in progress the taps poll carries

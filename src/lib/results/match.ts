@@ -42,7 +42,31 @@ export function matchAthlete(entry: ParsedEntry, athletes: Athlete[]): Match {
   const last = normalizeName(entry.lastName);
   const byLast = last ? athletes.filter((a) => normalizeName(a.displayName).endsWith(` ${last}`) || normalizeName(a.officialName).endsWith(` ${last}`)) : [];
   if (byLast.length === 1) return { athlete: null, kind: "last-name", candidates: byLast };
-  return { athlete: null, kind: "none", candidates: byLast };
+  if (byLast.length > 1) return { athlete: null, kind: "none", candidates: byLast };
+  // A surname typed a letter or two off ("Stoede" for Stroede) with the same first name.
+  const first = normalizeName(entry.firstName);
+  const near = first
+    ? athletes.filter((a) => {
+        const [f, ...rest] = normalizeName(a.displayName).split(" ");
+        return f === first && rest.length > 0 && editDistance(rest.join(" "), last) <= 2;
+      })
+    : [];
+  return { athlete: null, kind: "none", candidates: near };
+}
+
+/** Levenshtein distance, for near-miss surnames. */
+export function editDistance(a: string, b: string): number {
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let diag = prev[0];
+    prev[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = prev[j];
+      prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1));
+      diag = tmp;
+    }
+  }
+  return prev[b.length];
 }
 
 const GENDER_WORDS: Record<string, "F" | "M"> = { girls: "F", girl: "F", women: "F", womens: "F", boys: "M", boy: "M", men: "M", mens: "M" };

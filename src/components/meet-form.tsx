@@ -4,7 +4,7 @@ import { Check } from "lucide-react";
 import { useActionState, useState } from "react";
 import { type MeetFormState } from "@/app/actions/meets";
 import { CodesPanel } from "@/components/codes-panel";
-import { Alert, Button, Card, CardBody, CardHeader, Field, Input, LinkButton } from "@/components/ui";
+import { Alert, Button, Card, CardBody, CardHeader, Checkbox, Field, Input, LinkButton } from "@/components/ui";
 import type { VenueWithCourses } from "@/lib/data";
 
 export type MeetFormValues = {
@@ -16,6 +16,8 @@ export type MeetFormValues = {
   venueState: string;
   courseId: string | null;
   resultsUrl: string;
+  /** Null when the meet counts for records; otherwise the reason it doesn't (may be blank). */
+  recordsExclusionReason: string | null;
 };
 
 type Props = {
@@ -37,6 +39,7 @@ export function MeetForm({ action, venues, defaultTimeZone, defaultState, meet, 
   const [typedState, setTypedState] = useState(meet?.venueState || defaultState);
   const [courseId, setCourseId] = useState(meet?.courseId ?? "");
   const [newCourseName, setNewCourseName] = useState("");
+  const [recordsExcluded, setRecordsExcluded] = useState(meet?.recordsExclusionReason !== null && meet?.recordsExclusionReason !== undefined);
 
   const findVenue = (name: string) => venues.find((v) => v.name.trim().toLowerCase() === name.trim().toLowerCase());
   const venue = findVenue(venueName);
@@ -161,6 +164,12 @@ export function MeetForm({ action, venues, defaultTimeZone, defaultState, meet, 
           <Field label="Results link" hint="Optional. The timing company's page for this meet; shown on the meet page and used to import results.">
             <Input name="resultsUrl" defaultValue={meet?.resultsUrl} placeholder="https://www.badgerstatetiming.live/…" inputMode="url" maxLength={500} />
           </Field>
+
+          <div className="space-y-2">
+            <Checkbox name="recordsExcluded" checked={recordsExcluded} onChange={(e) => setRecordsExcluded(e.target.checked)} label={<>Doesn&rsquo;t count for PRs, season bests or course bests</>} />
+            <p className="text-[13px] text-ink-2">For a short or rerouted course. Times are still shown; they just won&rsquo;t earn a badge or set a best.</p>
+            {recordsExcluded && <Input name="recordsExclusionReason" defaultValue={meet?.recordsExclusionReason ?? ""} placeholder="Why, e.g. course measured short" maxLength={200} />}
+          </div>
 
           {state.error && <Alert tone="danger">{state.error}</Alert>}
         </CardBody>

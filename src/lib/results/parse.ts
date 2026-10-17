@@ -1,3 +1,4 @@
+import type { Precision } from "@/lib/db/schema";
 import { parseElapsed } from "@/lib/time";
 
 /**
@@ -30,7 +31,47 @@ export type ParsedContest = {
   entries: ParsedEntry[];
   /** Where it came from, for the import record. */
   source: { kind: "raceresult" | "arrow" | "text"; url?: string };
+  /** Decimals the sheet carries: whole seconds, tenths, hundredths. Never shown finer than this. */
+  precision: Precision;
+  /** Set when the field was cut down to a division's teams and places recomputed by the app (see restrictToDivision). */
+  division?: { teams: string[] };
 };
+
+/**
+ * A division's results out of a combined race the timing company scored as
+ * one field: keep only these teams and rank the finishers again by time.
+ * Times stay official; places become the app's, and the contest says so.
+ * Ties on the clock share a place, the next place skipping, as the sheets
+ * do. `indexMap` says where each kept entry went, for row assignments made
+ * against the full field.
+ */
+export function restrictToDivision(contest: ParsedContest, teams: string[]): { contest: ParsedContest; indexMap: Map<number, number> } {
+  const keep = new Set(teams.map((t) => t.trim().toLowerCase()));
+  const kept = contest.entries.map((e, i) => ({ e, i })).filter(({ e }) => e.team && keep.has(e.team.trim().toLowerCase()));
+  const finishers = kept.filter(({ e }) => e.status === "finished" && e.finishMs !== null).sort((a, b) => a.e.finishMs! - b.e.finishMs! || a.i - b.i);
+  const place = new Map<number, number>();
+  finishers.forEach(({ e, i }, rank) => {
+    const prev = finishers[rank - 1];
+    place.set(i, prev && prev.e.finishMs === e.finishMs ? place.get(prev.i)! : rank + 1);
+  });
+  // Field order: finishers by place, then everyone else as the sheet had them.
+  const ordered = [...finishers, ...kept.filter(({ e }) => !(e.status === "finished" && e.finishMs !== null))];
+  const indexMap = new Map(ordered.map(({ i }, n) => [i, n]));
+  return {
+    contest: { ...contest, name: `${contest.name} · division`, entries: ordered.map(({ e, i }) => ({ ...e, place: place.get(i) ?? null })), division: { teams } },
+    indexMap,
+  };
+}
+
+/** The finest precision any of these time strings carries ("16:16" → seconds, "17:09.87" → hundredths). */
+export function precisionOf(times: Iterable<string>): Precision {
+  let digits = 0;
+  for (const t of times) {
+    const d = t.match(/\.(\d+)\s*$/)?.[1].length ?? 0;
+    if (d > digits) digits = d;
+  }
+  return (["seconds", "tenths", "hundredths", "thousandths"] as const)[Math.min(digits, 3)];
+}
 
 const STATUS_WORDS: Record<string, ParsedStatus> = { DNF: "dnf", DNS: "dns", DQ: "dq", DNR: "dns" };
 
@@ -62,9 +103,11 @@ export function parseRaceResultJson(rows: Record<string, unknown>[], contestName
   const reserved = new Set(["Place", "Bib", "Firstname", "Lastname", "Team", "Grade", "Finish", "Points"]);
   const splitLabels = [...columns].filter((c) => !reserved.has(c) && !c.endsWith("_Rank") && !c.endsWith("_Points"));
 
+  const timeStrings: string[] = [];
   const entries = rows.map((r): ParsedEntry => {
     const { place, status } = placeAndStatus(r.Place);
     const firstName = String(r.Firstname ?? "").trim();
+    for (const label of [...splitLabels, "Finish"]) timeStrings.push(String(r[label] ?? ""));
     const lastName = String(r.Lastname ?? "").trim();
     const splits: Record<string, number> = {};
     for (const label of splitLabels) {
@@ -86,7 +129,7 @@ export function parseRaceResultJson(rows: Record<string, unknown>[], contestName
       splits,
     };
   });
-  return { name: contestName, distanceMeters: null, splitLabels, entries, source: { kind: "raceresult", url } };
+  return { name: contestName, distanceMeters: null, splitLabels, entries, source: { kind: "raceresult", url }, precision: precisionOf(timeStrings) };
 }
 
 const TIME_RE = /^\d{1,2}:\d{2}(?:\.\d{1,2})?$/;
@@ -125,6 +168,7 @@ export function parseResultsText(text: string, contestName = "Pasted results"): 
   const lines = text.split(/\r?\n/);
   let splitLabels: string[] | null = null;
   const entries: ParsedEntry[] = [];
+  const timeStrings: string[] = [];
 
   for (const raw of lines) {
     const line = raw.trim();
@@ -146,6 +190,7 @@ export function parseResultsText(text: string, contestName = "Pasted results"): 
     let start = end;
     while (start > 0 && TIME_RE.test(rest[start - 1])) start--;
     const times = rest.slice(start, end).map((t) => parseElapsed(t) ?? 0);
+    timeStrings.push(...rest.slice(start, end));
     let before = rest.slice(0, start);
     // An overall-place column before the name: a bare number (or a dash), then name words, then the grade.
     if (/^(\d+|[-–—])$/.test(before[0] ?? "") && before.length > 2 && !isGradeToken(before[1]) && before.slice(1).some(isGradeToken)) before = before.slice(1);
@@ -183,7 +228,7 @@ export function parseResultsText(text: string, contestName = "Pasted results"): 
       splits,
     });
   }
-  return { name: contestName, distanceMeters: null, splitLabels: splitLabels ?? [], entries, source: { kind: "text" } };
+  return { name: contestName, distanceMeters: null, splitLabels: splitLabels ?? [], entries, source: { kind: "text" }, precision: precisionOf(timeStrings) };
 }
 
 export const stripTags = (html: string) =>
@@ -205,6 +250,7 @@ export const stripTags = (html: string) =>
 export function parseArrowResultsHtml(html: string, contestName: string, url?: string, options: { live?: boolean } = {}): ParsedContest {
   const body = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i)?.[1] ?? "";
   const entries: ParsedEntry[] = [];
+  const timeStrings: string[] = [];
   for (const row of body.match(/<tr[\s\S]*?<\/tr>/gi) ?? []) {
     const cells = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((m) => m[1]);
     if (cells.length < 7) continue;
@@ -215,6 +261,7 @@ export function parseArrowResultsHtml(html: string, contestName: string, url?: s
     const words = name.split(" ");
     const finishText = stripTags(cells[6]).split(" ")[0] ?? "";
     const finishMs = /^\d/.test(finishText) ? parseElapsed(finishText) : null;
+    if (finishMs !== null) timeStrings.push(finishText);
     entries.push({
       firstName: words[0] ?? "",
       lastName: words.slice(1).join(" "),
@@ -228,5 +275,5 @@ export function parseArrowResultsHtml(html: string, contestName: string, url?: s
       splits: {},
     });
   }
-  return { name: contestName, distanceMeters: null, splitLabels: [], entries, source: { kind: "arrow", url } };
+  return { name: contestName, distanceMeters: null, splitLabels: [], entries, source: { kind: "arrow", url }, precision: precisionOf(timeStrings) };
 }

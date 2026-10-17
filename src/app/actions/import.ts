@@ -81,6 +81,8 @@ const ParsedContestSchema = z.object({
     }),
   ),
   source: z.object({ kind: z.enum(["raceresult", "arrow", "text"]), url: z.string().optional() }),
+  precision: z.enum(["seconds", "tenths", "hundredths", "thousandths"]),
+  division: z.object({ teams: z.array(z.string().min(1)).min(1) }).optional(),
 });
 
 const CommitPayload = z.object({
@@ -151,15 +153,8 @@ export async function commitImportAction(meetId: string, payloadJson: string): P
     plans.push({ race, contest, assignments: p.assignments, dnsAthleteIds: p.dnsAthleteIds.filter((id) => lineup.has(id) && !seen.has(id)) });
   }
 
-  // Nothing is written until every plan has checked out.
-  for (const [raceId, added] of lineupAdds) {
-    await collection(db, "races").updateOne({ _id: raceId }, { $push: { lineup: { $each: added } }, $set: { updatedAt: new Date(), updatedBy: actor } });
-  }
-  for (const p of payload.plans) {
-    for (const { athleteId, alias } of p.newAliases) {
-      await collection(db, "athletes").updateOne({ _id: athleteId, schoolId: meet.schoolId }, { $addToSet: { aliases: alias }, $set: { updatedAt: new Date(), updatedBy: actor } });
-    }
-  }
-  await commitImport(meet, plans, payload.raw, payload.sourceUrl, actor);
+  // Nothing is written until every plan has checked out, and then all of it in one transaction.
+  const aliases = payload.plans.flatMap((p) => p.newAliases);
+  await commitImport(meet, plans, payload.raw, payload.sourceUrl, actor, { lineupAdds, aliases });
   redirect(`/meets/${meet._id}`);
 }

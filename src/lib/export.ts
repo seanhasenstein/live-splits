@@ -78,7 +78,7 @@ export function buildExportRows(input: {
         o?.place != null ? String(o.place) : statusLabel,
         a.displayName,
         a.grade === null ? "" : String(a.grade),
-        o?.finishMs != null ? formatElapsed(o.finishMs) : "",
+        o?.finishMs != null ? formatElapsed(o.finishMs, o.precision) : "",
         elapsed(finishMark) === null ? statusLabel : formatWorkbookTime(elapsed(finishMark)!),
         ...splits.map((c, i) => {
           const off = officialSplit(c);
@@ -96,6 +96,12 @@ export function buildExportRows(input: {
 }
 
 export function toCsv(rows: string[][]): string {
-  const cell = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  // Text starting with = + - @ (a name like "=HYPERLINK(...)") would run as a formula in Excel: a leading
+  // apostrophe keeps it text. Plain numbers ("-1", "+2", "1:12") are left alone.
+  const safe = (v: string) => (/^[=+\-@\t\r]/.test(v) && !/^[+-]?\d+(\.\d+)?$/.test(v) ? `'${v}` : v);
+  const cell = (raw: string) => {
+    const v = safe(raw);
+    return /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  };
   return rows.map((r) => r.map(cell).join(",")).join("\r\n") + "\r\n";
 }

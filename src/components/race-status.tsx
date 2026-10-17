@@ -3,6 +3,7 @@
 import { Award, Check, Flag } from "lucide-react";
 import { useEffect, useState } from "react";
 import { LiveDot, Stat, Time } from "@/components/ui";
+import { RECORD_LABEL, type RecordBadge } from "@/lib/records";
 import { formatElapsed } from "@/lib/time";
 
 /**
@@ -10,6 +11,17 @@ import { formatElapsed } from "@/lib/time";
  * with the running clock, solid green finished. Shared by the board and the
  * record screen.
  */
+/** Elapsed since the gun, ticking at tenths: the one race clock, wherever it's shown. */
+export function RunningClock({ gunTimeMs, now, className }: { gunTimeMs: number; now: () => number | null; className?: string }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 100);
+    return () => clearInterval(t);
+  }, []);
+  const n = now();
+  return <Time className={className}>{n === null ? "—" : formatElapsed(n - gunTimeMs)}</Time>;
+}
+
 export function RaceStatusBar({
   name,
   finished,
@@ -23,15 +35,8 @@ export function RaceStatusBar({
   gunTimeMs: number | null;
   now: () => number | null;
   /** Official times are on the board (imported, or live from the timing company's feed), or "none": app taps only. */
-  official?: "imported" | "live" | "none";
+  official?: "imported" | "division" | "live" | "none";
 }) {
-  const [, tick] = useState(0);
-  useEffect(() => {
-    if (finished || !gunTimeMs) return;
-    const t = setInterval(() => tick((n) => n + 1), 100);
-    return () => clearInterval(t);
-  }, [finished, gunTimeMs]);
-
   const prefix = name ? <span className="truncate text-sm font-semibold">{name} ·</span> : null;
 
   if (finished) {
@@ -57,13 +62,12 @@ export function RaceStatusBar({
         <span className="hidden truncate text-sm opacity-80 min-[400px]:inline">· waiting for the gun</span>
       </div>
     );
-  const n = now();
   return (
     <div className="flex min-w-0 flex-1 items-center justify-center gap-2.5 rounded-lg border border-danger/40 bg-danger-soft px-3 py-1.5 text-danger sm:justify-start">
       <LiveDot className="bg-danger" />
       {prefix}
       <span className="shrink-0 text-sm font-semibold">In progress</span>
-      <Time className="shrink-0 text-2xl font-semibold tracking-tight text-ink">{n === null ? "—" : formatElapsed(n - gunTimeMs)}</Time>
+      <RunningClock gunTimeMs={gunTimeMs} now={now} className="shrink-0 text-2xl font-semibold tracking-tight text-ink" />
       {official && <OfficialPill kind={official} className="bg-danger/15 text-danger" />}
     </div>
   );
@@ -110,13 +114,31 @@ export function CheckpointCounts({
 }
 
 /** Sits at the right end of the status bar, as loud as the state itself. */
-function OfficialPill({ kind, className }: { kind: "imported" | "live" | "none"; className: string }) {
+function OfficialPill({ kind, className }: { kind: "imported" | "division" | "live" | "none"; className: string }) {
   if (kind === "none")
     return <span className="ml-auto shrink-0 rounded-md bg-current/15 px-2 py-1 text-[11px] font-semibold tracking-[0.06em] uppercase opacity-90">Unofficial times</span>;
   return (
     <span className={`ml-auto flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold tracking-[0.06em] uppercase ${className}`}>
       {kind === "live" ? <LiveDot className="bg-current" /> : <Award className="size-3.5" />}
-      {kind === "live" ? "Official · live" : "Official results"}
+      {kind === "live" ? "Official · live" : kind === "division" ? "Official times · division places" : "Official results"}
+    </span>
+  );
+}
+
+/**
+ * PR / SB / Course PR / Meet PR. Solid once the mats say so; outlined while
+ * it rests on app taps. How close the call is belongs in words on the sheet.
+ */
+export function RecordPill({ badge, size = "sm", className = "" }: { badge: RecordBadge; size?: "sm" | "md"; className?: string }) {
+  const text = RECORD_LABEL[badge.kind].short;
+  const title = `${RECORD_LABEL[badge.kind].long}${badge.unofficial ? " (unofficial, pending official results)" : ""}`;
+  // sm sits beside a name in a table: a tag, not a button-sized block. md beside the sheet's big finish time.
+  // A little wider than tall, with softer corners, so the small one reads as a tag rather than a dot.
+  const dims = size === "md" ? "h-7 rounded-md px-2.5 text-[13px]" : "h-4 rounded-[5px] px-1.5 text-[9px]";
+  const look = badge.unofficial ? "border border-brand text-brand-text" : "bg-brand text-brand-ink";
+  return (
+    <span title={title} className={`inline-flex shrink-0 items-center font-semibold tracking-[0.04em] uppercase ${dims} ${look} ${className}`}>
+      {text}
     </span>
   );
 }

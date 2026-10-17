@@ -54,12 +54,23 @@ export type ClassYearSystem = z.infer<typeof ClassYearSystem>;
 export const Program = tenantDoc({
   sport: Sport,
   name: z.string().min(1),
+  /**
+   * The team's workout code, for managers who time practice: a keyed hash for
+   * lookup plus the code encrypted so coaches can see and re-share it. Null until made.
+   */
+  workoutCode: z.object({ hash: z.string().min(1), enc: z.string().min(1) }).nullable().default(null),
   settings: z.object({
     /** Results below this grade are stored but excluded from records. */
     recordsStartGrade: z.int(),
     /** Default N for Top N lists; overridable per query. */
     defaultListLength: z.int().positive(),
     displayUnit: z.enum(["mi", "km"]),
+    /**
+     * How the team shows times to athletes and parents: whole seconds or tenths. A time is never
+     * shown finer than its source (a sheet in seconds stays in seconds). The record screen and
+     * the running race clock always show tenths.
+     */
+    timePrecision: z.enum(["seconds", "tenths"]).default("tenths"),
     classYearSystem: ClassYearSystem,
     levels: z.array(LevelLabel),
     raceCategories: z.array(RaceCategoryLabel),

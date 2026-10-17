@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
   // pdf.js reaches its worker through a dynamic import the tracer can't see, so the serverless
   // bundle for the import page (whose action parses PDFs) must carry the worker files explicitly.
   outputFileTracingIncludes: {
+    "/meets/import-history": ["./node_modules/.pnpm/pdfjs-dist@*/node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs", "./node_modules/.pnpm/pdf-parse@*/node_modules/pdf-parse/dist/worker/pdf.worker.mjs"],
     "/meets/\\[meetId\\]/import": ["./node_modules/.pnpm/pdfjs-dist@*/node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs", "./node_modules/.pnpm/pdf-parse@*/node_modules/pdf-parse/dist/worker/pdf.worker.mjs"],
   },
 };

@@ -6,6 +6,7 @@
  * See design/DESIGN.md.
  */
 :root {
+  color-scheme: light; /* native scrollbars, form controls */
   --bg: #f7f7f5; /* page */
   --surface: #ffffff; /* cards, sheets, inputs */
   --surface-2: #f1f1ee; /* hover, selected rows, secondary buttons */
@@ -32,6 +33,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #121311;
     --surface: #1b1c19;
     --surface-2: #24251f;
@@ -57,6 +59,7 @@
   }
 }
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #121311;
   --surface: #1b1c19;
   --surface-2: #24251f;
@@ -122,6 +125,23 @@ body {
   color: var(--ink);
 }
 
+/* A place button's flash after a counted tap; restarted (not stacked) by each tap. */
+@keyframes place-flash {
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Quick repeated taps (two runners of one team, a pack of names) must count, not zoom the page on iPhone. */
+button,
+a,
+[role="button"] {
+  touch-action: manipulation;
+}
+
 /* Every number that could be a time lines up. */
 .tnum,
 table,
@@ -130,7 +150,7 @@ input[type="time"] {
   font-variant-numeric: tabular-nums;
 }
 
-:where(a, button, [role="tab"]):focus-visible {
+:where(a, button, [role="radio"]):focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
 }

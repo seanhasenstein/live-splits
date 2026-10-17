@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { METERS_PER_MILE, paceMsPerMile, projectElapsed } from "./pace";
+import { METERS_PER_MILE, OPENING_FADE, paceMsPerMile, projectElapsed } from "./pace";
 
 const MI = METERS_PER_MILE;
 // Mile 1, Mile 2, Finish (5K): the last leg is 1.107 mi.
@@ -15,11 +15,24 @@ describe("projectElapsed", () => {
     expect(Math.round(t / 1000)).toBe(21 * 60 + 10); // 21:10, not 20:26 (a flat "+ one mile")
   });
 
-  it("projects every unrecorded checkpoint after the last real one, from the first segment when only Mile 1 is in", () => {
+  it("after the opening mile, projects the rest 8.5% slower than that mile", () => {
     const times = [m(7), null, null];
-    expect(projectElapsed(course, times, 1)).toBe(m(14));
-    // Finish is 3390.7 m past Mile 1 at 7:00/mi → 21:45
-    expect(Math.round(projectElapsed(course, times, 2)! / 1000)).toBe(Math.round((m(7) + (m(7) / MI) * (5000 - MI)) / 1000));
+    expect(Math.round(projectElapsed(course, times, 1)!)).toBe(Math.round(m(7) + m(7) * OPENING_FADE)); // 14:35.7, not 14:00
+    expect(Math.round(projectElapsed(course, times, 2)! / 1000)).toBe(Math.round((m(7) + (m(7) * OPENING_FADE * (5000 - MI)) / MI) / 1000)); // 22:00
+  });
+
+  it("the fade is what the mats showed at Nightfall 2026: median runner, Mile 1 6:49.1 → Mile 2 13:37.6", () => {
+    // Actual second mile 6:48.5 was this runner's own; the population median is 8.5% slower. The
+    // projection from Mile 1 alone lands within the data's spread rather than 4% early.
+    const projected = projectElapsed(course, [m(6, 49.1), null, null], 1)!;
+    expect(projected).toBeGreaterThan(m(13, 37.6) * 0.99);
+    expect(projected).toBeLessThan(m(14, 50));
+  });
+
+  it("a 1K checkpoint inside the opening mile is projected at opening pace", () => {
+    const k = [1000, MI, 2 * MI, 5000];
+    const t = projectElapsed(k, [m(4), null, null, null], 1)!; // 4:00 at 1K → mile at same pace: 6:26.2
+    expect(Math.round(t)).toBe(Math.round(m(4) * (MI / 1000)));
   });
 
   it("never projects a checkpoint at or before one already recorded", () => {
@@ -28,10 +41,12 @@ describe("projectElapsed", () => {
     expect(projectElapsed(course, [m(7), null, m(21)], 1)).toBeNull(); // finished: nothing to guess
   });
 
-  it("skips a missed checkpoint when finding the pace segment", () => {
-    // Mile 1 missed, Mile 2 at 14:00 → segment is gun→Mile 2 (2 mi in 14:00 = 7:00/mi)
+  it("skips a missed checkpoint when finding the pace segment, and unmixes the opening mile from it", () => {
+    // Mile 1 missed, Mile 2 at 14:00: the two miles were an opening mile plus one 8.5% slower, so the
+    // rest goes at that slower pace (7:17/mi), not the 7:00 average.
     const t = projectElapsed(course, [null, m(14), null], 2)!;
-    expect(Math.round(t)).toBe(Math.round(m(14) + (m(7) / MI) * (5000 - 2 * MI)));
+    const opening = m(14) / (MI + MI * OPENING_FADE);
+    expect(Math.round(t)).toBe(Math.round(m(14) + opening * OPENING_FADE * (5000 - 2 * MI)));
   });
 
   it("returns null without any data, and on inconsistent data", () => {

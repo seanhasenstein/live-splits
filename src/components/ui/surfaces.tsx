@@ -19,8 +19,9 @@ export function CardHeader({ title, description, action }: { title: ReactNode; d
   );
 }
 
-export function CardBody({ className = "", ...props }: ComponentProps<"div">) {
-  return <div className={`border-t border-line px-4 py-4 ${className}`} {...props} />;
+/** A section of a card. `flush` drops the padding for rows and tables that bring their own. */
+export function CardBody({ className = "", flush = false, ...props }: ComponentProps<"div"> & { flush?: boolean }) {
+  return <div className={`border-t border-line ${flush ? "" : "px-4 py-4"} ${className}`} {...props} />;
 }
 
 /** Small muted heading over a group of things; the PDFs' tracked label, used sparingly. */

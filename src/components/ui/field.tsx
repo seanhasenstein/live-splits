@@ -44,3 +44,15 @@ export function Checkbox({ label, className = "", ...props }: ComponentProps<"in
     </label>
   );
 }
+
+/** A small on/off switch with its label, for a view setting ("+/−"). */
+export function Switch({ checked, onChange, label, className = "" }: { checked: boolean; onChange: (checked: boolean) => void; label: ReactNode; className?: string }) {
+  return (
+    <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)} className={`inline-flex items-center gap-1.5 rounded-full py-0.5 text-[11px] font-semibold whitespace-nowrap text-ink-2 hover:text-ink ${className}`}>
+      <span className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${checked ? "bg-brand" : "bg-line-strong"}`}>
+        <span className={`absolute top-0.5 left-0.5 size-3 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-3" : ""}`} />
+      </span>
+      {label}
+    </button>
+  );
+}

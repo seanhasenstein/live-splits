@@ -4,7 +4,11 @@ import type { CollectionName } from "./collections";
 /** Index definitions. Applied by `pnpm db:indexes` (idempotent). */
 export const INDEXES: Partial<Record<CollectionName, IndexDescription[]>> = {
   schools: [{ key: { "viewerLink.tokenHash": 1 }, partialFilterExpression: { "viewerLink.tokenHash": { $type: "string" } } }],
-  programs: [{ key: { schoolId: 1, sport: 1 }, unique: true }],
+  programs: [
+    { key: { schoolId: 1, sport: 1 }, unique: true },
+    // Join by workout code.
+    { key: { "workoutCode.hash": 1 }, partialFilterExpression: { "workoutCode.hash": { $type: "string" } } },
+  ],
   seasons: [{ key: { programId: 1, label: 1 }, unique: true }],
   athletes: [{ key: { schoolId: 1, aliases: 1 } }],
   seasonRosters: [
@@ -36,10 +40,18 @@ export const INDEXES: Partial<Record<CollectionName, IndexDescription[]>> = {
     { key: { clientTapId: 1 }, unique: true },
   ],
   users: [{ key: { schoolId: 1, email: 1 }, unique: true }],
+  workouts: [{ key: { schoolId: 1, programId: 1, date: -1 } }],
+  workoutTemplates: [{ key: { schoolId: 1, programId: 1, name: 1 } }],
+  workoutEvents: [
+    { key: { workoutId: 1, serverTimeMs: 1 } },
+    { key: { clientEventId: 1 }, unique: true },
+  ],
   sessions: [
     { key: { tokenHash: 1 }, unique: true },
     // Who's recording where: polled every few seconds per race.
     { key: { "presence.raceId": 1, "presence.at": 1 }, partialFilterExpression: { "presence.raceId": { $type: "string" } } },
+    // Who's timing which workout group.
+    { key: { "workoutPresence.workoutId": 1, "workoutPresence.at": 1 }, partialFilterExpression: { "workoutPresence.workoutId": { $type: "string" } } },
   ],
   pins: [{ key: { userId: 1 } }],
 };

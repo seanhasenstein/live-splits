@@ -11,14 +11,14 @@ const history: LineupHistory = {
   ],
   byAthlete: {
     a: [
-      { raceId: "r2", finishMs: 1_300_000, status: "finished", splits: {}, prSb: true },
-      { raceId: "r1", finishMs: 1_200_000, status: "finished", splits: {}, prSb: true },
+      { raceId: "r2", finishMs: 1_300_000, status: "finished", precision: "tenths", splits: {}, prSb: true },
+      { raceId: "r1", finishMs: 1_200_000, status: "finished", precision: "tenths", splits: {}, prSb: true },
     ],
     b: [
-      { raceId: "r2", finishMs: null, status: "dnf", splits: {}, prSb: false },
-      { raceId: "r1", finishMs: 1_250_000, status: "finished", splits: {}, prSb: true },
+      { raceId: "r2", finishMs: null, status: "dnf", precision: "tenths", splits: {}, prSb: false },
+      { raceId: "r1", finishMs: 1_250_000, status: "finished", precision: "tenths", splits: {}, prSb: true },
     ],
-    c: [{ raceId: "r1", finishMs: 1_100_000, status: "finished", splits: {}, prSb: false }],
+    c: [{ raceId: "r1", finishMs: 1_100_000, status: "finished", precision: "tenths", splits: {}, prSb: false }],
     // d has never raced
   },
 };

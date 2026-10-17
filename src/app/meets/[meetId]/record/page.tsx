@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { TapScreen } from "@/components/tap-screen";
 import { can, getSession, isSchoolCoach } from "@/lib/auth/session";
-import { getMeet, listAthletes, listRaces } from "@/lib/data";
+import { getMeet, getSchool, listAthletes, listRaces } from "@/lib/data";
+import { ourTeamOf } from "@/lib/race-places";
 import { getLineupHistory } from "@/lib/results/history";
 
 export const metadata: Metadata = { title: "Record splits" };
@@ -17,7 +18,7 @@ export default async function RecordPage({ params, searchParams }: PageProps<"/m
 
   const races = await listRaces(meet._id);
   const athleteIds = [...new Set(races.flatMap((r) => r.lineup.map((l) => l.athleteId)))];
-  const [athletes, histories] = await Promise.all([listAthletes(meet.schoolId, athleteIds), Promise.all(races.map((r) => getLineupHistory(meet, r)))]);
+  const [athletes, histories, school] = await Promise.all([listAthletes(meet.schoolId, athleteIds), Promise.all(races.map((r) => getLineupHistory(meet, r))), getSchool(meet.schoolId)]);
 
   return (
     <TapScreen
@@ -36,6 +37,9 @@ export default async function RecordPage({ params, searchParams }: PageProps<"/m
         checkpoints: r.checkpoints.map((c) => ({ id: c.id, label: c.label, kind: c.kind, meters: c.distance.meters })),
         athleteIds: r.lineup.map((l) => l.athleteId),
         history: histories[i],
+        // As set up, on or off: the Switch sheet can turn it on (screens check .on).
+        places: r.places ?? null,
+        ourTeam: ourTeamOf(school),
       }))}
       athletes={Object.fromEntries(athletes.map((a) => [a._id, a.displayName]))}
     />

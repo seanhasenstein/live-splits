@@ -20,9 +20,10 @@ export const TapInput = z.object({
   estimate: z.boolean(),
   missed: z.boolean(),
   status: AthleteRaceStatus.nullable().default(null),
+  team: z.string().min(1).max(40).nullable().default(null),
   note: z.string().max(500).nullable(),
 });
-/** Input shape: `status` may be left off (defaults to null). */
+/** Input shape: `status` and `team` may be left off (default null). */
 export type TapInput = z.input<typeof TapInput>;
 
 export class TapError extends Error {
@@ -56,6 +57,11 @@ export async function recordTaps(
       throw new TapError(`Unknown checkpoint ${t.checkpointId}`, 400);
     }
     if (t.type === "status" && (!t.athleteId || !t.status)) throw new TapError("A status tap needs an athlete and a status", 400);
+    if (t.type === "tick" && (!t.checkpointId || !t.team)) throw new TapError("A place tap needs a checkpoint and a team", 400);
+    // "us", "other", or a team tracked on this race (a team removed since keeps its old taps; new ones are refused).
+    if (t.team && t.team !== "us" && t.team !== "other" && !(race.places?.teams ?? []).some((x) => x.id === t.team)) {
+      throw new TapError("That team isn't tracked in this race", 400);
+    }
   }
 
   const taps: Tap[] = inputs.map((t) =>

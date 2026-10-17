@@ -31,6 +31,11 @@ export const Meet = tenantDoc({
   date: LocalDate,
   timeZone: TimeZone,
   weather: Weather.nullable(),
+  /**
+   * Set when nothing from this meet should count for PRs, season bests or course bests
+   * (a short course, a rerouted race). Results are kept and shown; records ignore them.
+   */
+  recordsExclusion: z.object({ reason: z.string().min(1).nullable() }).nullable().default(null),
   /** The timing company's page for this meet (live timing / results), linked from the meet page. */
   resultsUrl: z.url().nullable().default(null),
   /**
@@ -87,7 +92,37 @@ export const TeamScoring = z.object({
 });
 export type TeamScoring = z.infer<typeof TeamScoring>;
 
-export const EventKind = z.enum(["run", "relay", "field_distance", "field_height"]);
+/** A team whose runners get their own button when counting places. */
+export const TrackedTeam = z.object({
+  /** Stable within the race; ticks reference it. */
+  id: z.string().regex(/^t_[A-Za-z0-9]+$/),
+  /** As the timing company writes it, e.g. "Kimberly". */
+  name: z.string().trim().min(1).max(60),
+  /** The button label, e.g. "KIM". */
+  short: z.string().trim().min(1).max(6),
+  /** A palette key (see PLACE_COLORS), so buttons stay readable in light and dark. */
+  color: z.string().min(1).max(20),
+  /** Other spellings to match in results ("Kimberly High School"). */
+  aliases: z.array(z.string().trim().min(1).max(60)).max(5).default([]),
+});
+export type TrackedTeam = z.infer<typeof TrackedTeam>;
+
+/** "Places 1–10: First team all-conference." */
+export const AwardLine = z.object({ through: z.int().positive().max(999), label: z.string().trim().min(1).max(40) });
+export type AwardLine = z.infer<typeof AwardLine>;
+
+/** Counting places at checkpoints: off unless a race turns it on. */
+export const RacePlaces = z.object({
+  on: z.boolean(),
+  teams: z.array(TrackedTeam).max(6),
+  /** Best first: [{ through: 10, … }, { through: 20, … }]. */
+  awards: z.array(AwardLine).max(5),
+  /** Places, scores and award lines on the live board for everyone, not just coaches and managers. */
+  public: z.boolean(),
+});
+export type RacePlaces = z.infer<typeof RacePlaces>;
+
+export const EventKind =z.enum(["run", "relay", "field_distance", "field_height"]);
 export type EventKind = z.infer<typeof EventKind>;
 
 /** An event/race within a meet. */
@@ -117,11 +152,18 @@ export const Race = tenantDoc({
   /** The import that supplied this race's official results, if any. Official times then take precedence over app taps. */
   officialImportId: Id.nullable(),
   /**
+   * The official sheet scored a bigger field (divisions run together); the import kept our
+   * division's teams and the app ranked them by time. Times are official, places are the app's.
+   */
+  placesDerived: z.boolean().default(false),
+  /**
    * The timing company's live feed for this race (a RACE RESULT contest URL),
    * polled while the race is in progress so official finishes show on the
    * board as they post. Ignored once results are imported.
    */
   liveFeed: z.object({ url: z.url(), contestName: z.string().nullable() }).nullable().default(null),
+  /** Counting places at checkpoints (tracked teams, award lines). Null: never set up. */
+  places: RacePlaces.nullable().default(null),
   checkpoints: z.array(Checkpoint),
   /** Which of our athletes run in this race, and at which level. */
   lineup: z.array(z.object({ athleteId: Id, levelId: z.string().min(1) })),

@@ -2,8 +2,8 @@ import { can, getSession } from "@/lib/auth/session";
 import { getMeet, getRace } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
-import { getOfficialTimes } from "@/lib/results/import";
-import { getLiveOfficial, liveFeedActive } from "@/lib/results/live";
+import { type FieldEntry, getOfficialField, getOfficialTimes } from "@/lib/results/import";
+import { getLiveField, getLiveOfficial, liveFeedActive } from "@/lib/results/live";
 
 /** A record screen counts as "here" this long after its last poll. */
 const PRESENCE_MS = 2 * 60_000;
@@ -29,21 +29,27 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
   // `?at=<checkpointId>` is the record screen saying where it is; remembered on the session
   // so the results page can show who's covering each checkpoint. Refreshed at most every 20 s.
   const at = url.searchParams.get("at");
-  if (session && at && can(session, "tap", meet) && race.checkpoints.some((c) => c.id === at)) {
+  const jobParam = url.searchParams.get("job");
+  const job = jobParam === "places" || jobParam === "both" ? jobParam : "times";
+  const staff = can(session, "tap", meet);
+  if (session && at && staff && race.checkpoints.some((c) => c.id === at)) {
     const p = session.presence;
-    if (!p || p.raceId !== race._id || p.checkpointId !== at || Date.now() - p.at.getTime() > 20_000) {
-      await collection(db, "sessions").updateOne({ _id: session._id }, { $set: { presence: { raceId: race._id, checkpointId: at, at: new Date() } } });
+    if (!p || p.raceId !== race._id || p.checkpointId !== at || p.job !== job || Date.now() - p.at.getTime() > 20_000) {
+      await collection(db, "sessions").updateOne({ _id: session._id }, { $set: { presence: { raceId: race._id, checkpointId: at, job, at: new Date() } } });
     }
   }
-  const recording = (
-    await collection(db, "sessions")
-      .find({ "presence.raceId": race._id, "presence.at": { $gt: new Date(Date.now() - PRESENCE_MS) }, revokedAt: null }, { projection: { name: 1, "presence.checkpointId": 1 } })
-      .toArray()
-  ).map((s) => ({ name: s.name, checkpointId: s.presence!.checkpointId }));
+  // Who is recording where, and doing what: for coaches and managers only, never the public.
+  const recording = staff
+    ? (
+        await collection(db, "sessions")
+          .find({ "presence.raceId": race._id, "presence.at": { $gt: new Date(Date.now() - PRESENCE_MS) }, revokedAt: null }, { projection: { name: 1, "presence.checkpointId": 1, "presence.job": 1 } })
+          .toArray()
+      ).map((s) => ({ name: s.name, checkpointId: s.presence!.checkpointId, job: s.presence!.job ?? "times", me: s._id === session?._id }))
+    : [];
   // Taps whose insert is still in flight have an earlier createdAt than this poll; re-send a
   // generous window (clients dedupe by clientTapId) so a slow write is never skipped.
   const serverTimeMs = Date.now() - 5000;
-  const taps = await collection(db, "taps")
+  const rawTaps = await collection(db, "taps")
     .find(since > 0 ? { raceId, createdAt: { $gt: new Date(since) } } : { raceId })
     .sort({ createdAt: 1 })
     .project({ _id: 0, schoolId: 0, schemaVersion: 0, meetId: 0 })
@@ -53,9 +59,38 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
   // change rarely); a live feed's on every poll while the race runs (throttled upstream).
   const live = liveFeedActive(race);
   const official = live ? await getLiveOfficial(meet, race) : since > 0 ? undefined : await getOfficialTimes(race);
+  // The whole field, for team scores: only when the race counts places and this viewer may see them.
+  const showPlaces = !!race.places?.on && (race.places.public || can(session, "tap", meet));
+  // Place taps (and the edits and undos aimed at them) go only to viewers who may see places: otherwise
+  // a parent could rebuild private places, and see who was counting, from the raw log.
+  let taps = rawTaps;
+  // (A race that never had places set up has no place taps: the record screen only offers them once on.)
+  if (!showPlaces && race.places) {
+    if (rawTaps.some((t) => t.targetTapId)) {
+      // Everything aimed at a place tap, however deep: an edit of it, an undo of that edit, an undo of a remove…
+      const chain = await collection(db, "taps")
+        .find({ raceId, type: { $in: ["tick", "edit", "void"] } }, { projection: { clientTapId: 1, targetTapId: 1, type: 1 } })
+        .toArray();
+      const hidden = new Set(chain.filter((t) => t.type === "tick").map((t) => t.clientTapId));
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const t of chain) {
+          if (t.targetTapId && hidden.has(t.targetTapId) && !hidden.has(t.clientTapId)) {
+            hidden.add(t.clientTapId);
+            grew = true;
+          }
+        }
+      }
+      taps = rawTaps.filter((t) => !hidden.has(t.clientTapId));
+    } else {
+      taps = rawTaps.filter((t) => t.type !== "tick");
+    }
+  }
+  const field: FieldEntry[] | undefined = !showPlaces || official === undefined ? undefined : live ? await getLiveField(meet, race) : await getOfficialField(race);
 
   return Response.json(
-    { taps, gunTimeMs: race.gunTimeMs, serverTimeMs, official, officialLive: live, finished: !!race.finishedAt, recording },
+    // The current places setup rides along, so open screens follow it being turned on or off mid-race.
+    { taps, gunTimeMs: race.gunTimeMs, serverTimeMs, official, field, places: staff ? (race.places ?? null) : showPlaces ? race.places : null, officialLive: live, finished: !!race.finishedAt, recording },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

@@ -16,7 +16,7 @@ export default async function JoinPage({ searchParams }: PageProps<"/join">) {
       </div>
       <JoinForm initialCode={typeof code === "string" ? code : ""} />
       <p className="mt-6 text-center text-[13px] text-ink-3">
-        Coaches: the meet&rsquo;s coach code opens fix and export; the school&rsquo;s coach access code opens meet setup.
+        Coaches: the meet&rsquo;s coach code opens fix and export; the school&rsquo;s coach access code opens meet setup. Timing practice? Use the team&rsquo;s workout code.
       </p>
     </main>
   );

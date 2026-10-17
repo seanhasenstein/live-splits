@@ -43,6 +43,64 @@
   the gun can be typed from the clock time or set later from official results.
 - After each race, the live results is the review screen; fix there, then export.
 
+## Places (added Oct 15 2026, first used at the Big East conference meet Oct 17)
+
+- Set up per race: meet page → race Options → Count places (or on Record
+  splits: Switch → "Count places in …", for coaches and managers). The race
+  card then shows "Places · ML, KEW". Tracked teams
+  (up to 6; names suggested from past results, labels and colors kept for
+  next time) and "Show places to everyone" (off: only coaches and managers
+  see them).
+- Each phone picks its job in Switch ("Your job here"), with the race and
+  checkpoint: Times, Times + places, or Places. The header shows it. Every
+  phone starts on Times (so two timers can't both count places by accident);
+  whoever counts places picks Times + places or Places once, and it sticks.
+- Changing a race's places setup (on/off, teams) reaches every open record
+  screen and Live results within a few seconds, no reload. Turning places
+  off mid-race is the safety switch: everyone drops back to times and splits,
+  nothing is lost, and turning it back on brings the places back.
+  - One phone: Times + places. Tap our names as now and a team button for
+    their runners; Other for everyone else (hold Other for a pack of 2–5).
+  - Two phones: the name tapper on Times; a helper on Places taps our
+    school's button / teams / Other for every runner. Its 1st school tap is
+    the 1st name tapped, and so on. Places fills the screen (no scrolling):
+    up to 3 teams get a full-width row each, more go two to a row, and Other
+    has +2 / +3 / +4 beside it (no hold needed there).
+  - Each button shows how many of that team have been counted; Scores opens
+    that checkpoint's scores (only with tracked teams).
+  - The line above the buttons shows the last tap (it flashes on each tap)
+    and the next place. Fix lists the last 30 (newest first) to correct one
+    between packs. On Places, Done locks the buttons (remembered through a
+    reload). On Times + places there's no Done in the row: once all ours are
+    through a mile mark, "Done here · Go to Mile 2" locks the place buttons
+    and moves on; the finish shows the usual "Everyone has finished" message.
+  - Who's where (Live results, coaches and managers only) lists each
+    checkpoint's people and jobs. Switch shows it too, and warns before two
+    people count places (or time) at the same checkpoint; the Switch button
+    turns red if it happens anyway.
+  - Each time one of ours is tapped, a big green card shows their place,
+    time here and name for 5 s ("23rd place in 6:02 · Eddy", whole seconds) for the coach beside the
+    counter to shout; it never covers the buttons. Tiles on Times +
+    places show the place in bold after they pass.
+  - Scores: one table. Counting everyone (Other tapped): "Whole meet,
+    estimated" (≈), which includes the tracked teams. Otherwise "Tracked teams
+    only": as if only those teams raced, which can differ from the real meet
+    (a team with a big 4–5 gap looks better than it is).
+  - Tapping Other means counting everyone: places become overall. Without Other, places are
+    among our runners and the tracked teams only (marked *).
+  - Scores: one table. Counting everyone: "Whole meet, estimated" (≈), which
+    includes the tracked teams. Otherwise "Tracked teams only": as if only
+    those teams raced, which can differ from the real meet (a team with a big
+    gap to its 5th runner looks better than it is).
+  - Mistakes: Fix (who it was, swap with the one ahead, someone missed before
+    it, remove), or Undo.
+- Live results: place and ▲/▼ under each time; below the table the Team
+  card (per checkpoint: team place and points, our scorers' places 1–5 and
+  (6)(7), 1–5 spread, top-5 average; spread and average work without places)
+  and the Places card, and at the finish real team scores from the live
+  feed or imported results. Meets that score only declared runners (more than
+  7 entered) can differ by a few points below the top teams.
+
 ## After the meet (in order)
 
 1. ~~Athlete race status (DNS / DNR / DNF)~~ — done Oct 6: Live results → Fix times

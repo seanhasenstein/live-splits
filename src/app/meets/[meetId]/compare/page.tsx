@@ -107,7 +107,7 @@ export default async function ComparePage({ params, searchParams }: PageProps<"/
                             {c.appMs === null ? "—" : formatElapsed(c.appMs)}
                             {c.estimate ? "~" : c.edited ? "*" : ""}
                           </Time>
-                          <Time className="block text-ink-2">{c.officialMs === null ? "—" : formatElapsed(c.officialMs)}</Time>
+                          <Time className="block text-ink-2">{c.officialMs === null ? "—" : formatElapsed(c.officialMs, official[r.athleteId]?.precision)}</Time>
                           <Time className={`block text-[13px] font-medium ${c.errorMs === null ? "text-ink-3" : Math.abs(c.errorMs) <= 1000 ? "text-brand-bright" : Math.abs(c.errorMs) <= 3000 ? "text-gold-text" : "text-danger"}`}>
                             {c.errorMs === null ? "—" : signed(c.errorMs)}
                           </Time>

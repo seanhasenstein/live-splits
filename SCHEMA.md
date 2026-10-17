@@ -39,7 +39,9 @@ the preloaded set (or the school that added a custom one).
 
 **Two kinds of time, stored differently.**
 - *Durations* (marks, splits, cutoffs) are integer milliseconds (`...Ms`), with
-  `precision` and `timingMethod` on marks.
+  `precision` (`seconds` | `tenths` | `hundredths` | `thousandths`, what the
+  source carried: a hand-split sheet in seconds, Arrow in hundredths) and
+  `timingMethod` on marks.
 - *Timing instants* (gun, taps) are integer epoch milliseconds (`gunTimeMs`,
   `deviceTimeMs`, `serverTimeMs`). Elapsed = tap − gun is plain subtraction and
   is calculated on display, never stored.
@@ -79,9 +81,23 @@ team, e.g. "Sheboygan Area Lutheran"; used to find our rows in results).
 ### programs
 School × sport (`xc` | `track_outdoor` | `track_indoor`); unique per school.
 `settings`: `recordsStartGrade`, `defaultListLength`, `displayUnit`,
-`classYearSystem`, `levels[]`, `raceCategories[]`, `coachRoles[]`,
+`timePrecision` (`seconds` | `tenths`: how the team shows times to athletes
+and parents; never finer than the source's own precision; the record screen
+and the running race clock always show tenths), `classYearSystem`, `levels[]`, `raceCategories[]`, `coachRoles[]`,
 `historyCompleteFromYear` (null until history is imported; lists use it to say
 "history complete from YYYY").
+
+`meets.recordsExclusion`: `{ reason }` when nothing from the meet counts for
+PRs / season bests / course bests (short course); null otherwise. Bests are
+computed in `src/lib/results/bests.ts` from official finished results of
+earlier (or same-day, other) meets at the same distance, honouring this flag,
+`races.exclusions.excludeFromPrSb`, `results.exclusions.excludeFromPrSb` and
+`programs.settings.recordsStartGrade`.
+
+`races.placesDerived`: the official sheet scored a bigger field (divisions run
+together); the import kept our division's teams and the app ranked them by
+time. Times are official, places are the app's; the board labels them
+"division place".
 
 `raceCategories[].gender` says which athletes to offer when building a lineup
 for that category (`null` = everyone, for Open/Mixed).

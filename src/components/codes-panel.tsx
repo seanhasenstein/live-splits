@@ -68,7 +68,7 @@ export function CodesPanel({ meetId, initialCodes, canRegenerate }: { meetId: st
   );
 }
 
-function CodeRow({ label, value, note, link, small }: { label: string; value: string; note: string; link: string; small?: boolean }) {
+export function CodeRow({ label, value, note, link, small }: { label: string; value: string; note: string; link: string; small?: boolean }) {
   const [copied, setCopied] = useState(false);
   const flashCopied = () => {
     setCopied(true);

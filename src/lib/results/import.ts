@@ -1,6 +1,7 @@
 import "server-only";
-import type { Actor, Athlete, Meet, Race, Result, Split } from "@/lib/db/schema";
-import { getDb, newId } from "@/lib/db/client";
+import type { ClientSession } from "mongodb";
+import type { Actor, Athlete, Meet, Precision, Race, Result, Split } from "@/lib/db/schema";
+import { getClient, getDb, newId } from "@/lib/db/client";
 import { collection, COLLECTIONS } from "@/lib/db/collections";
 import { gradeForSeason } from "@/lib/grade";
 import { replay } from "@/lib/replay";
@@ -31,11 +32,35 @@ export function checkpointForLabel(race: Race, label: string): string | null {
   return race.checkpoints.find((c) => normalizeName(c.label) === n)?.id ?? null;
 }
 
-export async function commitImport(meet: Meet, plans: ImportPlan[], raw: string, sourceUrl: string | null, actor: Actor): Promise<{ importId: string }> {
+/**
+ * Writes an import does before the records: lineup additions and confirmed
+ * spellings, applied in the same transaction so none of them outlive a
+ * failed import.
+ */
+export type ImportSideEffects = {
+  lineupAdds: Map<string, Race["lineup"]>;
+  aliases: { athleteId: string; alias: string }[];
+};
+
+export async function commitImport(meet: Meet, plans: ImportPlan[], raw: string, sourceUrl: string | null, actor: Actor, sideEffects?: ImportSideEffects): Promise<{ importId: string }> {
   const db = await getDb();
+  const client = await getClient();
+  // All or nothing: a dropped connection halfway must not leave a race with its old field
+  // retired and nothing in its place. Taps are read inside too, for a consistent snapshot.
+  return client.withSession((session) => session.withTransaction(() => writeImport(db, session, meet, plans, raw, sourceUrl, actor, sideEffects)));
+}
+
+async function writeImport(db: Awaited<ReturnType<typeof getDb>>, session: ClientSession, meet: Meet, plans: ImportPlan[], raw: string, sourceUrl: string | null, actor: Actor, sideEffects?: ImportSideEffects): Promise<{ importId: string }> {
   const now = new Date();
   const audit = { source: "mat" as const, createdAt: now, createdBy: actor, updatedAt: now, updatedBy: actor, deletedAt: null };
-  const season = await collection(db, "seasons").findOne({ _id: meet.seasonId });
+  const season = await collection(db, "seasons").findOne({ _id: meet.seasonId }, { session });
+
+  for (const [raceId, added] of sideEffects?.lineupAdds ?? []) {
+    await collection(db, "races").updateOne({ _id: raceId }, { $push: { lineup: { $each: added } }, $set: { updatedAt: now, updatedBy: actor } }, { session });
+  }
+  for (const { athleteId, alias } of sideEffects?.aliases ?? []) {
+    await collection(db, "athletes").updateOne({ _id: athleteId, schoolId: meet.schoolId }, { $addToSet: { aliases: alias }, $set: { updatedAt: now, updatedBy: actor } }, { session });
+  }
 
   const importDoc = COLLECTIONS.imports.schema.parse({
     _id: newId(),
@@ -48,7 +73,7 @@ export async function commitImport(meet: Meet, plans: ImportPlan[], raw: string,
     raw,
     ...audit,
   });
-  await collection(db, "imports").insertOne(importDoc);
+  await collection(db, "imports").insertOne(importDoc, { session });
 
   // Build (and validate) every race's entries before touching the database, so a bad row
   // fails the import up front instead of after the old entries were already retired.
@@ -69,7 +94,7 @@ export async function commitImport(meet: Meet, plans: ImportPlan[], raw: string,
         place: e.place,
         status: e.status,
         timeMs: e.finishMs,
-        precision: e.finishMs !== null ? "tenths" : null,
+        precision: e.finishMs !== null ? contest.precision : null,
         splits: Object.entries(e.splits).map(([label, cumulativeMs]) => ({ label, checkpointId: checkpointForLabel(race, label), cumulativeMs })),
         athleteId: byIndex.get(i) ?? null,
         ...audit,
@@ -80,25 +105,25 @@ export async function commitImport(meet: Meet, plans: ImportPlan[], raw: string,
   // The full field, replacing any earlier import of each race. Done once per race up front:
   // a combined race (boys + girls JV together) takes two contests, both of which must survive.
   for (const raceId of new Set(plans.map((p) => p.race._id))) {
-    await collection(db, "raceEntries").updateMany({ raceId, deletedAt: null }, { $set: { deletedAt: now, updatedAt: now, updatedBy: actor } });
+    await collection(db, "raceEntries").updateMany({ raceId, deletedAt: null }, { $set: { deletedAt: now, updatedAt: now, updatedBy: actor } }, { session });
     // An earlier import's result for someone this one doesn't mention would outlive its field.
     const keep = plans.filter((p) => p.race._id === raceId).flatMap((p) => [...p.assignments.map((a) => a.athleteId), ...p.dnsAthleteIds]);
-    await collection(db, "results").updateMany({ raceId, deletedAt: null, athleteId: { $nin: keep } }, { $set: { deletedAt: now, updatedAt: now, updatedBy: actor } });
+    await collection(db, "results").updateMany({ raceId, deletedAt: null, athleteId: { $nin: keep } }, { $set: { deletedAt: now, updatedAt: now, updatedBy: actor } }, { session });
   }
 
   for (const [planIndex, plan] of plans.entries()) {
     const { race, contest } = plan;
     const byIndex = new Map(plan.assignments.map((a) => [a.entryIndex, a.athleteId]));
     const entries = entriesByPlan[planIndex];
-    if (entries.length > 0) await collection(db, "raceEntries").insertMany(entries);
+    if (entries.length > 0) await collection(db, "raceEntries").insertMany(entries, { session });
     const entryIdByIndex = new Map(entries.map((e, i) => [i, e._id]));
 
     // Our results: official times plus a snapshot of the app's splits for comparison.
-    const taps = await collection(db, "taps").find({ raceId: race._id }).toArray();
+    const taps = await collection(db, "taps").find({ raceId: race._id }, { session }).toArray();
     const state = replay(race, taps);
     const levelByAthlete = new Map(race.lineup.map((l) => [l.athleteId, l.levelId]));
     const athletes = await collection(db, "athletes")
-      .find({ _id: { $in: [...byIndex.values(), ...plan.dnsAthleteIds] } })
+      .find({ _id: { $in: [...byIndex.values(), ...plan.dnsAthleteIds] } }, { session })
       .toArray();
     const athleteById = new Map(athletes.map((a) => [a._id, a]));
 
@@ -118,7 +143,7 @@ export async function commitImport(meet: Meet, plans: ImportPlan[], raw: string,
               : []),
           ]
         : [];
-      const existing = await collection(db, "results").findOne({ raceId: race._id, athleteId: athlete._id, deletedAt: null });
+      const existing = await collection(db, "results").findOne({ raceId: race._id, athleteId: athlete._id, deletedAt: null }, { session });
       const result: Result = COLLECTIONS.results.schema.parse({
         _id: existing?._id ?? newId(),
         schoolId: meet.schoolId,
@@ -126,7 +151,7 @@ export async function commitImport(meet: Meet, plans: ImportPlan[], raw: string,
         raceId: race._id,
         athleteId: athlete._id,
         distanceId: race.distanceId,
-        mark: entry?.finishMs != null ? { type: "time", value: entry.finishMs, precision: "tenths", timingMethod: "rfid" } : null,
+        mark: entry?.finishMs != null ? { type: "time", value: entry.finishMs, precision: contest.precision, timingMethod: "rfid" } : null,
         status: entry ? entry.status : "dns",
         place: entry?.place ?? null,
         levelId: levelByAthlete.get(athlete._id) ?? null,
@@ -149,7 +174,7 @@ export async function commitImport(meet: Meet, plans: ImportPlan[], raw: string,
         updatedBy: actor,
         deletedAt: null,
       });
-      await collection(db, "results").replaceOne({ _id: result._id }, result, { upsert: true });
+      await collection(db, "results").replaceOne({ _id: result._id }, result, { upsert: true, session });
     };
 
     for (const [entryIndex, athleteId] of byIndex) {
@@ -166,12 +191,25 @@ export async function commitImport(meet: Meet, plans: ImportPlan[], raw: string,
     // A combined race takes several contests; the race ends with the last of them.
     const lastFinish = Math.max(0, ...plans.filter((p) => p.race._id === race._id).flatMap((p) => p.contest.entries.map((e) => e.finishMs ?? 0)));
     const finishedAt = race.finishedAt ?? (race.gunTimeMs !== null && lastFinish > 0 ? new Date(race.gunTimeMs + lastFinish) : now);
-    await collection(db, "races").updateOne({ _id: race._id }, { $set: { officialImportId: importDoc._id, finishedAt, updatedAt: now, updatedBy: actor } });
+    const placesDerived = plans.filter((p) => p.race._id === race._id).some((p) => !!p.contest.division);
+    await collection(db, "races").updateOne({ _id: race._id }, { $set: { officialImportId: importDoc._id, placesDerived, finishedAt, updatedAt: now, updatedBy: actor } }, { session });
   }
   return { importId: importDoc._id };
 }
 
-export type OfficialTimes = Record<string, { finishMs: number | null; status: string; place: number | null; byCheckpoint: Record<string, number> }>;
+/** One runner of the whole field, any team: enough to score teams. */
+export type FieldEntry = { team: string | null; place: number | null; status: string; ours: boolean };
+
+/** The imported field for a race (every team), for team scores. Empty when nothing was imported. */
+export async function getOfficialField(race: Race): Promise<FieldEntry[]> {
+  if (!race.officialImportId) return [];
+  const entries = await collection(await getDb(), "raceEntries")
+    .find({ raceId: race._id, deletedAt: null }, { projection: { teamName: 1, place: 1, status: 1, athleteId: 1 } })
+    .toArray();
+  return entries.map((e) => ({ team: e.teamName, place: e.place, status: e.status, ours: !!e.athleteId }));
+}
+
+export type OfficialTimes = Record<string, { finishMs: number | null; status: string; place: number | null; byCheckpoint: Record<string, number>; precision: Precision }>;
 
 /** Official (mat) times per athlete for a race, keyed by athleteId → checkpointId. Empty when nothing was imported. */
 export async function getOfficialTimes(race: Race): Promise<OfficialTimes> {
@@ -182,7 +220,7 @@ export async function getOfficialTimes(race: Race): Promise<OfficialTimes> {
     if (!r.athleteId) continue;
     const byCheckpoint: Record<string, number> = {};
     for (const s of r.splits) if (s.source === "mat") byCheckpoint[s.checkpointId] = s.cumulativeMs;
-    out[r.athleteId] = { finishMs: r.mark?.type === "time" ? r.mark.value : null, status: r.status, place: r.place, byCheckpoint };
+    out[r.athleteId] = { finishMs: r.mark?.type === "time" ? r.mark.value : null, status: r.status, place: r.place, byCheckpoint, precision: r.mark?.type === "time" ? r.mark.precision : "tenths" };
   }
   return out;
 }

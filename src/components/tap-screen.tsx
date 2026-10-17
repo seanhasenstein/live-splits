@@ -1,18 +1,24 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Check, ChevronDown, Pencil, SlidersHorizontal, Undo2, X } from "lucide-react";
 import { ClockWarning } from "@/components/race-card";
+import { PlacesCard } from "@/components/places-card";
+import { PlacesPad, type PlacesMode } from "@/components/places-pad";
+import { PlacesSetupSheet } from "@/components/places-setup";
 import { CheckpointCounts, DeltaText, RaceStatusBar } from "@/components/race-status";
 import { StartRaceControl } from "@/components/start-race";
 import { SessionMenu } from "@/components/session-menu";
-import { AppHeader, Badge, Button, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast, RaceStateBadge } from "@/components/ui";
+import { Alert, AppHeader, Badge, Button, LinkButton, SectionLabel, Segmented, Sheet, Time, Toast, RaceStateBadge } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
 import { useLocalValue } from "@/lib/client/use-local-value";
-import { useRaceTaps } from "@/lib/client/use-race-taps";
+import { type Recording, useRaceTaps } from "@/lib/client/use-race-taps";
 import { useWakeLock } from "@/lib/client/use-wake-lock";
+import type { RacePlaces } from "@/lib/db/schema";
 import { type OrderMode, lastFinished, orderAthletes, orderKey, parseOrderMode } from "@/lib/order";
+import { ordinal, type OurTeam, racePlaces, replayTicks } from "@/lib/race-places";
 import { paceMsPerMile, projectElapsed } from "@/lib/pace";
 import { type AthleteStatus, expectedAt, type Mark, replay, replayStatuses, type Slot, type SlotWithNames, STATUS_LABEL, STATUS_LONG, type TapLike } from "@/lib/replay";
 import type { LineupHistory, PriorResult } from "@/lib/results/history";
@@ -27,6 +33,10 @@ type RaceInfo = {
   /** The lineup in the coach's order. */
   athleteIds: string[];
   history: LineupHistory;
+  /** Place counting, when the race has it on. */
+  places: RacePlaces | null;
+  /** Our school, for the places buttons. */
+  ourTeam: OurTeam;
 };
 
 type Props = {
@@ -55,10 +65,31 @@ const INTRO_KEY = "ls_record_intro_seen";
 const ORDER_KEY = "ls_record_order_";
 const COMPARE_KEY = "ls_record_compare";
 const LARGE_KEY = "ls_record_large";
+/** This phone's part in counting places: "both" (names and teams), "places" (places only) or "names". */
+const PLACES_MODE_KEY = "ls_record_places_mode";
+type RecordMode = PlacesMode | "names";
+const MODES: { value: RecordMode; label: string; hint: string }[] = [
+  { value: "names", label: "Times", hint: "Our runners' splits." },
+  { value: "both", label: "Times + places", hint: "Our runners' splits, and a button for every other runner." },
+  { value: "places", label: "Places", hint: "Count every runner. Times come from whoever taps names here." },
+];
+/** What each mode does, as the server records it. */
+const JOB: Record<RecordMode, "times" | "places" | "both"> = { names: "times", both: "both", places: "places" };
+const countsPlaces = (job: string) => job === "places" || job === "both";
+const timesRunners = (job: string) => job === "times" || job === "both";
+const JOB_LABEL: Record<string, string> = { times: "times", places: "places", both: "times + places" };
+const names = (list: { name: string }[]) => [...new Set(list.map((r) => r.name))].join(" and ");
+/** This phone's job at a race that counts places (default: both). */
+// Times unless this phone picked a places job: two timers who never open Switch must not both count places.
+const modeFrom = (pref: string | null): RecordMode => (pref === "places" || pref === "both" ? pref : "names");
 /** How many of this device's latest taps the bottom strip shows. */
 const RECENT_N = 3;
 type CompareMode = "last" | "course" | "off";
 const TOAST_MS = 2500;
+/** A tap still unsent after this long (or while offline) shows the "unsent" badge. */
+const UNSENT_SHOW_MS = 5000;
+/** How long the shout card (our runner's place) stays up. */
+const SHOUT_MS = 5000;
 const FLASH_MS = 400;
 
 /**
@@ -120,7 +151,11 @@ export function TapScreen({ meetId, meetName, session, initial, timeZone, hasCou
       hasCourse={hasCourse}
       canGun={canGun}
       onSwitch={setSel}
-      pickerFor={(current) => <SwitchControl races={races} race={race} checkpointId={race.checkpoints[cpIndex].id} current={current} onSwitch={setSel} />}
+      pickerFor={(current) => {
+        // The race on screen with its places setup as of the last poll.
+        const live = current.places !== undefined ? { ...race, places: current.places } : race;
+        return <SwitchControl races={races.map((r) => (r.id === live.id ? live : r))} race={live} checkpointId={race.checkpoints[cpIndex].id} current={current} onSwitch={setSel} canSetUp={canGun} />;
+      }}
     />
   );
 }
@@ -129,7 +164,7 @@ export function TapScreen({ meetId, meetName, session, initial, timeZone, hasCou
  * Where taps go. Changing it is deliberate: open the sheet, pick, confirm.
  * A stray tap on a segmented control was too easy to make mid-race.
  */
-type RaceSummary = { counts: Record<string, number>; gunTimeMs: number | null };
+type RaceSummary = { counts: Record<string, number>; gunTimeMs: number | null; recording: Recording[]; places?: RacePlaces | null };
 
 function SwitchControl({
   races,
@@ -137,20 +172,35 @@ function SwitchControl({
   checkpointId,
   current,
   onSwitch,
+  canSetUp,
 }: {
   races: RaceInfo[];
   race: RaceInfo;
   checkpointId: string;
+  /** Coaches and managers: may turn places on or change their setup from here. */
+  canSetUp: boolean;
   /** Live numbers for the race we're on; other races are fetched when picked. */
   current: RaceSummary;
   onSwitch: (sel: { raceId: string; checkpointId: string }) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [placesFor, setPlacesFor] = useState<RaceInfo | null>(null);
+  const router = useRouter();
   const [pick, setPick] = useState({ raceId: race.id, checkpointId });
   const [fetched, setFetched] = useState<Record<string, RaceSummary>>({});
+  const [modePref, setModePref] = useLocalValue(PLACES_MODE_KEY);
+  const [pickMode, setPickMode] = useState<RecordMode>(modeFrom(modePref));
   const pickedRace = races.find((r) => r.id === pick.raceId) ?? race;
   const pickedCp = pickedRace.checkpoints.find((c) => c.id === pick.checkpointId) ?? pickedRace.checkpoints[0];
-  const changed = pick.raceId !== race.id || pick.checkpointId !== checkpointId;
+  const hereMode = race.places?.on ? modeFrom(modePref) : null;
+  // Someone else here doing the same job: two people counting places count runners twice;
+  // two people timing ask to replace each other's times (fine if they've split the runners).
+  // Shown on the button's second line, so nothing moves under a thumb; the sheet explains.
+  const others = current.recording.filter((r) => !r.me && r.checkpointId === checkpointId);
+  const myJob = JOB[hereMode ?? "names"];
+  const placeClash = hereMode && countsPlaces(myJob) ? others.filter((r) => countsPlaces(r.job)) : [];
+  const timeClash = timesRunners(myJob) ? others.filter((r) => timesRunners(r.job)) : [];
+  const changed = pick.raceId !== race.id || pick.checkpointId !== checkpointId || (!!pickedRace.places?.on && pickMode !== modeFrom(modePref));
   const summary: RaceSummary | null = pickedRace.id === race.id ? current : (fetched[pickedRace.id] ?? null);
 
   // Another race's numbers: one fetch of its log, replayed here.
@@ -159,11 +209,11 @@ function SwitchControl({
     let cancelled = false;
     fetch(`/api/races/${pickedRace.id}/taps`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((body: { taps: TapLike[]; gunTimeMs: number | null }) => {
+      .then((body: { taps: TapLike[]; gunTimeMs: number | null; recording?: Recording[] }) => {
         if (cancelled) return;
         const st = replay({ checkpoints: pickedRace.checkpoints.map((c) => ({ ...c, distance: { value: 0, unit: "mi", meters: 0 }, kind: "split" })) }, body.taps);
         const counts = Object.fromEntries(pickedRace.checkpoints.map((c) => [c.id, [...(st.get(c.id)?.byAthlete.values() ?? [])].filter((m) => !m.missed).length]));
-        setFetched((f) => ({ ...f, [pickedRace.id]: { counts, gunTimeMs: body.gunTimeMs } }));
+        setFetched((f) => ({ ...f, [pickedRace.id]: { counts, gunTimeMs: body.gunTimeMs, recording: body.recording ?? [] } }));
       })
       .catch(() => {});
     return () => {
@@ -177,6 +227,7 @@ function SwitchControl({
         type="button"
         onClick={() => {
           setPick({ raceId: race.id, checkpointId });
+          setPickMode(modeFrom(modePref));
           setOpen(true);
         }}
         aria-label="Change race or checkpoint"
@@ -184,7 +235,15 @@ function SwitchControl({
       >
         <span className="min-w-0 flex-1">
           <span className="block truncate text-2xl leading-tight font-semibold tracking-tight text-ink">{race.checkpoints.find((c) => c.id === checkpointId)?.label}</span>
-          <span className="block truncate text-[13px] text-ink-2">{race.name}</span>
+          <span className="block truncate text-[13px] text-ink-2">
+            {race.name}
+            {hereMode && <span className="font-medium text-ink"> · {MODES.find((m) => m.value === hereMode)!.label}</span>}
+            {placeClash.length > 0 ? (
+              <span className="font-semibold text-danger"> · {names(placeClash)} also counting places</span>
+            ) : (
+              timeClash.length > 0 && <span className="font-medium text-gold-text"> · {names(timeClash)} also timing</span>
+            )}
+          </span>
         </span>
         <span className="flex shrink-0 items-center gap-0.5 rounded-md bg-surface-2 px-2 py-1 text-[11px] font-medium text-ink-2">
           Switch
@@ -222,16 +281,25 @@ function SwitchControl({
                 {pickedRace.checkpoints.map((c) => {
                   const active = c.id === pick.checkpointId;
                   const n = summary?.counts[c.id];
+                  const here = (summary?.recording ?? []).filter((r) => !r.me && r.checkpointId === c.id);
                   return (
                     <button
                       key={c.id}
                       type="button"
                       onClick={() => setPick({ raceId: pickedRace.id, checkpointId: c.id })}
-                      className={`flex h-12 items-center justify-between rounded-lg border px-4 text-left text-base font-medium ${
+                      className={`flex min-h-12 items-center justify-between gap-3 rounded-lg border px-4 py-1.5 text-left text-base font-medium ${
                         active ? "border-brand bg-brand-soft text-ink" : "border-line bg-surface text-ink hover:bg-surface-2"
                       }`}
                     >
-                      <span>{c.label}</span>
+                      <span className="min-w-0">
+                        {c.label}
+                        {/* Who else is here and doing what, so gaps and doubles show before picking. */}
+                        {here.length > 0 && (
+                          <span className="block text-xs font-normal text-ink-2">
+                            {here.map((r) => `${r.name} · ${pickedRace.places?.on ? JOB_LABEL[r.job] : "times"}`).join(", ")}
+                          </span>
+                        )}
+                      </span>
                       <span className="flex items-center gap-2 text-[13px] font-normal text-ink-2">
                         {n !== undefined && (
                           <span className="tnum">
@@ -245,19 +313,79 @@ function SwitchControl({
                 })}
               </div>
             </div>
+            {canSetUp && (
+              // Last-minute help at the course: turn places on (or change the teams) without going back to the meet page.
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setPlacesFor(pickedRace);
+                }}
+                className="text-[13px] font-medium text-brand-text hover:underline"
+              >
+                {pickedRace.places?.on ? `Places setup for ${pickedRace.name}…` : `Count places in ${pickedRace.name}…`}
+              </button>
+            )}
+            {pickedRace.places?.on && (
+              <div>
+                <SectionLabel className="mb-1.5">Your job here</SectionLabel>
+                <div className="grid gap-2">
+                  {MODES.map((m) => (
+                    <OrderRow key={m.value} active={pickMode === m.value} label={m.label} hint={m.hint} onClick={() => setPickMode(m.value)} />
+                  ))}
+                </div>
+                {(() => {
+                  const there = (summary?.recording ?? []).filter((r) => !r.me && r.checkpointId === pick.checkpointId);
+                  const job = JOB[pickMode];
+                  const placing = countsPlaces(job) ? there.filter((r) => countsPlaces(r.job)) : [];
+                  const timing = timesRunners(job) ? there.filter((r) => timesRunners(r.job)) : [];
+                  return (
+                    <>
+                      {placing.length > 0 && (
+                        <div className="mt-2">
+                        <Alert tone="danger">
+                          {names(placing)} {placing.length === 1 ? "is" : "are"} already counting places at {pickedCp?.label}. Two people counting the same runners count them twice: pick Times, or a different checkpoint.
+                        </Alert>
+                        </div>
+                      )}
+                      {timing.length > 0 && (
+                        <div className="mt-2">
+                        <Alert tone="gold">
+                          {names(timing)} {timing.length === 1 ? "is" : "are"} already timing at {pickedCp?.label}. Fine if you&rsquo;ve split our runners between you; otherwise you&rsquo;ll replace each other&rsquo;s times.
+                        </Alert>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
             <Button
               size="lg"
               disabled={!changed}
               onClick={() => {
+                if (pickedRace.places?.on) setModePref(pickMode === "names" ? null : pickMode);
                 onSwitch(pick);
                 setOpen(false);
               }}
               className="w-full"
             >
-              {changed ? `Record at ${pickedCp?.label ?? ""} · ${pickedRace.name}` : `Already at ${pickedCp?.label ?? ""} · ${pickedRace.name}`}
+              {changed ? `Record at ${pickedCp?.label ?? ""} · ${pickedRace.name}` : `Already here: ${pickedCp?.label ?? ""} · ${pickedRace.name}`}
             </Button>
           </div>
         </Sheet>
+      )}
+      {placesFor && (
+        <PlacesSetupSheet
+          raceId={placesFor.id}
+          raceName={placesFor.name}
+          initial={placesFor.places}
+          onClose={() => setPlacesFor(null)}
+          onSaved={() => {
+            setPlacesFor(null);
+            router.refresh();
+          }}
+        />
       )}
     </>
   );
@@ -265,6 +393,8 @@ function SwitchControl({
 
 type LastAction = {
   tapId: string;
+  /** Sent with it (a pack of Others): undone together. */
+  more?: string[];
   label: string;
   /** Set when the action replaced an earlier time, so undo can put it back. */
   restore?: { athleteId: string; timeMs: number; estimate: boolean };
@@ -275,7 +405,7 @@ function RaceTapper({
   meetName,
   session,
   timeZone,
-  race,
+  race: raceIn,
   cpIndex,
   athletes,
   hasCourse,
@@ -297,8 +427,21 @@ function RaceTapper({
   pickerFor: (current: RaceSummary) => React.ReactNode;
 }) {
   const clock = useClock();
-  const checkpoint = race.checkpoints[cpIndex];
-  const { taps, gunTimeMs, official, officialLive, finished, staleMinutes, send, online, signedOut, rejected, loaded, unsent, refresh, adoptGun } = useRaceTaps(race.id, race.gunTimeMs, checkpoint.id);
+  const checkpoint = raceIn.checkpoints[cpIndex];
+  const [placesModePref] = useLocalValue(PLACES_MODE_KEY);
+  const { taps, gunTimeMs, official, officialLive, finished, staleMinutes, send, online, signedOut, rejected, loaded, unsent, oldestUnsentAt, refresh, adoptGun, recording, places: livePlaces } = useRaceTaps(
+    raceIn.id,
+    raceIn.gunTimeMs,
+    checkpoint.id,
+    // The job this phone picked (Who's where only shows jobs while places are on).
+    JOB[modeFrom(placesModePref)],
+  );
+  // The places setup as of the last poll: turning places off (or on) mid-race reaches this phone by itself.
+  const race = useMemo(() => (livePlaces === undefined ? raceIn : { ...raceIn, places: livePlaces }), [raceIn, livePlaces]);
+  const placesOn = !!race.places?.on;
+  // Chosen in the Switch sheet ("Your job here"), with the race and checkpoint.
+  const placesMode: RecordMode = !placesOn ? "names" : modeFrom(placesModePref);
+
   const isFinished = race.finished || finished;
   const officialAt = (athleteId: string): number | null => {
     const o = official[athleteId];
@@ -312,6 +455,29 @@ function RaceTapper({
   const cp = state.get(checkpoint.id);
   const prev = cpIndex > 0 ? state.get(race.checkpoints[cpIndex - 1].id) : undefined;
   const statuses = useMemo(() => replayStatuses(taps), [taps]);
+  const ticks = useMemo(() => replayTicks(taps), [taps]);
+  const cpPlaces = useMemo(
+    // Counting here (Times + places or Places): places from the first tap, even one of ours leading.
+    () => (placesOn ? racePlaces([checkpoint.id], state, ticks, gunTimeMs, placesMode === "names" ? [] : [checkpoint.id]).get(checkpoint.id) : undefined),
+    [placesOn, checkpoint.id, state, ticks, gunTimeMs, placesMode],
+  );
+  const [scoresOpen, setScoresOpen] = useState(false);
+  // The shout card: the place (and award gap) of the runner of ours just tapped, big enough for the
+  // coach beside the counter to call out. By name tap (athleteId) or by a places-only school tap (tapId).
+  const [shout, setShout] = useState<{ athleteId?: string; tapId?: string; key: number } | null>(null);
+  const shoutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shoutSeq = useRef(0);
+  const showShout = (who: { athleteId?: string; tapId?: string }) => {
+    shoutSeq.current += 1;
+    setShout({ ...who, key: shoutSeq.current });
+    if (shoutTimer.current) clearTimeout(shoutTimer.current);
+    shoutTimer.current = setTimeout(() => setShout(null), SHOUT_MS);
+  };
+  // Done counting here, remembered on this phone (a reload mid-race doesn't unlock the buttons).
+  const [placesDoneFlag, setPlacesDone] = useLocalValue(`ls_places_done_${race.id}_${checkpoint.id}`);
+  const placesDone = placesDoneFlag === "1";
+  // Chosen in the Switch sheet ("Your job here"), with the race and checkpoint.
+
   const counts = race.checkpoints.map((c, i) => {
     const has = (id: string) => {
       const o = official[id];
@@ -492,10 +658,10 @@ function RaceTapper({
     if (release && heldRef.current) setHoldId(id);
   };
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
-  // Coarse clock for chip expiry; ticks every few seconds rather than reading the clock during render.
+  // Coarse clock for chip expiry and the stuck-unsent badge; ticks every couple of seconds rather than reading the clock during render.
   const [nowMs, setNowMs] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setNowMs(Date.now()), 5000);
+    const t = setInterval(() => setNowMs(Date.now()), 2000);
     return () => clearInterval(t);
   }, []);
   // First-use card. Until hydration the flag reads null, so the card waits a beat rather than flashing.
@@ -521,6 +687,7 @@ function RaceTapper({
     setConfirmId(null);
     setSelectedSlotId(null);
     setRecent([]);
+    setShout(null);
   }
   const offset = clock.sync?.offsetMs ?? 0;
   // The chips on screen, and the one the manager picked (a selection dies with its chip).
@@ -590,6 +757,7 @@ function RaceTapper({
     setLastAction({ tapId, label: athletes[athleteId] ?? "tap", restore });
     setRecent((r) => [{ athleteId, timeMs: slot ? slot.timeMs : deviceTimeMs + offset }, ...r.filter((x) => x.athleteId !== athleteId)].slice(0, RECENT_N));
     flash(athleteId);
+    if (placesOn && placesMode !== "names") showShout({ athleteId });
     const how = slot ? (selected ? " · from the chip" : cp?.pending.some((p) => p.tapId === slot.tapId) ? " · from capture" : " · with the pack") : "";
     showToast(`${correction ? "Replaced" : "Recorded"} ${athletes[athleteId]} ${fmt(slot ? slot.timeMs : deviceTimeMs + offset)}${how}`);
   };
@@ -614,8 +782,11 @@ function RaceTapper({
 
   const undo = (e: SyntheticEvent) => {
     if (!lastAction) return;
+    // The undo's own message matters more than the last runner's place card.
+    setShout(null);
     const t = eventTimeMs(e);
     send({ ...base, type: "void", targetTapId: lastAction.tapId, deviceTimeMs: t });
+    for (const id of lastAction.more ?? []) send({ ...base, type: "void", targetTapId: id, deviceTimeMs: t });
     if (lastAction.restore) {
       // The replaced time was voided; give it back as a typed time.
       const { athleteId, timeMs, estimate } = lastAction.restore;
@@ -634,8 +805,28 @@ function RaceTapper({
     showToast(`Deleted ${fmt(slot.timeMs)}`);
   };
 
+  // The shout card: our runner just tapped, with their place, time here and name (a places-only tap gets
+  // the name once the names phone taps the runner).
+  const shoutView = (() => {
+    if (!shout || !cpPlaces) return null;
+    const index = shout.tapId ? cpPlaces.entries.findIndex((e) => e.tapId === shout.tapId) : -1;
+    const entry = index >= 0 ? cpPlaces.entries[index] : null;
+    const athleteId = shout.athleteId ?? (entry?.kind === "us" ? entry.athleteId : null);
+    const place = athleteId && cpPlaces.place.has(athleteId) ? cpPlaces.place.get(athleteId)! : index >= 0 ? (cpPlaces.countingAll ? index + 1 : cpPlaces.entries.slice(0, index + 1).filter((e) => e.kind !== "other").length) : null;
+    if (place === null) return null;
+    // A places-only tap shows its own moment at once (and keeps it, so the number doesn't jump when the
+    // names phone's time arrives); a name tap shows that runner's recorded time.
+    const mark = athleteId ? cp?.byAthlete.get(athleteId) : undefined;
+    const at = entry ? entry.timeMs : mark && !mark.missed ? mark.timeMs : null;
+    // Whole seconds: what gets shouted ("14:59"), and finer than a thumb tap anyway.
+    const time = at !== null && gunTimeMs && at >= gunTimeMs ? formatElapsed(at - gunTimeMs, "seconds") : null;
+    // "Of tracked teams" only means something when there are tracked teams; with none, everyone else is Other.
+    return { key: shout.key, place, time, name: athleteId ? (athletes[athleteId] ?? null) : null, overall: cpPlaces.countingAll || (race.places?.teams.length ?? 0) === 0 };
+  })();
+
   return (
-    <main className="flex min-h-dvh flex-col bg-bg">
+    // Places fits the screen exactly: the buttons take what's left, so a slipping thumb can't scroll them away.
+    <main className={`flex flex-col bg-bg ${placesMode === "places" ? "h-dvh overflow-hidden" : "min-h-dvh"}`}>
       <AppHeader
         title={meetName}
         titleHref={`/meets/${meetId}`}
@@ -666,7 +857,8 @@ function RaceTapper({
               </Badge>
             )
           )}
-          {unsent > 0 && <Badge tone="gold">{unsent} unsent</Badge>}
+          {/* Every tap waits here for a moment while it sends; only say so when it's stuck (offline, or a few seconds). */}
+          {unsent > 0 && (!online || (oldestUnsentAt !== null && nowMs > 0 && nowMs - oldestUnsentAt > UNSENT_SHOW_MS)) && <Badge tone="gold">{unsent} unsent</Badge>}
           {staleMinutes > 0 && <Badge tone="gold">updated {staleMinutes} min ago</Badge>}
           {rejected > 0 && (
             <Badge tone="danger" dot>
@@ -675,8 +867,10 @@ function RaceTapper({
           )}
         </div>
         {pickerFor({
+          places: race.places,
           gunTimeMs,
           counts: Object.fromEntries(counts.map((c) => [c.id, c.n])),
+          recording,
         })}
         {!gunTimeMs && !isFinished && canGun && (
           <StartRaceControl
@@ -688,10 +882,11 @@ function RaceTapper({
             onConflict={() => refresh()}
           />
         )}
-        <CheckpointCounts counts={counts} total={race.athleteIds.length} loaded={loaded} finished={isFinished} activeId={checkpoint.id} />
+        {/* A places counter doesn't need our runners' time counts. */}
+        {placesMode !== "places" && <CheckpointCounts counts={counts} total={race.athleteIds.length} loaded={loaded} finished={isFinished} activeId={checkpoint.id} />}
       </div>
 
-      {!introSeen && (
+      {!introSeen && placesMode !== "places" && (
         <div className="mx-3 mt-3 rounded-lg border border-brand/30 bg-brand-soft p-3 text-sm text-ink">
           <p className="font-semibold">How to record splits</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[13px] text-ink-2">
@@ -705,8 +900,32 @@ function RaceTapper({
           </Button>
         </div>
       )}
+      {placesMode === "places" ? (
+        // Room for the Undo bar, whatever the phone's home-bar inset.
+        <div className="flex min-h-0 flex-1 flex-col pb-[calc(7.5rem+env(safe-area-inset-bottom))]">
+          <PlacesPad
+              mode={placesMode}
+              teams={race.places?.teams ?? []}
+              ourTeam={race.ourTeam}
+              checkpointId={checkpoint.id}
+              places={cpPlaces}
+              athletes={athletes}
+              send={send}
+              eventTime={eventTimeMs}
+              onPointer={notePointerDown}
+              onScores={() => setScoresOpen(true)}
+              locked={placesDone}
+              ourExpected={total - counts[cpIndex].out}
+              onLock={(v) => setPlacesDone(v ? "1" : null)}
+              onAction={({ tapIds, label }) => setLastAction({ tapId: tapIds[0], more: tapIds.slice(1), label })}
+              onOurTap={(tapId) => showShout({ tapId })}
+              onToast={showToast}
+            />
+        </div>
+      ) : (
+      <>
       <div className="flex items-center justify-between gap-2 px-3 pt-3">
-        <span className="text-[13px] text-ink-2">Tap a runner as they pass.</span>
+        <span className="text-[13px] text-ink-2">{placesMode === "both" ? "Tap names as ours pass, teams for theirs." : placesOn ? "Tap a runner as they pass. Counting places too? Pick it in Switch." : "Tap a runner as they pass."}</span>
         <OrderControl
           mode={orderMode}
           picked={pickedOrder !== null}
@@ -721,7 +940,7 @@ function RaceTapper({
           onLarge={(v) => setLargePref(v ? "1" : null)}
         />
       </div>
-      <div className={`grid flex-1 content-start gap-2 p-3 ${hereDone ? "pb-72" : "pb-48"} ${large ? "grid-cols-1" : "grid-cols-2"}`}>
+      <div className={`grid flex-1 content-start gap-2 p-3 ${placesMode === "both" ? "pb-[26rem]" : hereDone ? "pb-72" : "pb-48"} ${large ? "grid-cols-1" : "grid-cols-2"}`}>
         {!loaded && <p className="col-span-full text-sm text-ink-3">Loading…</p>}
         {ordered.map((id) => {
           const mark = cp?.byAthlete.get(id);
@@ -850,12 +1069,31 @@ function RaceTapper({
                       vs {compareLabel} <DeltaText ms={vsRef} />
                     </span>
                   )}
+                  {placesMode !== "names" && cpPlaces?.place.has(id) && (
+                    // The place leads once they've passed: what the coach calls out.
+                    <span className={`mt-0.5 block ${flashing ? "" : "text-ink"}`}>
+                      <span className={`tnum font-bold ${large ? "text-xl" : "text-lg"}`}>{ordinal(cpPlaces.place.get(id)!)}</span>
+                      {!cpPlaces.countingAll && (race.places?.teams.length ?? 0) > 0 && <span className={`text-xs ${flashing ? "" : "text-ink-2"}`}> of tracked</span>}
+                    </span>
+                  )}
                 </>
               )}
             </button>
           );
         })}
       </div>
+      </>
+      )}
+
+      {scoresOpen && race.places && (
+        <Sheet title={`Scores at ${checkpoint.label}`} subtitle={race.name} onClose={() => setScoresOpen(false)}>
+          {cpPlaces ? (
+            <PlacesCard config={race.places} checkpoints={[checkpoint]} places={new Map([[checkpoint.id, cpPlaces]])} official={null} ourTeam={race.ourTeam} inSheet />
+          ) : (
+            <p className="text-sm text-ink-2">Nobody has been counted here yet.</p>
+          )}
+        </Sheet>
+      )}
 
       {holdId && (
         <TileStatusSheet
@@ -898,16 +1136,59 @@ function RaceTapper({
         />
       )}
 
+      {shoutView && (
+        // Over the race card, never the buttons; taps pass straight through it.
+        <div key={shoutView.key} className="pointer-events-none fixed inset-x-3 top-16 z-30 flex justify-center">
+          <div className="w-full max-w-md rounded-xl bg-brand px-4 py-3 text-brand-ink shadow-sheet">
+            {/* Who, then where: the order it's shouted in. */}
+            {(shoutView.name || !shoutView.overall) && (
+              <div className="mb-1.5 truncate text-base font-semibold">
+                {shoutView.name}
+                {!shoutView.overall && <span className="text-sm font-medium opacity-80">{shoutView.name ? " · " : ""}among the tracked teams</span>}
+              </div>
+            )}
+            <div className="flex items-baseline gap-3">
+              <span className="tnum text-5xl leading-none font-bold">{ordinal(shoutView.place)}</span>
+              <span className="text-base font-medium opacity-80">{shoutView.time ? "place in" : "place"}</span>
+              {shoutView.time && <Time className="text-4xl leading-none font-bold">{shoutView.time}</Time>}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Read-only: taps go straight through it to the tiles beneath. Undo lives in the bar. */}
-      {toast && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-36 z-20 flex justify-center px-3 [&>*]:pointer-events-none">
+      {/* The shout card already says what was recorded; no toast on top of it. */}
+      {toast && !shoutView && (
+        <div className={`pointer-events-none fixed inset-x-0 z-20 flex justify-center px-3 [&>*]:pointer-events-none ${placesMode === "names" ? "bottom-36" : "top-36"}`}>
           <Toast title={toast} />
         </div>
       )}
 
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-bg/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
         {/* Lives in the fixed bar (not above the grid) so appearing never moves a tile under a thumb. */}
-      {hereDone && (
+      {/* Counting places too: their runners are still coming, so Done (not our last runner) is what ends this checkpoint. */}
+      {/* Counting places at a mile mark: one step to finish here (locks the place buttons) and move on. */}
+      {hereDone && placesMode === "both" && !placesDone && nextCp && (
+        <div className="mx-3 mt-2 flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-2">
+          <span>
+            All ours are through <b className="text-ink">{checkpoint.label}</b>.
+          </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="shrink-0"
+            onClick={() => {
+              setPlacesDone("1");
+              onSwitch({ raceId: race.id, checkpointId: nextCp.id });
+            }}
+          >
+            Done here · Go to {nextCp.label}
+            <ArrowRight className="size-3.5" />
+          </Button>
+        </div>
+      )}
+      {/* The finish (nothing comes next) reads the same as on Times. */}
+      {hereDone && (placesMode === "names" || (placesMode === "both" && (placesDone || !nextCp))) && (
         <div className="mx-3 mt-2 rounded-lg border border-brand/30 bg-brand-soft px-3 py-2 text-sm text-ink">
           <div className="flex items-center justify-between gap-3">
             <span>
@@ -935,7 +1216,28 @@ function RaceTapper({
           {!nextCp && gapsBehind.length === 0 && <p className="mt-1 text-xs text-ink-2">Need to change something? Switch checkpoints above, or use Fix times on Live results.</p>}
         </div>
       )}
-        {recent.length > 0 && (
+        {placesMode === "both" && <PlacesPad
+              mode={placesMode}
+              teams={race.places?.teams ?? []}
+              ourTeam={race.ourTeam}
+              checkpointId={checkpoint.id}
+              places={cpPlaces}
+              athletes={athletes}
+              send={send}
+              eventTime={eventTimeMs}
+              onPointer={notePointerDown}
+              onScores={() => setScoresOpen(true)}
+              locked={placesDone}
+              ourExpected={total - counts[cpIndex].out}
+              onLock={(v) => setPlacesDone(v ? "1" : null)}
+              onAction={({ tapIds, label }) => setLastAction({ tapId: tapIds[0], more: tapIds.slice(1), label })}
+              onOurTap={(tapId) => showShout({ tapId })}
+              onToast={(text) => {
+                setShout(null);
+                showToast(text);
+              }}
+            />}
+        {placesMode === "names" && recent.length > 0 && (
           <p className="truncate px-3 pt-1.5 text-xs text-ink-2">
             <span className="text-ink-3">Last </span>
             {recent.map((r, i) => (
@@ -946,32 +1248,40 @@ function RaceTapper({
             ))}
           </p>
         )}
-        <CaptureChips
-          slots={shownSlots}
-          selectedId={selectedSlot?.tapId ?? null}
-          athletes={athletes}
-          fmt={fmt}
-          onSelect={(id) => setSelectedSlotId((cur) => (cur === id ? null : id))}
-          onDelete={deleteSlot}
-        />
-        <div className="flex gap-2 px-3 pt-2">
-          <Button variant="secondary" size="lg" onClick={undo} disabled={!lastAction} className="h-16 w-20 flex-col gap-0.5 px-0">
+        {/* On Times + places the chip row keeps its height even when empty: a chip appearing or expiring
+            must never move the team buttons above it under a thumb. */}
+        {placesMode !== "places" && (
+          <div className={placesMode === "both" ? "min-h-10" : ""}>
+            <CaptureChips
+              slots={shownSlots}
+              selectedId={selectedSlot?.tapId ?? null}
+              athletes={athletes}
+              fmt={fmt}
+              onSelect={(id) => setSelectedSlotId((cur) => (cur === id ? null : id))}
+              onDelete={deleteSlot}
+            />
+          </div>
+        )}
+        <div className={`flex gap-2 px-3 ${placesMode === "places" ? "pt-3 pb-5" : "pt-2"}`}>
+          <Button variant="secondary" size="lg" onClick={undo} disabled={!lastAction} className={`flex-col gap-0.5 px-1! ${placesMode === "places" ? "h-16 flex-1" : "h-16 w-20"}`}>
             <Undo2 className="size-6 shrink-0" />
-            <span className="text-xs">Undo</span>
+            {/* Says what it will undo, so a stray tap on Undo is caught before it costs a good one. */}
+            <span className={`w-full truncate px-1 text-center ${placesMode === "places" ? "text-xs" : "text-[11px] leading-tight"}`}>{lastAction ? (placesMode === "places" ? `Undo ${lastAction.label}` : lastAction.label) : "Undo"}</span>
           </Button>
-          <button
+          {placesMode !== "places" && <button
             type="button"
             onPointerDown={notePointerDown}
             onClick={capture}
-            className={`flex h-16 flex-1 flex-col items-center justify-center rounded-lg shadow-card select-none ${
-              flashId === "capture" ? "bg-brand text-brand-ink" : "bg-ink text-bg active:bg-ink/80"
+            // Filled but softened, with a crisp edge: still unmistakably not the outlined Other.
+            className={`flex h-16 flex-1 flex-col items-center justify-center rounded-lg border-2 shadow-card transition-transform duration-75 select-none active:scale-[0.98] ${
+              flashId === "capture" ? "border-brand bg-brand text-brand-ink" : "border-ink bg-ink/85 text-bg"
             }`}
           >
             <span className="text-xl leading-tight font-semibold tracking-wide">
               Capture time{cp && cp.pending.length > 0 ? ` · ${cp.pending.length} waiting` : ""}
             </span>
             <span className="text-xs opacity-70">{selectedSlot ? `names go to ${fmt(selectedSlot.timeMs)} · tap the chip to stop` : "then tap the names"}</span>
-          </button>
+          </button>}
         </div>
       </div>
     </main>
@@ -1083,19 +1393,19 @@ function OrderControl({
   const [showRaces, setShowRaces] = useState(mode.kind === "race");
   const prevLabel = cpIndex > 0 ? checkpoints[cpIndex - 1].label : null;
   const raceLabel = (id: string) => history.races.find((r) => r.id === id)?.label ?? "a race";
-  // Button label: reads as an ordering, so "Mile 2 order" next to a "Finish" title isn't mistaken for the checkpoint.
+  // Button label, after "Order:", so "Mile 2" next to a "Finish" title isn't mistaken for the checkpoint.
   const describe = (m: OrderMode) => {
     switch (m.kind) {
       case "prev":
-        return prevLabel ? `${prevLabel} order` : "Previous checkpoint";
+        return prevLabel ?? "Previous checkpoint";
       case "last":
-        return "Last-race order";
+        return "Last race";
       case "race":
-        return `${raceLabel(m.raceId)} order`;
+        return raceLabel(m.raceId);
       case "best":
-        return "Season-best order";
+        return "Season best";
       case "coach":
-        return "Coach's order";
+        return "Coach's";
       case "az":
         return "A–Z";
     }
@@ -1113,9 +1423,10 @@ function OrderControl({
   };
   return (
     <>
-      <Button variant="ghost" size="sm" onClick={() => setOpen(true)} className="-mr-2 text-ink-2">
-        <SlidersHorizontal className="size-3.5" />
-        {describe(mode)}
+      <Button variant="secondary" size="sm" onClick={() => setOpen(true)} className="min-w-0 shrink">
+        <SlidersHorizontal className="size-3.5 shrink-0" />
+        <span className="text-ink-2">Order:</span>
+        <span className="truncate">{describe(mode)}</span>
       </Button>
       {open && (
         <Sheet title="Names and tiles" subtitle="Remembered on this phone." onClose={() => setOpen(false)}>

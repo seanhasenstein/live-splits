@@ -1,12 +1,15 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import { guessRace, isOurTeam, matchAthlete, normalizeName } from "./match";
-import { headerLabels, parseArrowResultsHtml, parseRaceResultJson, parseResultsText } from "./parse";
+import { headerLabels, parseArrowResultsHtml, parseRaceResultJson, parseResultsText, restrictToDivision } from "./parse";
 
+// Real, unsanitized results stay out of git; these two tests run only where they exist.
+// The committed, sanitized copies are covered in fixtures.test.ts.
 const dir = `${process.cwd()}/data/results/2026-10-02-nightfall-classic`;
+const withRealData = test.skipIf(!existsSync(dir));
 const ALIASES = ["Sheboygan Lutheran", "Sheboygan Area Lutheran"];
 
-test("RACE RESULT json: columns, mats, DNF, our rows", () => {
+withRealData("RACE RESULT json: columns, mats, DNF, our rows", () => {
   const rows = JSON.parse(readFileSync(`${dir}/girls-raceresult.json`, "utf8"));
   const c = parseRaceResultJson(rows, "Girls Division 3");
   expect(c.splitLabels).toEqual(["Mile 1", "Mile 2"]);
@@ -21,7 +24,7 @@ test("RACE RESULT json: columns, mats, DNF, our rows", () => {
   expect(c.entries.filter((e) => isOurTeam(e.team, ALIASES))).toHaveLength(10);
 });
 
-test("pdf text: header gives mat labels; rows parse incl. DNF without points", () => {
+withRealData("pdf text: header gives mat labels; rows parse incl. DNF without points", () => {
   const text = readFileSync(`${dir}/boys.txt`, "utf8");
   const c = parseResultsText(text, "Boys Division 3");
   expect(c.splitLabels).toEqual(["Mile 1", "Mile 2"]);
@@ -44,7 +47,9 @@ test("matching: exact, alias, last-name suggestion, none", () => {
   expect(matchAthlete(entry("Patrick Stroede"), roster).kind).toBe("exact");
   expect(matchAthlete(entry("Jimmy Schulze"), roster)).toMatchObject({ kind: "alias", athlete: { displayName: "James Schulze" } });
   const typo = matchAthlete(entry("Patrick Stoede"), roster);
-  expect(typo.kind).toBe("none"); // no last-name match either; coach picks
+  expect(typo.kind).toBe("none"); // not matched outright; suggested from the same first name and a near-miss surname
+  expect(typo.candidates.map((a) => a.displayName)).toEqual(["Patrick Stroede"]);
+  expect(matchAthlete(entry("Patrick Smith"), roster).candidates).toEqual([]); // too far off to suggest
   const lucy = matchAthlete(entry("Lucie Leibham"), roster);
   expect(lucy.kind).toBe("none"); // two Leibhams: not unique
   expect(lucy.candidates.map((a) => a.displayName)).toEqual(["Lucy Leibham", "Will Leibham"]);
@@ -147,4 +152,35 @@ test("guesses the race from a contest or file name", () => {
   expect(guessRace("Boys Fr/So 5K", races)).toBeNull();
   expect(guessRace("Boys 9th Grade 5K", races)).toBeNull();
   expect(guessRace("Boys JV2 5K", races)).toBe("jv");
+});
+
+test("restrictToDivision keeps the division's teams, re-ranks by time, ties share a place, non-finishers keep none", () => {
+  const entry = (name: string, team: string, finishMs: number | null, place: number | null, status: "finished" | "dnf" = "finished") => ({
+    firstName: name.split(" ")[0], lastName: name.split(" ")[1], name, team, grade: null, bib: null, place, status, finishMs, splits: {},
+  });
+  const full = {
+    name: "Boys Varsity", distanceMeters: null, splitLabels: [], source: { kind: "text" as const }, precision: "seconds" as const,
+    entries: [
+      entry("Big One", "Luxemburg-Casco", 980_000, 1),
+      entry("Eddy Giebler", "Sheboygan Lutheran", 976_000 + 10_000, 3), // 16:26
+      entry("Big Two", "Bay Port", 990_000, 2),
+      entry("Small Two", "Kewaunee", 1_000_000, 4),
+      entry("Small Tie", "Oconto", 1_000_000, 4),
+      entry("Small Dnf", "Kewaunee", null, null, "dnf"),
+      entry("Small Three", "Oconto", 1_001_000, 6),
+    ],
+  };
+  const { contest, indexMap } = restrictToDivision(full, ["Sheboygan Lutheran", "Kewaunee", "oconto"]);
+  expect(contest.name).toBe("Boys Varsity · division");
+  expect(contest.division).toEqual({ teams: ["Sheboygan Lutheran", "Kewaunee", "oconto"] });
+  expect(contest.entries.map((e) => [e.name, e.place])).toEqual([
+    ["Eddy Giebler", 1],
+    ["Small Two", 2],
+    ["Small Tie", 2],
+    ["Small Three", 4],
+    ["Small Dnf", null],
+  ]);
+  expect(indexMap.get(1)).toBe(0); // Eddy's row moved from 1 to 0
+  expect(indexMap.get(0)).toBeUndefined(); // Big One is gone
+  expect(contest.entries[0].finishMs).toBe(986_000); // times untouched
 });

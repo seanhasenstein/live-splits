@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { offsetForTap } from "@/lib/client/clock";
 import { outboxAdd, outboxAll, outboxRemove, type OutboxTap } from "@/lib/client/outbox";
 import type { TapLike } from "@/lib/replay";
-import type { OfficialTimes } from "@/lib/results/import";
+import type { RacePlaces } from "@/lib/db/schema";
+import type { FieldEntry, OfficialTimes } from "@/lib/results/import";
 import type { TapInput } from "@/lib/taps";
 
 type ServerTap = TapLike & { raceId: string; createdAt: string };
@@ -27,10 +28,10 @@ const RETRY_MS = [1000, 2000, 4000, 8000, 15000];
  * The live tap log for a race: what the server has, plus what this device has
  * queued but not yet delivered. Polls the server and flushes the outbox.
  */
-export type Recording = { name: string; checkpointId: string };
+export type Recording = { name: string; checkpointId: string; job: "times" | "places" | "both"; me: boolean };
 
-/** `at`: the checkpoint this record screen is on, reported with each poll (undefined for the results page). */
-export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?: string) {
+/** `at`: the checkpoint this record screen is on, and `job` what it does there, reported with each poll (undefined for the results page). */
+export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?: string, job?: Recording["job"]) {
   const [serverTaps, setServerTaps] = useState<Map<string, ServerTap>>(() => new Map());
   const [outbox, setOutbox] = useState<Map<string, OutboxTap>>(() => new Map());
   const [gunTimeMs, setGunTimeMs] = useState(initialGunTimeMs);
@@ -38,6 +39,10 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
   const [signedOut, setSignedOut] = useState(false);
   const [rejected, setRejected] = useState(0);
   const [official, setOfficial] = useState<OfficialTimes>({});
+  /** Every team's finishers (live feed or import), when the race counts places: for team scores. */
+  const [field, setField] = useState<FieldEntry[]>([]);
+  /** The race's places setup as of the last poll (undefined until then: use the page's). */
+  const [places, setPlaces] = useState<RacePlaces | null | undefined>(undefined);
   /** The official times are coming from the timing company's live feed, not an import. */
   const [officialLive, setOfficialLive] = useState(false);
   const liveRef = useRef(false);
@@ -45,13 +50,17 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
   /** When each tap first arrived here (epoch ms); the board flashes times younger than a few seconds. */
   const [seenAt, setSeenAt] = useState<Map<string, number>>(() => new Map());
   const firstLoadDone = useRef(false);
+  /** Every tap this page has already had from the server: only others are news (overlapping polls resend old ones). */
+  const knownIds = useRef(new Set<string>());
   const quietRefetch = useRef(false);
   /** When this device last fired the gun itself (see adoptGun). */
   const adoptedAt = useRef<number | null>(null);
   const atRef = useRef(at);
+  const jobRef = useRef(job);
   useEffect(() => {
     atRef.current = at;
-  }, [at]);
+    jobRef.current = job;
+  }, [at, job]);
   const [finished, setFinished] = useState(false);
   const [loaded, setLoaded] = useState(false);
   /** Derived in the poll loop (not during render): is the race overdue, and how old is our data. */
@@ -66,10 +75,11 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
   // --- polling -------------------------------------------------------------
   const poll = useCallback(async () => {
     try {
-      const res = await fetch(`/api/races/${raceId}/taps?since=${since.current}${atRef.current ? `&at=${encodeURIComponent(atRef.current)}` : ""}`, { cache: "no-store" });
+      const res = await fetch(`/api/races/${raceId}/taps?since=${since.current}${atRef.current ? `&at=${encodeURIComponent(atRef.current)}&job=${jobRef.current ?? "times"}` : ""}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const body = (await res.json()) as { taps: ServerTap[]; gunTimeMs: number | null; serverTimeMs: number; official?: OfficialTimes; officialLive?: boolean; finished?: boolean; recording?: Recording[] };
+      const body = (await res.json()) as { taps: ServerTap[]; gunTimeMs: number | null; serverTimeMs: number; official?: OfficialTimes; field?: FieldEntry[]; places?: RacePlaces | null; officialLive?: boolean; finished?: boolean; recording?: Recording[] };
       if (body.recording) setRecording(body.recording);
+      if ("places" in body) setPlaces(body.places ?? null);
       since.current = body.serverTimeMs;
       // A poll that started before this device fired the gun can land after it; keep the gun.
       if (body.gunTimeMs === null && adoptedAt.current && Date.now() - adoptedAt.current < 15_000) body.gunTimeMs = stateRef.current.gunTimeMs;
@@ -79,6 +89,8 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
       if (body.official) {
         setOfficial(body.official);
         setOfficialLive(!!body.officialLive);
+        // Places turned off (or results removed) since: drop the old field rather than keep scoring it.
+        setField(body.field ?? []);
       } else if (liveRef.current && !body.officialLive) {
         // The live feed just ended (imported, or finished): fetch the real official times next.
         // That refetch re-sends every tap; none of them is news.
@@ -94,9 +106,11 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
           return next;
         });
         // Only taps that arrive after the first load count as "fresh"; the first load isn't news.
-        if (firstLoadDone.current && !quietRefetch.current) {
+        const unseen = body.taps.filter((t) => !knownIds.current.has(t.clientTapId));
+        for (const t of body.taps) knownIds.current.add(t.clientTapId);
+        if (firstLoadDone.current && !quietRefetch.current && unseen.length > 0) {
           setSeenAt((prev) => {
-            const fresh = body.taps.filter((t) => !prev.has(t.clientTapId));
+            const fresh = unseen.filter((t) => !prev.has(t.clientTapId));
             if (fresh.length === 0) return prev;
             const next = new Map(prev);
             const now = Date.now();
@@ -301,11 +315,18 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
   }, [serverTaps, outbox, raceId]);
 
   const unsent = useMemo(() => [...outbox.values()].filter((t) => t.raceId === raceId).length, [outbox, raceId]);
+  /** When the oldest unsent tap was queued (null when all sent): a tap waiting long means no signal. */
+  const oldestUnsentAt = useMemo(() => {
+    const times = [...outbox.values()].filter((t) => t.raceId === raceId).map((t) => t.queuedAt);
+    return times.length ? Math.min(...times) : null;
+  }, [outbox, raceId]);
 
   return {
     taps,
     gunTimeMs,
     official,
+    field,
+    places,
     officialLive,
     recording,
     seenAt,
@@ -318,6 +339,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
     rejected,
     loaded,
     unsent,
+    oldestUnsentAt,
     refresh: poll,
     adoptGun,
   };

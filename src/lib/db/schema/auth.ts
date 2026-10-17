@@ -39,7 +39,10 @@ export const Session = z.object({
   expiresAt: z.date(),
   revokedAt: z.date().nullable(),
   /** Where this person's record screen is pointed right now, so coaches can see who's covering which checkpoint. */
-  presence: z.object({ raceId: Id, checkpointId: z.string().min(1), at: z.date() }).nullable().default(null),
+  /** Where this person's record screen is, and their job there (times, places or both; older sessions lack it). */
+  presence: z.object({ raceId: Id, checkpointId: z.string().min(1), job: z.enum(["times", "places", "both"]).optional(), at: z.date() }).nullable().default(null),
+  /** The same for a workout: which group this person is timing. */
+  workoutPresence: z.object({ workoutId: Id, groupId: z.string().min(1), at: z.date() }).nullable().default(null),
 });
 export type Session = z.infer<typeof Session>;
 
