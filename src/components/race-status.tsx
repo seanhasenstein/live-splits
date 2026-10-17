@@ -132,7 +132,8 @@ function OfficialPill({ kind, className }: { kind: "imported" | "division" | "li
 export function RecordPill({ badge, size = "sm", className = "" }: { badge: RecordBadge; size?: "sm" | "md"; className?: string }) {
   const text = RECORD_LABEL[badge.kind].short;
   const title = `${RECORD_LABEL[badge.kind].long}${badge.unofficial ? " (unofficial, pending official results)" : ""}`;
-  const dims = size === "md" ? "h-7 px-2.5 text-[13px]" : "h-5 px-1.5 text-[11px]";
+  // sm sits beside a name in a table: a tag, not a button-sized block. md beside the sheet's big finish time.
+  const dims = size === "md" ? "h-7 px-2.5 text-[13px]" : "h-[18px] px-1 text-[10px]";
   const look = badge.unofficial ? "border border-brand text-brand-text" : "bg-brand text-brand-ink";
   return (
     <span title={title} className={`inline-flex shrink-0 items-center rounded-md font-semibold tracking-[0.04em] uppercase ${dims} ${look} ${className}`}>
