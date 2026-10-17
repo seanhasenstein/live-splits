@@ -134,7 +134,7 @@ export function RecordPill({ badge, size = "sm", className = "" }: { badge: Reco
   const title = `${RECORD_LABEL[badge.kind].long}${badge.unofficial ? " (unofficial, pending official results)" : ""}`;
   // sm sits beside a name in a table: a tag, not a button-sized block. md beside the sheet's big finish time.
   // A little wider than tall, with softer corners, so the small one reads as a tag rather than a dot.
-  const dims = size === "md" ? "h-7 rounded-md px-2.5 text-[13px]" : "h-4 rounded px-1.5 text-[9px]";
+  const dims = size === "md" ? "h-7 rounded-md px-2.5 text-[13px]" : "h-4 rounded-[5px] px-1.5 text-[9px]";
   const look = badge.unofficial ? "border border-brand text-brand-text" : "bg-brand text-brand-ink";
   return (
     <span title={title} className={`inline-flex shrink-0 items-center font-semibold tracking-[0.04em] uppercase ${dims} ${look} ${className}`}>
