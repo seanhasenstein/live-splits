@@ -761,9 +761,12 @@ function RaceBoard({
                   const cellNode = (
                     <>
                       {projected !== null ? (
+                        // A projection is a time from the gun, so it sits on that line; the split's line says what it is
+                        // (the first checkpoint has no split line, so the word goes under it).
                         <span className={`block ${staff && overdue(projected) ? "text-gold-text/80" : "text-ink-3"}`}>
-                          <Time className="block">~{formatElapsed(projected).replace(/\.\d$/, "")}</Time>
-                          {staff && overdue(projected) && <span className="block text-[11px]">overdue</span>}
+                          {i > 0 && <span className="block h-5 text-[11px] leading-5">{staff && overdue(projected) ? "overdue" : "projected"}</span>}
+                          <Time className={`block ${i > 0 ? "text-[13px] leading-5" : ""}`}>~{formatElapsed(projected).replace(/\.\d$/, "")}</Time>
+                          {i === 0 && <span className="block text-[11px] leading-5">{staff && overdue(projected) ? "overdue" : "projected"}</span>}
                         </span>
                       ) : i === 0 || split === null ? (
                         <Time className={`block ${cell.missed || cell.beforeGun ? "italic" : strong ? "font-semibold text-ink" : ""}`}>
@@ -880,7 +883,7 @@ function RaceBoard({
       )}
 
       <p className="mt-3 text-xs text-ink-3">
-        {!editing && "Tap a runner for their splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a light ~ time is a projection from the runner's last split${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : race.placesDerived ? "Official times replace app taps where imported; the timing company scored the divisions as one field, so places here are ranked by the app within our division. " : "Official times replace app taps where imported. ")}{" "}
+        {!editing && "Tap a runner for their splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a light ~ time marked projected is when they should get there at their last split's pace${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : race.placesDerived ? "Official times replace app taps where imported; the timing company scored the divisions as one field, so places here are ranked by the app within our division. " : "Official times replace app taps where imported. ")}{" "}
         {focusIndex === null
           ? race.places
             ? "The split, the time from the gun beneath it, then the place. Pick a checkpoint above the table for each split's pace change."
