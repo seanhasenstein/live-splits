@@ -25,7 +25,7 @@ export function HistoryImportWizard() {
     <form action={load}>
       <Card>
         <CardBody className="space-y-4 border-t-0">
-          <Field label="Split sheets PDF" hint="One PDF covering the seasons to import. Meets already in the app (same name and date) are skipped.">
+          <Field label="Split sheets PDF" hint="One PDF covering the seasons to import, or one meet's splits. Meets already in the app (any meet on the same date) are skipped.">
             <input name="file" type="file" accept="application/pdf" required className="block w-full text-sm text-ink file:mr-3 file:rounded-md file:border file:border-line file:bg-surface-2 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink" />
           </Field>
           {state.error && <Alert tone="danger">{state.error}</Alert>}
@@ -158,7 +158,7 @@ function Review({ meets, review }: { meets: HistoryMeet[]; review: HistoryReview
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="text-[15px] font-semibold text-ink">{m.name}</span>
-                      {existing ? <Badge tone="neutral">already in the app</Badge> : !checked && <Badge tone="neutral">skipped</Badge>}
+                      {existing ? <Badge tone="neutral">{m.existingMeetName && m.existingMeetName.trim().toLowerCase() !== m.name.trim().toLowerCase() ? `already in the app as ${m.existingMeetName}` : "already in the app"}</Badge> : !checked && <Badge tone="neutral">skipped</Badge>}
                     </span>
                     <span className="block text-[13px] text-ink-2">
                       {formatLocalDate(m.date)}, {m.date.slice(0, 4)} · {m.races.join(" · ")} · {m.rows} result{m.rows === 1 ? "" : "s"}

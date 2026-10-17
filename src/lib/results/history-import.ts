@@ -37,8 +37,13 @@ export type HistoryMeetReview = {
   date: string;
   rows: number;
   races: string[];
-  /** A meet with this name and date is already in the app: skipped. */
+  /**
+   * A meet on this date is already in the app (imported from official results, or an earlier run, maybe
+   * under another name): skipped, so nobody gets a second copy of that race.
+   */
   existingMeetId: string | null;
+  /** Its name in the app, so the review can say which meet it matched. */
+  existingMeetName: string | null;
   /** From an earlier meet of the same name, when the app has one. */
   venueName: string;
 };
@@ -99,7 +104,9 @@ export async function reviewHistory(db: Db, school: School, meets: HistoryMeet[]
 
   return {
     meets: meets.map((m, index) => {
-      const existing = existingMeets.find((e) => e.date === m.date && e.name.trim().toLowerCase() === m.name.trim().toLowerCase());
+      // Same date is the same meet (the sheet's name and the app's can differ); same name first if two share a day.
+      const sameDay = existingMeets.filter((e) => e.date === m.date);
+      const existing = sameDay.find((e) => e.name.trim().toLowerCase() === m.name.trim().toLowerCase()) ?? sameDay[0];
       const sameName = existingMeets.filter((e) => e.venueId && e.name.trim().toLowerCase() === m.name.trim().toLowerCase()).sort((a, b) => b.date.localeCompare(a.date))[0];
       return {
         index,
@@ -108,6 +115,7 @@ export async function reviewHistory(db: Db, school: School, meets: HistoryMeet[]
         rows: m.rows.length,
         races: raceGroups(m.rows).map((g) => g.name),
         existingMeetId: existing?._id ?? null,
+        existingMeetName: existing?.name ?? null,
         venueName: sameName?.venueId ? (venueName.get(sameName.venueId) ?? "") : "",
       };
     }),
@@ -275,9 +283,9 @@ async function writeMeet(db: Db, session: ClientSession, school: School, program
   const tenant = { schoolId: school._id };
   const { seasons, athleteIdByName, athleteById } = people;
 
-  // Already in the app (an earlier run, or a retry after a lost response): leave it alone.
-  const nameMatch = { $regex: `^${m.name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" };
-  if (await collection(db, "meets").findOne({ schoolId: school._id, date: m.date, name: nameMatch, deletedAt: null }, { session, projection: { _id: 1 } })) {
+  // Already in the app on that date (official results, an earlier run, a retry after a lost response,
+  // whatever it's called there): leave it alone rather than make a second copy of the race.
+  if (await collection(db, "meets").findOne({ schoolId: school._id, date: m.date, deletedAt: null }, { session, projection: { _id: 1 } })) {
     result.skipped += 1;
     return;
   }

@@ -75,6 +75,9 @@ function courseMeters(lastLabel: string): number | null {
 }
 
 export function parseSplitsHistory(text: string): HistoryMeet[] {
+  // This season's sheets ("MEET SPLITS", one meet per file) say the same things in a different layout:
+  // read them as the older sheet so both go through one tested path.
+  if (/^\s*MEET SPLITS\s*$/m.test(text)) text = meetSplitsAsHistory(text);
   const meets: HistoryMeet[] = [];
   let meet: HistoryMeet | null = null;
   let gender: "M" | "F" | null = null;
@@ -193,3 +196,101 @@ export function parseSplitsHistory(text: string): HistoryMeet[] {
 }
 
 const TIME_OR_STATUS = /^(\d+:\d{2}(\.\d+)?|dnf|dns)$/i;
+
+/** "V A R S I T Y R AC E" → "VARSITYRACE": the PDF text spaces out letter-spaced headings. */
+const squash = (cell: string) => cell.replace(/\s+/g, "").toUpperCase();
+
+const SUMMARY_LABELS: Record<string, string> = { PTS: "Pts", PLACE: "Place", TEAMS: "Teams", RUNNERS: "Runners", LETTERSTANDARD: "Letter standard" };
+
+/**
+ * A "MEET SPLITS" sheet (2026 on), rewritten as the older split sheet:
+ *   "Meet • Host • August 27, 2026"            → "Meet, August 27, 2026"
+ *   "BOYS" + "VARSITY RACE | MILE 1 | … | LETTER" → "Boys | Mile 1 | … | Letter"
+ *   rows under "JV RACE"                         → place "3rd JV"
+ *   "LETTER" badge                               → "Yes"
+ *   rows under "DID NOT RUN" (DNR)               → left out, as blank rows were
+ * and the summary numbers ("61 PTS 3rd PLACE 9 TEAMS …") as a summary line.
+ */
+export function meetSplitsAsHistory(text: string): string {
+  const out: string[] = [];
+  let gender: "Boys" | "Girls" | null = null;
+  let section: "varsity" | "jv" | "dnr" | null = null;
+  // The summary block between the gender and its table: "VARSITY", then value / label pairs.
+  let summaryLevel: string | null = null;
+  let summary: string[] = [];
+  let pending: string | null = null;
+  const flushSummary = () => {
+    if (gender && summaryLevel && summary.length) out.push(`${gender} ${summaryLevel} - ${summary.join(". ")}.`);
+    summary = [];
+    pending = null;
+  };
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const cells = line.split("\t").map((c) => c.trim());
+    const key = squash(cells[0]);
+    // "KML Charger Cross Country Classic • Kettle Moraine Lutheran • August 27, 2026"
+    const parts = line.split(/\s+•\s+/);
+    if (parts.length >= 2 && parseLongDate(parts[parts.length - 1])) {
+      flushSummary();
+      out.push(`${parts[0]}, ${parts[parts.length - 1]}`);
+      gender = null;
+      section = null;
+      continue;
+    }
+    if (cells.length === 1 && (key === "BOYS" || key === "GIRLS" || key === "MEN" || key === "WOMEN")) {
+      flushSummary();
+      gender = key === "BOYS" || key === "MEN" ? "Boys" : "Girls";
+      section = null;
+      summaryLevel = null;
+      continue;
+    }
+    if (!gender) continue;
+    // Table header: "VARSITY RACE | MILE 1 | MILE 2 | MILE 3.1 | FINISH | PLACE | LETTER"
+    if (cells.length >= 3 && cells.slice(1).some((c) => squash(c) === "FINISH")) {
+      flushSummary();
+      summaryLevel = null;
+      section = /^JV/.test(key) ? "jv" : "varsity";
+      const labels = cells.slice(1).map((c) => {
+        const k = squash(c);
+        const mile = k.match(/^MILE(\d+(?:\.\d+)?)$/);
+        return mile ? `Mile ${mile[1]}` : k.charAt(0) + k.slice(1).toLowerCase();
+      });
+      out.push([gender, ...labels].join("\t"));
+      continue;
+    }
+    if (cells.length === 1 && (key === "JVRACE" || key === "VARSITYRACE")) {
+      section = key === "JVRACE" ? "jv" : "varsity";
+      continue;
+    }
+    if (cells.length === 1 && key === "DIDNOTRUN") {
+      section = "dnr";
+      continue;
+    }
+    if (section === null) {
+      // The summary block: a level, then numbers each followed by what they are.
+      if (cells.length === 1 && (key === "VARSITY" || key === "JV")) {
+        flushSummary();
+        summaryLevel = key === "JV" ? "JV" : "Varsity";
+      } else if (cells.length === 1 && SUMMARY_LABELS[key] && pending !== null) {
+        summary.push(key === "LETTERSTANDARD" ? `${SUMMARY_LABELS[key]} ${pending}` : `${pending} ${SUMMARY_LABELS[key]}`);
+        pending = null;
+      } else if (cells.length === 1) {
+        pending = line;
+      }
+      continue;
+    }
+    // A runner: name, segment times, finish, place, letter. Didn't run: left out.
+    if (section === "dnr" || cells.length < 2 || cells.slice(1).some((c) => /^dnr$/i.test(c))) continue;
+    const row = cells.map((c, i) => {
+      if (i === 0) return c;
+      if (/^letter$/i.test(c)) return "Yes";
+      if (section === "jv" && /^\d+(st|nd|rd|th)$/i.test(c)) return `${c} JV`;
+      return c;
+    });
+    out.push(row.join("\t"));
+  }
+  flushSummary();
+  return out.join("\n");
+}
+
