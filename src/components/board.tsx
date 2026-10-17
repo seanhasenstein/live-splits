@@ -750,12 +750,16 @@ function RaceBoard({
                           within a second. The exact change is in the checkpoint view and the runner's sheet. */}
                       {i > 0 && split !== null && (
                         <span
-                          className={`block text-xs leading-5 ${paceChange === null || Math.abs(paceChange) < 1000 ? "text-ink-3" : paceChange < 0 ? "text-brand-text" : "text-danger"}`}
+                          // With places on, ▲ / ▼ are the color in the cell; the split stays gray (its pace change
+                          // is in the checkpoint view's Pace ± column and the runner's sheet).
+                          className={`block text-xs leading-5 ${race.places || paceChange === null || Math.abs(paceChange) < 1000 ? "text-ink-3" : paceChange < 0 ? "text-brand-text" : "text-danger"}`}
                           title={paceChange !== null ? `${paceChange <= 0 ? "−" : "+"}${formatElapsed(Math.abs(paceChange)).replace(/\.\d$/, "")} per mile vs the previous segment` : undefined}
                         >
                           <Time>{ft(split)}</Time>
                         </span>
                       )}
+                      {/* The first checkpoint has no split (it is the time): an empty line keeps its place level with the others. */}
+                      {i === 0 && place && <span aria-hidden className="block text-xs leading-5">&nbsp;</span>}
                       {/* The place in a fixed-width slot, so down a column the ▲ / ▼ / ↔ beside it line up. */}
                       {place && (
                         <span className="tnum flex text-xs leading-5 font-medium text-ink-2">
@@ -845,7 +849,9 @@ function RaceBoard({
       <p className="mt-3 text-xs text-ink-3">
         {!editing && "Tap a runner for their splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a light ~ time is a projection from the runner's last split${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : race.placesDerived ? "Official times replace app taps where imported; the timing company scored the divisions as one field, so places here are ranked by the app within our division. " : "Official times replace app taps where imported. ")}{" "}
         {focusIndex === null
-          ? "Time from the gun; beneath it the split, green when that segment was faster than the one before, red when slower (the exact change is in the checkpoint view)."
+          ? race.places
+            ? "Time from the gun, the split beneath it, then the place. Pick a checkpoint above the table for each split's pace change."
+            : "Time from the gun; beneath it the split, green when that segment was faster than the one before, red when slower (the exact change is in the checkpoint view)."
           : "Time from the gun, the split for this segment, and Pace ±: the change in pace per mile from the previous segment (+ slower, − faster)."}{" "}
         Updates every few seconds.
         {race.places && placesByCp.size > 0 && (
