@@ -634,7 +634,7 @@ function RaceBoard({
         <Segmented
           size="sm"
           scroll
-          className="mb-2"
+          className="mb-4"
           value={focusIndex === null ? "all" : race.checkpoints[focusIndex].id}
           onChange={(v) => setFocusPref(v)}
           options={[{ value: "all", label: "All" }, ...race.checkpoints.map((c) => ({ value: c.id, label: c.label }))]}
