@@ -246,6 +246,9 @@ export function parseColumnResults(text: string, fallbackName: string): ParsedCo
   const contests: ParsedContest[] = [];
   let cols: { place: number; name: number; team: number; grade: number; time: number; bib: number; points: number; count: number } | null = null;
   let current: { name: string; entries: ParsedEntry[]; times: string[] } | null = null;
+  // A line that may name a race. It only starts one if the next runner is first: a page footer can
+  // name the meet ("Lakeshore Boys & Girls Invite") in the middle of a race.
+  let heading: string | null = null;
   const close = () => {
     if (current && current.entries.length > 0)
       contests.push({ name: current.name, distanceMeters: null, splitLabels: [], entries: current.entries, source: { kind: "text" }, precision: precisionOf(current.times) });
@@ -261,10 +264,8 @@ export function parseColumnResults(text: string, fallbackName: string): ParsedCo
       continue;
     }
     if (!cols) continue;
-    // A race heading: one cell naming a race. Page footers ("Overall Results", the meet name) aren't.
     if (cells.length === 1 && RACE_HEADING_RE.test(cells[0]) && placeAndStatus(cells[0]).place === null) {
-      close();
-      current = { name: cells[0], entries: [], times: [] };
+      heading = cells[0];
       continue;
     }
     const { place, status } = placeAndStatus(cells[cols.place]);
@@ -283,6 +284,11 @@ export function parseColumnResults(text: string, fallbackName: string): ParsedCo
     if (status === "finished" && finishMs === null) continue;
     const nameWords = (row[cols.name] ?? "").split(/\s+/).filter(Boolean);
     if (nameWords.length === 0) continue;
+    if (heading !== null && (current === null || place === 1)) {
+      close();
+      current = { name: heading, entries: [], times: [] };
+    }
+    heading = null;
     current ??= { name: fallbackName, entries: [], times: [] };
     if (finishMs !== null) current.times.push(timeText);
     const [firstName, ...lastParts] = nameWords;
