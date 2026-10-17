@@ -52,7 +52,11 @@
   next time) and "Show places to everyone" (off: only coaches and managers
   see them).
 - Each phone picks its job in Switch ("Your job here"), with the race and
-  checkpoint: Times, Times + places, or Places. The header shows it.
+  checkpoint: Times, Times + places, or Places. The header shows it. Every
+  phone starts on Times (so two timers can't both count places by accident);
+  whoever counts places picks Times + places or Places once, and it sticks.
+- Reload the record screens after changing a race's places setup (teams,
+  on/off): open phones don't pick it up on their own.
   - One phone: Times + places. Tap our names as now and a team button for
     their runners; Other for everyone else (hold Other for a pack of 2–5).
   - Two phones: the name tapper on Times; a helper on Places taps our

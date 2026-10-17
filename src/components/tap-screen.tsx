@@ -80,7 +80,8 @@ const timesRunners = (job: string) => job === "times" || job === "both";
 const JOB_LABEL: Record<string, string> = { times: "times", places: "places", both: "times + places" };
 const names = (list: { name: string }[]) => [...new Set(list.map((r) => r.name))].join(" and ");
 /** This phone's job at a race that counts places (default: both). */
-const modeFrom = (pref: string | null): RecordMode => (pref === "places" || pref === "names" ? pref : "both");
+// Times unless this phone picked a places job: two timers who never open Switch must not both count places.
+const modeFrom = (pref: string | null): RecordMode => (pref === "places" || pref === "both" ? pref : "names");
 /** How many of this device's latest taps the bottom strip shows. */
 const RECENT_N = 3;
 type CompareMode = "last" | "course" | "off";
@@ -359,7 +360,7 @@ function SwitchControl({
               size="lg"
               disabled={!changed}
               onClick={() => {
-                if (pickedRace.places?.on) setModePref(pickMode === "both" ? null : pickMode);
+                if (pickedRace.places?.on) setModePref(pickMode === "names" ? null : pickMode);
                 onSwitch(pick);
                 setOpen(false);
               }}
@@ -674,6 +675,7 @@ function RaceTapper({
     setConfirmId(null);
     setSelectedSlotId(null);
     setRecent([]);
+    setShout(null);
   }
   const offset = clock.sync?.offsetMs ?? 0;
   // The chips on screen, and the one the manager picked (a selection dies with its chip).
@@ -743,7 +745,7 @@ function RaceTapper({
     setLastAction({ tapId, label: athletes[athleteId] ?? "tap", restore });
     setRecent((r) => [{ athleteId, timeMs: slot ? slot.timeMs : deviceTimeMs + offset }, ...r.filter((x) => x.athleteId !== athleteId)].slice(0, RECENT_N));
     flash(athleteId);
-    if (placesOn) showShout({ athleteId });
+    if (placesOn && placesMode !== "names") showShout({ athleteId });
     const how = slot ? (selected ? " · from the chip" : cp?.pending.some((p) => p.tapId === slot.tapId) ? " · from capture" : " · with the pack") : "";
     showToast(`${correction ? "Replaced" : "Recorded"} ${athletes[athleteId]} ${fmt(slot ? slot.timeMs : deviceTimeMs + offset)}${how}`);
   };
@@ -768,6 +770,8 @@ function RaceTapper({
 
   const undo = (e: SyntheticEvent) => {
     if (!lastAction) return;
+    // The undo's own message matters more than the last runner's place card.
+    setShout(null);
     const t = eventTimeMs(e);
     send({ ...base, type: "void", targetTapId: lastAction.tapId, deviceTimeMs: t });
     for (const id of lastAction.more ?? []) send({ ...base, type: "void", targetTapId: id, deviceTimeMs: t });
@@ -908,7 +912,7 @@ function RaceTapper({
       ) : (
       <>
       <div className="flex items-center justify-between gap-2 px-3 pt-3">
-        <span className="text-[13px] text-ink-2">{placesMode === "both" ? "Tap names as ours pass, teams for theirs." : "Tap a runner as they pass."}</span>
+        <span className="text-[13px] text-ink-2">{placesMode === "both" ? "Tap names as ours pass, teams for theirs." : placesOn ? "Tap a runner as they pass. Counting places too? Pick it in Switch." : "Tap a runner as they pass."}</span>
         <OrderControl
           mode={orderMode}
           picked={pickedOrder !== null}
@@ -1052,7 +1056,7 @@ function RaceTapper({
                       vs {compareLabel} <DeltaText ms={vsRef} />
                     </span>
                   )}
-                  {cpPlaces?.place.has(id) && (
+                  {placesMode !== "names" && cpPlaces?.place.has(id) && (
                     // The place leads once they've passed: what the coach calls out.
                     <span className={`mt-0.5 block ${flashing ? "" : "text-ink"}`}>
                       <span className={`tnum font-bold ${large ? "text-xl" : "text-lg"}`}>{ordinal(cpPlaces.place.get(id)!)}</span>
@@ -1215,7 +1219,10 @@ function RaceTapper({
               onLock={(v) => setPlacesDone(v ? "1" : null)}
               onAction={({ tapIds, label }) => setLastAction({ tapId: tapIds[0], more: tapIds.slice(1), label })}
               onOurTap={(tapId) => showShout({ tapId })}
-              onToast={showToast}
+              onToast={(text) => {
+                setShout(null);
+                showToast(text);
+              }}
             />}
         {placesMode === "names" && recent.length > 0 && (
           <p className="truncate px-3 pt-1.5 text-xs text-ink-2">
@@ -1228,14 +1235,20 @@ function RaceTapper({
             ))}
           </p>
         )}
-        {placesMode !== "places" && <CaptureChips
-          slots={shownSlots}
-          selectedId={selectedSlot?.tapId ?? null}
-          athletes={athletes}
-          fmt={fmt}
-          onSelect={(id) => setSelectedSlotId((cur) => (cur === id ? null : id))}
-          onDelete={deleteSlot}
-        />}
+        {/* On Times + places the chip row keeps its height even when empty: a chip appearing or expiring
+            must never move the team buttons above it under a thumb. */}
+        {placesMode !== "places" && (
+          <div className={placesMode === "both" ? "min-h-[38px]" : ""}>
+            <CaptureChips
+              slots={shownSlots}
+              selectedId={selectedSlot?.tapId ?? null}
+              athletes={athletes}
+              fmt={fmt}
+              onSelect={(id) => setSelectedSlotId((cur) => (cur === id ? null : id))}
+              onDelete={deleteSlot}
+            />
+          </div>
+        )}
         <div className={`flex gap-2 px-3 ${placesMode === "places" ? "pt-3 pb-5" : "pt-2"}`}>
           <Button variant="secondary" size="lg" onClick={undo} disabled={!lastAction} className={`flex-col gap-0.5 px-1! ${placesMode === "places" ? "h-16 flex-1" : "h-16 w-20"}`}>
             <Undo2 className="size-6 shrink-0" />

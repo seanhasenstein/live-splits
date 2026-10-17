@@ -13,7 +13,8 @@ type Send = (input: Omit<TapInput, "clientTapId" | "deviceTimeMs" | "clockOffset
 export type PlacesMode = "both" | "places";
 
 /** A bounce, not two runners: taps on the same button closer than this are one. */
-const BOUNCE_MS = 120;
+/** One finger can't tap a button twice this fast; two runners of one team can be 80 ms apart. */
+const BOUNCE_MS = 40;
 const HOLD_MS = 500;
 const PACK_GAP_MS = 10;
 /** Other (and its pack buttons) is outlined: one group, never mistaken for Capture time or a team. */
@@ -77,7 +78,8 @@ export function PlacesPad({
     if (flashTimer.current) clearTimeout(flashTimer.current);
     flashTimer.current = setTimeout(() => setFlash(false), 450);
   };
-  const [fixing, setFixing] = useState<{ entry: PlaceEntry; index: number } | null>(null);
+  // The tap being fixed; its place and neighbours are read fresh each render (places can shift while open).
+  const [fixingId, setFixingId] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(false);
   /** Taps counted per button: a new value restarts that button's flash (in the button's text color, so it shows on every background). */
   const [flashes, setFlashes] = useState<Record<string, number>>({});
@@ -86,6 +88,12 @@ export function PlacesPad({
     flashes[key] ? <span key={flashes[key]} aria-hidden className="pointer-events-none absolute inset-0 rounded-lg bg-current opacity-0 animate-[place-flash_160ms_ease-out]" /> : null;
   const [burst, setBurst] = useState<number | null>(null);
   const lastTap = useRef(new Map<string, number>());
+  /** When a finger landed on each button: a tap's time is its own button's, never another thumb's. */
+  const downAt = useRef(new Map<string, number>());
+  const timeFor = (key: string, e: SyntheticEvent) => {
+    const at = downAt.current.get(key);
+    return at !== undefined && Date.now() - at < 1500 ? at : eventTime(e);
+  };
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const held = useRef(false);
 
@@ -93,7 +101,7 @@ export function PlacesPad({
   const [seenCp, setSeenCp] = useState(checkpointId);
   if (seenCp !== checkpointId) {
     setSeenCp(checkpointId);
-    setFixing(null);
+    setFixingId(null);
     setBurst(null);
   }
   useEffect(() => {
@@ -120,7 +128,7 @@ export function PlacesPad({
       held.current = false;
       return;
     }
-    const at = eventTime(e);
+    const at = timeFor(team, e);
     if (at - (lastTap.current.get(team) ?? 0) < BOUNCE_MS) return;
     lastTap.current.set(team, at);
     const tapId = send({ ...base, type: "tick", team, deviceTimeMs: at });
@@ -132,7 +140,7 @@ export function PlacesPad({
   };
   // A clump of untracked runners: n Others at once, a few ms apart so they keep their order.
   const pack = (e: SyntheticEvent, n: number) => {
-    const at = eventTime(e);
+    const at = timeFor(`pack${n}`, e);
     const tapIds = Array.from({ length: n }, (_, i) => send({ ...base, type: "tick", team: "other", deviceTimeMs: at + i * PACK_GAP_MS }));
     buzz();
     flashNow();
@@ -170,6 +178,7 @@ export function PlacesPad({
       disabled={locked}
       onPointerDown={() => {
         onPointer();
+        downAt.current.set(team, Date.now());
         held.current = false;
         if (team === "other" && !showPacks) holdStart();
       }}
@@ -185,7 +194,7 @@ export function PlacesPad({
           ? { background: colors.bg, color: colors.ink, WebkitTouchCallout: "none" }
           : { background: `color-mix(in srgb, ${colors.bg} 90%, transparent)`, border: `2px solid ${colors.bg}`, color: colors.ink, WebkitTouchCallout: "none" }
       }
-      className={`relative flex flex-col items-center justify-center rounded-lg font-bold shadow-card transition-transform duration-75 select-none active:scale-[0.97] disabled:opacity-40 ${big ? "h-full min-h-14 text-2xl" : "h-14 text-lg"} ${extra}`}
+      className={`relative flex flex-col items-center justify-center rounded-lg font-bold shadow-card transition-transform duration-75 select-none active:scale-[0.97] disabled:opacity-40 ${big ? "h-full min-h-0 text-2xl" : "h-14 text-lg"} ${extra}`}
     >
       {flashLayer(team)}
       {/* How many of them have passed here; for ours, of how many are coming (still waiting on some = don't stop yet). */}
@@ -204,10 +213,13 @@ export function PlacesPad({
       key={n}
       type="button"
       disabled={locked}
-      onPointerDown={onPointer}
+      onPointerDown={() => {
+        onPointer();
+        downAt.current.set(`pack${n}`, Date.now());
+      }}
       onClick={(e) => pack(e, n)}
       aria-label={`${n} Others`}
-      className={`relative flex flex-1 flex-col items-center justify-center rounded-lg border-2 border-line-strong bg-surface font-bold text-ink shadow-card transition-transform duration-75 select-none active:scale-[0.97] disabled:opacity-40 ${big ? "h-full min-h-14 text-xl" : "h-14 text-lg"}`}
+      className={`relative flex flex-1 flex-col items-center justify-center rounded-lg border-2 border-line-strong bg-surface font-bold text-ink shadow-card transition-transform duration-75 select-none active:scale-[0.97] disabled:opacity-40 ${big ? "h-full min-h-0 text-xl" : "h-14 text-lg"}`}
     >
       {flashLayer(`pack${n}`)}
       +{n}
@@ -215,6 +227,9 @@ export function PlacesPad({
     </button>
   ));
 
+  const fixIndex = fixingId ? entries.findIndex((e) => e.tapId === fixingId) : -1;
+  // Gone (undone from another phone): nothing to fix.
+  const fixing = fixIndex >= 0 ? { entry: entries[fixIndex], index: fixIndex } : null;
   const last = entries.at(-1) ?? null;
   const teamOf = (e: PlaceEntry) => (e.kind === "us" ? "us" : e.kind === "other" ? "other" : e.teamId);
   const colorsOf = (team: string) => (team === "us" ? US : team === "other" ? null : placeColor(teams.find((t) => t.id === team)?.color ?? "gray"));
@@ -273,9 +288,17 @@ export function PlacesPad({
         {/* Over the row, not above the buttons, so the buttons never move under a thumb. */}
         {burst !== null && !locked && (
           <div className="absolute inset-x-0 bottom-0 z-10 grid grid-cols-4 gap-1.5 bg-bg">
-            {[2, 3, 4, 5].map((n) => (
-              <Button key={n} variant="secondary" onPointerDown={onPointer} onClick={(e) => pack(e, n)} className="h-12 text-base font-bold">
-                +{n} Other
+            {/* +1 too: the press that opened this was a runner. */}
+            {[1, 2, 3, 4].map((n) => (
+              <Button
+                key={n}
+                variant="secondary"
+                onPointerDown={() => {
+                  onPointer();
+                  downAt.current.set(`pack${n}`, Date.now());
+                }}
+                onClick={(e) => pack(e, n)} className="h-12 text-base font-bold">
+                +{n}
               </Button>
             ))}
           </div>
@@ -327,7 +350,7 @@ export function PlacesPad({
                     <button
                       type="button"
                       disabled={!entry.tapId}
-                      onClick={() => setFixing({ entry, index })}
+                      onClick={() => setFixingId(entry.tapId)}
                       className="flex h-12 w-full items-center gap-3 px-3 text-left hover:bg-surface-2 disabled:hover:bg-transparent"
                     >
                       <span className="tnum w-12 shrink-0 text-sm font-semibold text-ink">{ordinal(index + 1)}</span>
@@ -356,12 +379,12 @@ export function PlacesPad({
           teams={teams}
           canUs={mode === "places" || fixing.entry.kind === "us"}
           label={label}
-          onClose={() => setFixing(null)}
+          onClose={() => setFixingId(null)}
           onSend={(input, toast) => {
             const tapId = send({ ...base, ...input });
             onAction({ tapIds: [tapId], label: toast });
             onToast(toast);
-            setFixing(null);
+            setFixingId(null);
           }}
         />
       )}

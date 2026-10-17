@@ -51,8 +51,14 @@ export function PlacesSetupSheet({ raceId, raceName, initial, onClose, onSaved }
   const update = (id: string, patch: Partial<TrackedTeam>) => setTeams((list) => list.map((t) => (t.id === id ? { ...t, ...patch } : t)));
 
   const save = () => {
+    // A name typed in the Add box but not added yet is meant to be saved too.
+    const pending = draft.trim() && !taken.has(teamKey(draft.trim())) && teams.length < MAX_TEAMS ? draft.trim() : null;
+    const used = new Set(teams.map((t) => t.color));
+    const extra: TrackedTeam[] = pending
+      ? [{ id: `t_${Date.now().toString(36)}`, name: pending, short: shortLabel(pending), color: Object.keys(PLACE_COLORS).find((c) => !used.has(c)) ?? "gray", aliases: [] }]
+      : [];
     startSaving(async () => {
-      const r = await setRacePlacesAction(raceId, { on, teams: teams.map((t) => ({ ...t, short: t.short.trim() || shortLabel(t.name) })), awards, public: isPublic });
+      const r = await setRacePlacesAction(raceId, { on, teams: [...teams, ...extra].map((t) => ({ ...t, short: t.short.trim() || shortLabel(t.name) })), awards, public: isPublic });
       if (r.error) return setError(r.error);
       onSaved();
     });
