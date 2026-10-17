@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import { guessRace, isOurTeam, matchAthlete, normalizeName } from "./match";
-import { headerLabels, parseArrowResultsHtml, parseRaceResultJson, parseResultsText, restrictToDivision } from "./parse";
+import { COLUMN_HEADER_RE, headerLabels, parseArrowResultsHtml, parseColumnResults, parseRaceResultJson, parseResultsText, restrictToDivision } from "./parse";
 
 // Real, unsanitized results stay out of git; these two tests run only where they exist.
 // The committed, sanitized copies are covered in fixtures.test.ts.
@@ -183,4 +183,35 @@ test("restrictToDivision keeps the division's teams, re-ranks by time, ties shar
   expect(indexMap.get(1)).toBe(0); // Eddy's row moved from 1 to 0
   expect(indexMap.get(0)).toBeUndefined(); // Big One is gone
   expect(contest.entries[0].finishMs).toBe(986_000); // times untouched
+});
+
+test("column results without a grade column: capitalized last names, a DNF with no time, footers that name the meet", () => {
+  // As pdf.js reads Trackside's every-race PDF with a tab between text items (names made up).
+  const t = (...cells: string[]) => cells.join("\t \t");
+  const text = [
+    t("Place", "Points", "Bib", "Name", "Team", "Time", "Pace"),
+    t("Boys Varsity"),
+    t("1", "1", "9647", "Alex ABBOTT", "North Academy", "16:05.5", "5:10"),
+    t("2", "2", "9852", "Eddy GIEBLER", "Sheboygan Area Lutheran", "16:06.8", "5:11"),
+    t("3", "(n/a)", "9576", "Blake DE TROYE", "South Academy", "16:50.3", "5:25"),
+    t("DNF", "--", "9839", "Casey COLE", "East Academy"),
+    t("Lakeshore Boys & Girls Invite"), // a page footer naming the meet, mid-race
+    t("4", "3", "9577", "Ellis EVANS", "South Academy", "17:01.0", "5:29"),
+    t("2026 Sample Championship"),
+    t("Girls Varsity"),
+    t("1", "1", "9640", "Drew DALTON", "North Academy", "18:32.8", "5:58"),
+  ].join("\n");
+  expect(COLUMN_HEADER_RE.test(text.replace(/\t/g, " "))).toBe(true);
+  const [boys, girls] = parseColumnResults(text, "fallback");
+  expect(boys.name).toBe("Boys Varsity");
+  expect(boys.entries.map((e) => [e.name, e.team, e.place, e.status, e.finishMs])).toEqual([
+    ["Alex ABBOTT", "North Academy", 1, "finished", 16 * 60_000 + 5_500],
+    ["Eddy GIEBLER", "Sheboygan Area Lutheran", 2, "finished", 16 * 60_000 + 6_800],
+    ["Blake DE TROYE", "South Academy", 3, "finished", 16 * 60_000 + 50_300],
+    ["Casey COLE", "East Academy", null, "dnf", null],
+    ["Ellis EVANS", "South Academy", 4, "finished", 17 * 60_000 + 1_000],
+  ]);
+  expect(boys.entries[0]).toMatchObject({ firstName: "Alex", lastName: "ABBOTT", grade: null, bib: "9647" });
+  expect(normalizeName(boys.entries[1].name)).toBe(normalizeName("Eddy Giebler"));
+  expect(girls.entries).toHaveLength(1);
 });

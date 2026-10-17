@@ -1,5 +1,5 @@
 import "server-only";
-import { type ParsedContest, parseArrowResultsHtml, parseRaceResultJson, parseResultsText, stripTags } from "./parse";
+import { COLUMN_HEADER_RE, type ParsedContest, parseArrowResultsHtml, parseColumnResults, parseRaceResultJson, parseResultsText, stripTags } from "./parse";
 
 /**
  * Turn what a coach hands us (a URL, pasted text, a PDF) into contests.
@@ -216,13 +216,26 @@ function polyfillCanvasGlobals() {
   if (!g.ImageData) g.ImageData = class ImageData {};
 }
 
-/** The text of a PDF, as pdf.js lays it out (tabs between columns). */
-export async function fromPdfText(data: Uint8Array): Promise<string> {
+/**
+ * The text of a PDF, as pdf.js lays it out (tabs between columns). `itemJoiner` goes between every
+ * text item instead, for layouts whose columns sit too close for a tab.
+ */
+export async function fromPdfText(data: Uint8Array, itemJoiner?: string): Promise<string> {
   polyfillCanvasGlobals();
   const { PDFParse } = await import("pdf-parse");
-  return (await new PDFParse({ data }).getText()).text;
+  // pdf.js may take over the buffer; a copy leaves the caller's for a second read.
+  return (await new PDFParse({ data: data.slice() }).getText(itemJoiner ? { itemJoiner } : undefined)).text;
 }
 
-export async function fromPdf(data: Uint8Array, contestName: string): Promise<ParsedContest> {
-  return parseResultsText(await fromPdfText(data), contestName);
+/** Usually one contest per PDF; an every-race PDF (Trackside's "All Contests") gives one per race. */
+export async function fromPdf(data: Uint8Array, contestName: string): Promise<ParsedContest[]> {
+  const text = await fromPdfText(data);
+  // Team results ("1. Ozaukee - 78 Points" over each team's runners) would read as runners with their pace as the finish.
+  if (/^\s*\d+\.\s.+\s-\s*\d+\s+Points\s*$/m.test(text))
+    throw new SourceError("That's the team results PDF. Import the individual (overall) results instead; the app works out team scores from them.");
+  if (COLUMN_HEADER_RE.test(text)) {
+    const contests = parseColumnResults(await fromPdfText(data, "\t"), contestName);
+    if (contests.length > 0) return contests;
+  }
+  return [parseResultsText(text, contestName)];
 }

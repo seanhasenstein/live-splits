@@ -46,14 +46,14 @@ export async function loadResultsAction(meetId: string, _prev: LoadState, formDa
       if (contest.entries.length === 0) return { error: "No result rows found. Each line should read: place, name, grade, team, times." };
       return { contests: [contest], raw: text, sourceUrl: null };
     }
-    // One contest per PDF; several at once for a combined race.
+    // One contest per PDF (or per race in an every-race PDF); several at once for a combined race.
     const files = formData.getAll("file").filter((f): f is File => f instanceof File && f.size > 0);
     if (files.length === 0) return { error: "Choose a PDF." };
     const contests: ParsedContest[] = [];
     for (const file of files) {
-      const contest = await fromPdf(new Uint8Array(await file.arrayBuffer()), file.name.replace(/\.pdf$/i, ""));
-      if (contest.entries.length === 0) return { error: `No result rows found in ${file.name}.` };
-      contests.push(contest);
+      const found = (await fromPdf(new Uint8Array(await file.arrayBuffer()), file.name.replace(/\.pdf$/i, ""))).filter((c) => c.entries.length > 0);
+      if (found.length === 0) return { error: `No result rows found in ${file.name}.` };
+      contests.push(...found);
     }
     return { contests, raw: JSON.stringify(contests), sourceUrl: files.map((f) => f.name).join(", ") };
   } catch (err) {
