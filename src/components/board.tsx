@@ -678,7 +678,7 @@ function RaceBoard({
               <th className="px-3 py-2 font-semibold sm:px-4">{hasOfficial ? (race.placesDerived ? "Division place · Athlete" : "Finish place · Athlete") : "Athlete"}</th>
               {race.checkpoints.map((c) => (
                 // Left-aligned like the cells. No sub-label: the cells read themselves (time, colored split, place).
-                <th key={c.id} className="px-2 py-2 text-left font-semibold last:pr-3 sm:last:pr-4">
+                <th key={c.id} className="px-2 py-2 text-left font-semibold whitespace-nowrap last:pr-3 sm:last:pr-4">
                   {c.label}
                 </th>
               ))}
@@ -772,9 +772,9 @@ function RaceBoard({
                         </Time>
                       ) : (
                         <span
-                          // Green faster, red slower, gray within a second. With places on, ▲ / ▼ are the color in
-                          // the cell and the split stays plain (its pace change is in the checkpoint view and the sheet).
-                          className={`block whitespace-nowrap ${place || paceChange === null || Math.abs(paceChange) < 1000 ? "" : paceChange < 0 ? "text-brand-text" : "text-danger"}`}
+                          // Green faster, red slower, gray within a second. When the place below has a ▲ / ▼, that is the
+                          // color in the cell and the split stays plain (its pace change is in the checkpoint view and the sheet).
+                          className={`block whitespace-nowrap ${place?.gained != null || paceChange === null || Math.abs(paceChange) < 1000 ? "" : paceChange < 0 ? "text-brand-text" : "text-danger"}`}
                           title={paceChange !== null ? `${paceChange <= 0 ? "−" : "+"}${formatElapsed(Math.abs(paceChange)).replace(/\.\d$/, "")} per mile vs the previous segment` : undefined}
                         >
                           <Time>{ft(split)}</Time>
