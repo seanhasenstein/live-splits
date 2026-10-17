@@ -15,7 +15,7 @@ import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type AthleteStatus, type CheckpointState, expectedAt, type Mark, replay, replayStatuses, type Slot, STATUS_LABEL, STATUS_LONG } from "@/lib/replay";
 import type { AthleteRaceStatus, Precision, RacePlaces } from "@/lib/db/schema";
 import { type CheckpointPlaces, fieldScores, ordinal as placeText, type OurTeam, racePlaces, replayTicks } from "@/lib/race-places";
-import { METERS_PER_MILE, paceMsPerMile, projectElapsed } from "@/lib/pace";
+import { METERS_PER_MILE, openingEstimate, paceMsPerMile, projectElapsed, segmentLength } from "@/lib/pace";
 import { RECORD_LABEL, recordBadge } from "@/lib/records";
 import type { LineupBests, PriorFinish } from "@/lib/results/bests";
 import { formatClock, formatDateWithYear, formatElapsed, formatLocalDate, parseTypedTime } from "@/lib/time";
@@ -354,11 +354,17 @@ function RaceBoard({
    */
   const projectAt = (row: Row, i: number): number | null => {
     if (isFinished || row.status || (row.officialStatus && row.officialStatus !== "finished")) return null;
-    return projectElapsed(
+    const times = race.checkpoints.map((_, j) => elapsedAt(row, j));
+    const fromTimes = projectElapsed(
       race.checkpoints.map((c) => c.meters),
-      race.checkpoints.map((_, j) => elapsedAt(row, j)),
+      times,
       i,
     );
+    if (fromTimes !== null || i !== 0 || gunTimeMs === null || times.some((v) => v !== null)) return fromTimes;
+    // Nothing recorded yet: the first checkpoint from their earlier races this season.
+    const key = String(Math.round(race.checkpoints[0].meters));
+    const earlier = (race.bests[row.athleteId]?.finishes ?? []).filter((f) => f.thisSeason && f.splits[key] !== undefined).map((f) => f.splits[key]);
+    return openingEstimate(earlier);
   };
   // "Overdue" is a cue for the people who can do something about it; viewers just see the projection.
   const staff = canFix || canTap;
@@ -457,7 +463,15 @@ function RaceBoard({
             <tr className="border-b border-line text-left text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
               <th className="px-3 py-2 font-semibold sm:px-4">Athlete</th>
               <th className={th}>Time</th>
-              {i > 0 && <th className={th}>Split</th>}
+              {i > 0 && (
+                <th className={th}>
+                  Split
+                  {(() => {
+                    const seg = segmentLength(race.checkpoints[i].meters - race.checkpoints[i - 1].meters);
+                    return seg && <span className="block text-[10px] font-medium tracking-normal text-ink-3 normal-case">{seg}</span>;
+                  })()}
+                </th>
+              )}
               <th className={`${th} ${race.places ? "" : "pr-3 sm:pr-4"}`} title={i > 0 ? "Pace change from the previous segment (+ slower, − faster)" : "Pace per mile"}>
                 {i > 0 ? "Pace ±" : "Pace"}
               </th>
@@ -676,10 +690,15 @@ function RaceBoard({
           <thead>
             <tr className="border-b border-line text-left text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
               <th className="px-3 py-2 font-semibold sm:px-4">{hasOfficial ? (race.placesDerived ? "Division place · Athlete" : "Finish place · Athlete") : "Athlete"}</th>
-              {race.checkpoints.map((c) => (
-                // Left-aligned like the cells. No sub-label: the cells read themselves (time, colored split, place).
-                <th key={c.id} className="px-2 py-2 text-left font-semibold whitespace-nowrap last:pr-3 sm:last:pr-4">
+              {race.checkpoints.map((c, ci) => (
+                // Left-aligned like the cells. The only sub-label is a segment that isn't a mile.
+                <th key={c.id} className="px-2 py-2 text-left align-top font-semibold whitespace-nowrap last:pr-3 sm:last:pr-4">
                   {c.label}
+                  {/* The split under it isn't a mile (the last 1.1 of a 5K): say so where the splits are. */}
+                  {(() => {
+                    const seg = segmentLength(c.meters - (ci > 0 ? race.checkpoints[ci - 1].meters : 0));
+                    return seg && <span className="block text-[10px] font-medium tracking-normal text-ink-3 normal-case">{seg}</span>;
+                  })()}
                 </th>
               ))}
             </tr>
@@ -1209,7 +1228,7 @@ function AthleteSheet({
                 const gain = prev.ms - finish!;
                 const gainText = gain < 1000 ? `${(gain / 1000).toFixed(1)}s` : gapText(gain);
                 const previous = `the previous ${what}, ${ft(prev.ms, prev.precision)} at ${prev.meetName} on ${formatDateWithYear(prev.date)}`;
-                const tapped = row.record.unofficial && row.record.uncertain ? " From taps, so official results could change it." : "";
+                const tapped = row.record.unofficial && row.record.uncertain ? " Unofficial, so official results could change it." : "";
                 return `${gain <= 0 ? `Matches ${previous}` : `${gainText} faster than ${previous}`}.${tapped}`;
               })()}
             </span>
@@ -1274,6 +1293,7 @@ function AthleteSheet({
             <div key={c.id} className="flex items-start gap-x-3 px-3 py-2 text-sm">
               <span className="min-w-0 flex-1 font-medium text-ink">
                 {c.label}
+                {segmentLength(segMeters) && <span className="ml-1.5 text-xs font-normal text-ink-3">{segmentLength(segMeters)}</span>}
                 {officialCount > 0 && officialCount < timedCount && cell?.official !== null && cell?.official !== undefined && <span className="ml-1.5 text-[10px] font-semibold tracking-wide text-brand-text uppercase">official</span>}
                 {cell?.mark?.estimate && cell.official === null && <span className="ml-1.5 text-xs text-ink-3">estimate</span>}
                 {(() => {

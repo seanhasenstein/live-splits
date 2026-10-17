@@ -33,7 +33,7 @@ export type PriorFinish = {
   sameCourse: boolean;
   /** An earlier running of this meet (same series), on whatever course it was held. */
   sameMeet: boolean;
-  /** Official mat splits, cumulative ms by checkpoint meters (whole meters). */
+  /** Splits (mat, or tapped by the team), cumulative ms by checkpoint meters (whole meters). */
   splits: Record<string, number>;
 };
 
@@ -107,9 +107,10 @@ export async function getLineupBests(meet: Meet, race: Pick<Race, "lineup" | "di
     // Keyed by whole meters so a Mile 1 at 1609.344 m and one stored as 1609 m line up.
     const metersOf = new Map(race.checkpoints.map((c) => [c.id, String(Math.round(c.distance.meters))]));
     const splits: Record<string, number> = {};
+    // Mat splits, and the team's own tapped ones (most of our mile splits); a mat time wins where both exist.
     for (const s of r.splits) {
-      const key = s.source === "mat" ? metersOf.get(s.checkpointId) : undefined;
-      if (key) splits[key] = s.cumulativeMs;
+      const key = s.source === "mat" || s.source === "app" ? metersOf.get(s.checkpointId) : undefined;
+      if (key && (s.source === "mat" || splits[key] === undefined)) splits[key] = s.cumulativeMs;
     }
     b.finishes.push({ ms: r.mark.value, precision: r.mark.precision, meetId: m._id, meetName: m.name, raceId: race._id, raceName: race.name, date: m.date, thisSeason, sameCourse, sameMeet: seriesKey(m) === thisSeries, splits });
   }

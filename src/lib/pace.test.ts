@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { METERS_PER_MILE, OPENING_FADE, paceMsPerMile, projectElapsed } from "./pace";
+import { METERS_PER_MILE, OPENING_FADE, openingEstimate, paceMsPerMile, projectElapsed, segmentLength } from "./pace";
 
 const MI = METERS_PER_MILE;
 // Mile 1, Mile 2, Finish (5K): the last leg is 1.107 mi.
@@ -59,4 +59,18 @@ describe("projectElapsed", () => {
   it("pace per mile uses the segment's own distance", () => {
     expect(Math.round(paceMsPerMile(m(7, 20.5), 5000 - 2 * MI) / 1000)).toBe(6 * 60 + 38);
   });
+});
+
+it("opening estimate: the median of earlier first-checkpoint times, none without any", () => {
+  expect(openingEstimate([])).toBeNull();
+  expect(openingEstimate([400_000])).toBe(400_000);
+  expect(openingEstimate([410_000, 395_000, 500_000])).toBe(410_000); // one bad day doesn't drag it
+  expect(openingEstimate([400_000, 410_000])).toBe(405_000);
+});
+
+it("segment length: a mile needs no label, the last stretch of a 5K reads 1.1 mi", () => {
+  expect(segmentLength(METERS_PER_MILE)).toBeNull();
+  expect(segmentLength(1609)).toBeNull();
+  expect(segmentLength(5000 - 2 * METERS_PER_MILE)).toBe("1.1 mi");
+  expect(segmentLength(1000)).toBe("0.6 mi");
 });

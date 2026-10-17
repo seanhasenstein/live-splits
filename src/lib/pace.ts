@@ -63,3 +63,21 @@ export function projectElapsed(meters: number[], times: (number | null)[], i: nu
   }
   return lastMs + (segMs / segMeters) * remaining;
 }
+
+/**
+ * Where a runner should reach the first checkpoint before anyone has recorded them: the median of their
+ * times there in earlier races this season. Null without any. Rough on purpose (starts and courses vary);
+ * once a real time comes in, projectElapsed takes over.
+ */
+export function openingEstimate(earlier: number[]): number | null {
+  if (earlier.length === 0) return null;
+  const sorted = [...earlier].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+}
+
+/** "1.1 mi" for a segment that isn't about a mile (the last stretch of a 5K); null for a mile, which needs no label. */
+export function segmentLength(segmentMeters: number): string | null {
+  if (segmentMeters <= 0 || Math.abs(segmentMeters - METERS_PER_MILE) <= 50) return null;
+  return `${(segmentMeters / METERS_PER_MILE).toFixed(1)} mi`;
+}
