@@ -191,24 +191,6 @@ function RaceBoard({
     }
     return { place, overall, gained };
   };
-  /** "11th ▼1": a place and its change since the last checkpoint counted the same way. */
-  const placeNode = (p: { place: number; overall: boolean; gained: number | null }, showSame = true) => (
-    <>
-      {placeText(p.place)}
-      {!p.overall && "*"}
-      {p.gained !== null &&
-        (p.gained === 0 ? (
-          showSame && (
-            <span className="text-ink-3" title="Same place as the last checkpoint">
-              {" "}
-              <MoveHorizontal className="inline size-3.5 align-[-2px]" aria-label="same place" />
-            </span>
-          )
-        ) : (
-          <span className={p.gained > 0 ? "text-brand-text" : "text-danger"}>{p.gained > 0 ? ` ▲${p.gained}` : ` ▼${-p.gained}`}</span>
-        ))}
-    </>
-  );
   const [fix, setFix] = useState<{ athleteId: string; cpIndex: number } | null>(null);
   const [statusFor, setStatusFor] = useState<string | null>(null);
   // The open runner's sheet is in the URL (?athlete=) so it can be shared and reopened.
@@ -770,7 +752,25 @@ function RaceBoard({
                           <Time>{ft(split)}</Time>
                         </span>
                       )}
-                      {place && <span className="tnum block text-xs leading-5 font-medium text-ink-2">{placeNode(place)}</span>}
+                      {/* Place and its change in two fixed slots, so down a column the places line up and the
+                          ▲ / ▼ / ↔ form their own straight column (the first checkpoint keeps the empty slot). */}
+                      {place && (
+                        <span className="tnum flex justify-end text-xs leading-5 font-medium text-ink-2">
+                          <span className="text-right">
+                            {placeText(place.place)}
+                            {!place.overall && "*"}
+                          </span>
+                          <span className="w-7 shrink-0 pl-1 text-left">
+                            {place.gained === null ? null : place.gained === 0 ? (
+                              <span className="text-ink-3" title="Same place as the last checkpoint">
+                                <MoveHorizontal className="inline size-3.5 align-[-2px]" aria-label="same place" />
+                              </span>
+                            ) : (
+                              <span className={place.gained > 0 ? "text-brand-text" : "text-danger"}>{place.gained > 0 ? `▲${place.gained}` : `▼${-place.gained}`}</span>
+                            )}
+                          </span>
+                        </span>
+                      )}
                     </>
                   );
                   return (
