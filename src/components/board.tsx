@@ -648,11 +648,11 @@ function RaceBoard({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line text-left text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
-              <th className="px-3 py-2 font-semibold sm:px-4">{hasOfficial ? (race.placesDerived ? "Division place · Athlete" : "Place · Athlete") : "Athlete"}</th>
+              <th className="px-3 py-2 font-semibold sm:px-4">{hasOfficial ? (race.placesDerived ? "Division place · Athlete" : "Finish place · Athlete") : "Athlete"}</th>
               {race.checkpoints.map((c) => (
-                <th key={c.id} className="px-2 py-2 text-right font-semibold last:px-3 sm:last:px-4">
+                // Left-aligned like the cells. No sub-label: the cells read themselves (time, colored split, place).
+                <th key={c.id} className="px-2 py-2 text-left font-semibold last:pr-3 sm:last:pr-4">
                   {c.label}
-                  <span className="hidden text-[10px] font-normal tracking-normal normal-case text-ink-3 min-[420px]:block">cumulative · split</span>
                 </th>
               ))}
             </tr>
@@ -704,7 +704,7 @@ function RaceBoard({
                 {row.cells.map((cell, i) => {
                   if (row.status && !expectedAt(row.status, i, race.checkpoints) && cell.official === null && cell.absoluteMs === null && !cell.missed) {
                     return (
-                      <td key={race.checkpoints[i].id} className="px-1 py-1 text-right align-top text-ink-3 last:pr-2 sm:last:pr-3">
+                      <td key={race.checkpoints[i].id} className="px-1 py-1 text-left align-top text-ink-3 last:pr-2 sm:last:pr-3">
                         <span className="block px-1.5 py-1.5">—</span>
                       </td>
                     );
@@ -752,15 +752,14 @@ function RaceBoard({
                           <Time>{ft(split)}</Time>
                         </span>
                       )}
-                      {/* Place and its change in two fixed slots, so down a column the places line up and the
-                          ▲ / ▼ / ↔ form their own straight column (the first checkpoint keeps the empty slot). */}
+                      {/* The place in a fixed-width slot, so down a column the ▲ / ▼ / ↔ beside it line up. */}
                       {place && (
-                        <span className="tnum flex justify-end text-xs leading-5 font-medium text-ink-2">
-                          <span className="text-right">
+                        <span className="tnum flex text-xs leading-5 font-medium text-ink-2">
+                          <span className="w-10 shrink-0">
                             {placeText(place.place)}
                             {!place.overall && "*"}
                           </span>
-                          <span className="w-7 shrink-0 pl-1 text-left">
+                          <span className="shrink-0">
                             {place.gained === null ? null : place.gained === 0 ? (
                               <span className="text-ink-3" title="Same place as the last checkpoint">
                                 <MoveHorizontal className="inline size-3.5 align-[-2px]" aria-label="same place" />
@@ -774,12 +773,12 @@ function RaceBoard({
                     </>
                   );
                   return (
-                    <td key={race.checkpoints[i].id} className="px-1 py-1.5 text-right align-top last:pr-2 sm:last:pr-3">
+                    <td key={race.checkpoints[i].id} className="px-1 py-1.5 text-left align-top last:pr-2 sm:last:pr-3">
                       {editing && cell.official === null ? (
                         <button
                           type="button"
                           onClick={() => setFix({ athleteId: row.athleteId, cpIndex: i })}
-                          className="w-full rounded-md border border-dashed border-line-strong px-1.5 py-1 text-right hover:bg-surface-2 active:bg-brand-soft"
+                          className="w-full rounded-md border border-dashed border-line-strong px-1.5 py-1 text-left hover:bg-surface-2 active:bg-brand-soft"
                         >
                           {cellNode}
                         </button>

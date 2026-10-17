@@ -47,6 +47,8 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
   /** When each tap first arrived here (epoch ms); the board flashes times younger than a few seconds. */
   const [seenAt, setSeenAt] = useState<Map<string, number>>(() => new Map());
   const firstLoadDone = useRef(false);
+  /** Every tap this page has already had from the server: only others are news (overlapping polls resend old ones). */
+  const knownIds = useRef(new Set<string>());
   const quietRefetch = useRef(false);
   /** When this device last fired the gun itself (see adoptGun). */
   const adoptedAt = useRef<number | null>(null);
@@ -99,9 +101,11 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
           return next;
         });
         // Only taps that arrive after the first load count as "fresh"; the first load isn't news.
-        if (firstLoadDone.current && !quietRefetch.current) {
+        const unseen = body.taps.filter((t) => !knownIds.current.has(t.clientTapId));
+        for (const t of body.taps) knownIds.current.add(t.clientTapId);
+        if (firstLoadDone.current && !quietRefetch.current && unseen.length > 0) {
           setSeenAt((prev) => {
-            const fresh = body.taps.filter((t) => !prev.has(t.clientTapId));
+            const fresh = unseen.filter((t) => !prev.has(t.clientTapId));
             if (fresh.length === 0) return prev;
             const next = new Map(prev);
             const now = Date.now();
