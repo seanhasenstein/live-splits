@@ -209,12 +209,19 @@ const SUMMARY_LABELS: Record<string, string> = { PTS: "Pts", PLACE: "Place", TEA
  *   rows under "JV RACE"                         → place "3rd JV"
  *   "LETTER" badge                               → "Yes"
  *   rows under "DID NOT RUN" (DNR)               → left out, as blank rows were
- * and the summary numbers ("61 PTS 3rd PLACE 9 TEAMS …") as a summary line.
+ * and the summary numbers ("61 PTS 3rd PLACE 9 TEAMS …") as a summary line. The earlier 2026 sheets
+ * differ a little, and read the same way:
+ *   "Meet • September 15, 2026 • Overcast · 75°"  (weather after the date)
+ *   "BOYS VARSITY" / "BOYS JV (COMBINED D2/D3)"     (gender and level on one line, then "ATHLETE | MILE 1 | …")
+ *   "Eddy Giebler ★"                                 (a mark after the name)
+ *   "DID NOT RUN" followed by names only.
  */
 export function meetSplitsAsHistory(text: string): string {
   const out: string[] = [];
   let gender: "Boys" | "Girls" | null = null;
   let section: "varsity" | "jv" | "dnr" | null = null;
+  // An earlier sheet's "BOYS JV" line: the level its next table is.
+  let lineLevel: "varsity" | "jv" | null = null;
   // The summary block between the gender and its table: "VARSITY", then value / label pairs.
   let summaryLevel: string | null = null;
   let summary: string[] = [];
@@ -230,11 +237,24 @@ export function meetSplitsAsHistory(text: string): string {
     const cells = line.split("\t").map((c) => c.trim());
     const key = squash(cells[0]);
     // "KML Charger Cross Country Classic • Kettle Moraine Lutheran • August 27, 2026"
+    // "Crusader Challenge • September 15, 2026 • Overcast · 75° · …" (weather after the date)
     const parts = line.split(/\s+•\s+/);
-    if (parts.length >= 2 && parseLongDate(parts[parts.length - 1])) {
+    const datePart = parts.length >= 2 && !line.includes("\t") ? parts.slice(1).find((p) => parseLongDate(p)) : undefined;
+    if (datePart) {
       flushSummary();
-      out.push(`${parts[0]}, ${parts[parts.length - 1]}`);
+      out.push(`${parts[0]}, ${datePart}`);
       gender = null;
+      section = null;
+      lineLevel = null;
+      continue;
+    }
+    // "BOYS VARSITY", "GIRLS JV (COMBINED D1–D3)": gender and level on one line (earlier 2026 sheets).
+    const both = cells.length === 1 ? squash(cells[0].replace(/\(.*?\)/g, "")).match(/^(BOYS|GIRLS|MEN|WOMEN)(VARSITY|JV)$/) : null;
+    if (both) {
+      flushSummary();
+      gender = both[1] === "BOYS" || both[1] === "MEN" ? "Boys" : "Girls";
+      lineLevel = both[2] === "JV" ? "jv" : "varsity";
+      summaryLevel = both[2] === "JV" ? "JV" : "Varsity";
       section = null;
       continue;
     }
@@ -246,11 +266,12 @@ export function meetSplitsAsHistory(text: string): string {
       continue;
     }
     if (!gender) continue;
-    // Table header: "VARSITY RACE | MILE 1 | MILE 2 | MILE 3.1 | FINISH | PLACE | LETTER"
+    // Table header: "VARSITY RACE | MILE 1 | MILE 2 | MILE 3.1 | FINISH | PLACE | LETTER" (or "ATHLETE | …",
+    // its level from the line above it)
     if (cells.length >= 3 && cells.slice(1).some((c) => squash(c) === "FINISH")) {
       flushSummary();
       summaryLevel = null;
-      section = /^JV/.test(key) ? "jv" : "varsity";
+      section = /^JV/.test(key) ? "jv" : /^VARSITY/.test(key) ? "varsity" : (lineLevel ?? "varsity");
       const labels = cells.slice(1).map((c) => {
         const k = squash(c);
         const mile = k.match(/^MILE(\d+(?:\.\d+)?)$/);
@@ -283,7 +304,8 @@ export function meetSplitsAsHistory(text: string): string {
     // A runner: name, segment times, finish, place, letter. Didn't run: left out.
     if (section === "dnr" || cells.length < 2 || cells.slice(1).some((c) => /^dnr$/i.test(c))) continue;
     const row = cells.map((c, i) => {
-      if (i === 0) return c;
+      // "Eddy Giebler ★": a mark after the name isn't part of it.
+      if (i === 0) return c.replace(/[^\p{L}\p{M}.'’\- ]+$/u, "").trim();
       if (/^letter$/i.test(c)) return "Yes";
       if (section === "jv" && /^\d+(st|nd|rd|th)$/i.test(c)) return `${c} JV`;
       return c;
