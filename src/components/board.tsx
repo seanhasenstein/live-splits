@@ -100,7 +100,7 @@ export function Board({ meetId, meetName, meetDate, session, initialRaceId, time
 
   return (
     <>
-      <AppHeader title={meetName} titleHref={`/meets/${meetId}`} subtitle="Live results" right={<SessionMenu name={session.name} role={session.role} />} />
+      <AppHeader title={meetName} titleHref={`/meets/${meetId}`} subtitle={`Live results · ${formatDateWithYear(meetDate)}`} right={<SessionMenu name={session.name} role={session.role} />} />
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-4">
         {races.length > 1 && (
           <Segmented value={race.id} onChange={setRaceId} options={races.map((r) => ({ value: r.id, label: r.name }))} className="mb-3 lg:max-w-md" />
