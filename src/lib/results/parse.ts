@@ -267,10 +267,15 @@ export function parseColumnResults(text: string, fallbackName: string): ParsedCo
       current = { name: cells[0], entries: [], times: [] };
       continue;
     }
-    // A non-scorer's points can be blank rather than "(n/a)".
-    const row = cells.length === cols.count - 1 && cols.points >= 0 ? [...cells.slice(0, cols.points), "", ...cells.slice(cols.points)] : cells;
+    const { place, status } = placeAndStatus(cells[cols.place]);
+    // A DNF has no time or pace at the end of its row ("DNF -- 9839 Sam Who Team"); a non-scorer's points can be blank rather than "(n/a)".
+    const row =
+      status !== "finished" && cells.length < cols.count && cols.time >= cells.length
+        ? [...cells, ...Array<string>(cols.count - cells.length).fill("")]
+        : cells.length === cols.count - 1 && cols.points >= 0
+          ? [...cells.slice(0, cols.points), "", ...cells.slice(cols.points)]
+          : cells;
     if (row.length !== cols.count) continue;
-    const { place, status } = placeAndStatus(row[cols.place]);
     if (place === null && status === "finished") continue;
     const timeText = row[cols.time] ?? "";
     // A walker's hour-plus finish ("1:14:38.4") counts too.
