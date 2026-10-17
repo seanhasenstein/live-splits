@@ -673,7 +673,7 @@ function RaceBoard({
                 <td className={`px-3 py-2.5 align-top font-medium sm:px-4 ${row.reached < 0 ? "" : "text-ink"}`}>
                   {/* Place in its own column so a wrapped name hangs under its first line, not under the number. */}
                   <span className="flex items-start gap-2">
-                    {hasOfficial && <span className="tnum w-6 shrink-0 py-1 text-right text-ink-3">{row.officialPlace ?? ""}</span>}
+                    {hasOfficial && <span className="tnum w-8 shrink-0 py-1 text-right text-ink-3">{row.officialPlace ?? ""}</span>}
                     <span className="min-w-0">
                       {editing ? (
                         <button type="button" onClick={() => setStatusFor(row.athleteId)} className="-mx-1.5 rounded px-1.5 py-1 text-left hover:bg-gold-soft" title="Set DNS / DNR / DNF">
