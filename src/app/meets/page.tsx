@@ -150,17 +150,16 @@ export default async function MeetsPage() {
                   </Card>
                 </section>
               ) : (
-                <details key={year} className="group">
-                  <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg border border-line bg-surface px-4 py-3 shadow-card hover:bg-surface-2 [&::-webkit-details-marker]:hidden">
+                // One card: the season row is its header, and the meets open inside it below a divider.
+                <details key={year} className="group overflow-hidden rounded-lg border border-line bg-surface shadow-card">
+                  <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 hover:bg-surface-2 [&::-webkit-details-marker]:hidden">
                     <span className="text-sm font-semibold text-ink">{year} season</span>
                     <span className="flex items-center gap-2 text-[13px] text-ink-2">
                       {list.length} meet{list.length === 1 ? "" : "s"}
                       <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
                     </span>
                   </summary>
-                  <Card className="mt-2 overflow-hidden">
-                    <div className="divide-y divide-line">{list.map((m) => row(m, "past"))}</div>
-                  </Card>
+                  <div className="divide-y divide-line border-t border-line">{list.map((m) => row(m, "past"))}</div>
                 </details>
               ),
             )}
