@@ -40,7 +40,12 @@ export type RecordBadge = {
   previousMs: number;
 };
 
-const ORDER: RecordKind[] = ["pr", "sb", "course", "meet"];
+/**
+ * Badge order, strongest first. No Meet PR: at a meet that keeps its course it's also a Course PR, which
+ * outranks it, so it would only ever show when the meet moved (a conference meet that rotates hosts),
+ * which is exactly when comparing the times means nothing.
+ */
+const ORDER: RecordKind[] = ["pr", "sb", "course"];
 
 /**
  * Equal to the old mark counts: it's as good as they've ever run. No badge

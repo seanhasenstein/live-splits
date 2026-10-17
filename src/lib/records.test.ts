@@ -5,10 +5,10 @@ const m = (min: number, s = 0) => (min * 60 + s) * 1000;
 const bests = { pr: { ms: m(17, 10) }, sb: { ms: m(17, 30) }, course: { ms: m(17, 45) }, meet: { ms: m(18) } };
 
 test("the strongest record shows; the rest ride along", () => {
-  expect(recordBadge(m(17, 5), bests, true)).toMatchObject({ kind: "pr", all: ["pr", "sb", "course", "meet"], unofficial: false, uncertain: false, previousMs: m(17, 10) });
-  expect(recordBadge(m(17, 20), bests, true)).toMatchObject({ kind: "sb", all: ["sb", "course", "meet"] });
-  expect(recordBadge(m(17, 40), bests, true)).toMatchObject({ kind: "course", all: ["course", "meet"] });
-  expect(recordBadge(m(17, 55), bests, true)).toMatchObject({ kind: "meet", all: ["meet"] });
+  expect(recordBadge(m(17, 5), bests, true)).toMatchObject({ kind: "pr", all: ["pr", "sb", "course"], unofficial: false, uncertain: false, previousMs: m(17, 10) });
+  expect(recordBadge(m(17, 20), bests, true)).toMatchObject({ kind: "sb", all: ["sb", "course"] });
+  expect(recordBadge(m(17, 40), bests, true)).toMatchObject({ kind: "course", all: ["course"] });
+  expect(recordBadge(m(17, 55), bests, true)).toBeNull(); // only a meet best: no badge (the meet may have moved courses)
   expect(recordBadge(m(18, 30), bests, true)).toBeNull();
 });
 
