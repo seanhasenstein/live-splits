@@ -106,7 +106,7 @@ export default async function MeetsPage() {
           description={school?.name ?? "This season"}
           action={
             coach ? (
-              <div className="flex gap-1">
+              <div className="flex gap-2">
                 <ShareSeason initialPath={school ? readSeasonViewerPath(school) : null} />
                 <LinkButton href="/meets/new" size="sm">
                   <Plus className="size-4" />
@@ -114,6 +114,7 @@ export default async function MeetsPage() {
                 </LinkButton>
                 <LinkButton href="/meets/import-history" size="sm" variant="secondary" aria-label="Import past seasons">
                   <History className="size-4" />
+                  Import
                 </LinkButton>
               </div>
             ) : undefined
