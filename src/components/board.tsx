@@ -427,9 +427,12 @@ function RaceBoard({
       return { r, cell, here, out, projected };
     });
     list.sort((a, b) => Number(a.out) - Number(b.out) || Number(a.here === null) - Number(b.here === null) || (a.here ?? a.projected ?? Infinity) - (b.here ?? b.projected ?? Infinity));
-    const th = "px-2 py-2 text-right font-semibold";
+    // Tight padding and no wrapping in the number columns, so the five columns fit a narrow phone.
+    const th = "px-1.5 py-2 text-right font-semibold whitespace-nowrap";
     return (
       <Card className="overflow-hidden">
+        {/* A very narrow phone scrolls the table sideways inside its card instead of cutting off the last column. */}
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line text-left text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
@@ -439,7 +442,7 @@ function RaceBoard({
               <th className={`${th} ${race.places ? "" : "pr-3 sm:pr-4"}`} title={i > 0 ? "Pace change from the previous segment (+ slower, − faster)" : "Pace per mile"}>
                 {i > 0 ? "Pace ±" : "Pace"}
               </th>
-              {race.places && <th className="py-2 pr-3 pl-3 text-left font-semibold sm:pr-4">Place</th>}
+              {race.places && <th className="py-2 pr-3 pl-2 text-left font-semibold sm:pr-4">Place</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -489,7 +492,7 @@ function RaceBoard({
                       </span>
                     )}
                   </td>
-                  <td className="px-2 py-2.5 text-right align-top">
+                  <td className="px-1.5 py-2.5 text-right align-top whitespace-nowrap">
                     {editing && cell.official === null ? (
                       <button type="button" onClick={() => setFix({ athleteId: r.athleteId, cpIndex: i })} className="rounded-md border border-dashed border-line-strong px-1.5 py-0.5 hover:bg-surface-2 active:bg-brand-soft">
                         {timeNode}
@@ -498,8 +501,8 @@ function RaceBoard({
                       <span className={`rounded-md px-1 py-0.5 transition-colors duration-1000 ${isFresh(m?.tapId) ? "bg-brand-soft" : ""}`}>{timeNode}</span>
                     )}
                   </td>
-                  {i > 0 && <td className="px-2 py-2.5 text-right align-top">{split !== null ? <Time>{ft(split)}</Time> : ""}</td>}
-                  <td className={`px-2 py-2.5 text-right align-top ${race.places ? "" : "pr-3 sm:pr-4"}`}>
+                  {i > 0 && <td className="px-1.5 py-2.5 text-right align-top whitespace-nowrap">{split !== null ? <Time>{ft(split)}</Time> : ""}</td>}
+                  <td className={`px-1.5 py-2.5 text-right align-top whitespace-nowrap ${race.places ? "" : "pr-3 sm:pr-4"}`}>
                     {i > 0 ? (
                       paceChange !== null && (
                         <Time>
@@ -512,10 +515,10 @@ function RaceBoard({
                   </td>
                   {race.places && (
                     // Left-aligned, the place a fixed width so ▲ / ▼ / = line up beside it.
-                    <td className="tnum py-2.5 pr-3 pl-3 text-left align-top whitespace-nowrap sm:pr-4">
+                    <td className="tnum py-2.5 pr-3 pl-2 text-left align-top whitespace-nowrap sm:pr-4">
                       {place && (
                         <>
-                          <span className="inline-block w-11">
+                          <span className="inline-block w-9">
                             {placeText(place.place)}
                             {!place.overall && "*"}
                           </span>
@@ -536,6 +539,7 @@ function RaceBoard({
             })}
           </tbody>
         </table>
+        </div>
       </Card>
     );
   };
@@ -644,6 +648,8 @@ function RaceBoard({
         checkpointTable(focusIndex)
       ) : (
       <Card className="overflow-hidden">
+        {/* A very narrow phone scrolls the table sideways inside its card instead of cutting off the last column. */}
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line text-left text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
@@ -792,6 +798,7 @@ function RaceBoard({
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
       )}
 
