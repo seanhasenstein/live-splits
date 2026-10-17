@@ -24,11 +24,19 @@ export function replayTicks(taps: TapLike[]): Map<string, Tick[]> {
   for (const t of sorted) {
     if (t.type === "tick" && t.checkpointId && t.team) ticks.set(t.clientTapId, { tapId: t.clientTapId, checkpointId: t.checkpointId, team: t.team, timeMs: t.timeMs ?? t.serverTimeMs, by: t.createdBy?.name ?? null });
   }
-  // Undo can void a tick or an edit of one, whichever order the clocks put them in; undoing a
-  // remove voids the void, which brings the tick back.
-  const voids = taps.filter((t) => t.type === "void" && t.targetTapId);
-  const undone = new Set(voids.map((t) => t.targetTapId!));
-  const voided = new Set(voids.filter((t) => !undone.has(t.clientTapId)).map((t) => t.targetTapId!));
+  // Undo can void a tick or an edit of one, whichever order the clocks put them in. A void can itself be
+  // voided (undoing a remove brings the tick back, redoing it removes it again…): a void is in effect
+  // unless an in-effect void targets it.
+  const voidOf = new Map<string, string[]>();
+  for (const t of taps) if (t.type === "void" && t.targetTapId) voidOf.set(t.targetTapId, [...(voidOf.get(t.targetTapId) ?? []), t.clientTapId]);
+  const memo = new Map<string, boolean>();
+  const isVoided = (id: string, depth = 0): boolean => {
+    if (memo.has(id)) return memo.get(id)!;
+    const result = depth < 50 && (voidOf.get(id) ?? []).some((v) => !isVoided(v, depth + 1));
+    memo.set(id, result);
+    return result;
+  };
+  const voided = new Set([...voidOf.keys()].filter((id) => isVoided(id)));
   // Edits after the ticks they fix (a clock resync can order them first); the latest edit wins.
   for (const t of sorted) {
     if (voided.has(t.clientTapId)) continue;
@@ -73,10 +81,10 @@ export type CheckpointPlaces = {
 };
 
 const OTHER = "*";
-/** A name tapped this much before an Us tap still belongs to it (the two phones' thumbs differ). */
+/** Names tapped this long before the first place tap came before counting started (a phone switched to places partway). */
 const US_LEAD_MS = 5_000;
-/** …and this much after it. */
-const US_LAG_MS = 30_000;
+/** After that, a name and an Us tap this far apart, either way, can be the same runner (a counter working through a pack). */
+const US_WINDOW_MS = 30_000;
 
 /**
  * Places at each checkpoint where someone counted (a checkpoint with no place taps has none).
@@ -99,18 +107,22 @@ export function racePlaces(
     const ours = [...(state.get(id)?.byAthlete.values() ?? [])]
       .filter((m) => !m.missed && m.timeMs !== null && !(gunTimeMs !== null && m.timeMs < gunTimeMs))
       .sort((a, b) => a.timeMs! - b.timeMs! || a.assignedAt - b.assignedAt);
-    // A places-only phone's Us taps are our runners, matched in order to the names tapped here
-    // (the names phone may run a few seconds early or late). Names well before the next Us tap
-    // (the phone switched to places only partway) slot in by time; names after its last Us tap
-    // (it stopped counting) get no place rather than taking someone else's.
+    // A places-only phone's Us taps are our runners, matched in order to the names tapped here. Names
+    // from before counting started (well before the first place tap: a phone switched to places
+    // partway) slot in by time. After that the two
+    // phones can be well apart (the counter works through a pack button by button), so a name and an
+    // Us tap up to US_WINDOW_MS apart match; a name with no Us tap that close (the counter missed one)
+    // slots in by its own time rather than taking the next runner's place. Names after the last Us
+    // tap (it stopped counting) get no place.
     const usTicks = list.filter((t) => t.team === "us");
     const byTime: typeof ours = usTicks.length === 0 ? ours : [];
     const matched = new Map<string, string | null>();
     if (usTicks.length > 0) {
       let k = 0;
+      while (k < ours.length && ours[k].timeMs! < list[0].timeMs - US_LEAD_MS) byTime.push(ours[k++]);
       for (const t of usTicks) {
-        while (k < ours.length && ours[k].timeMs! < t.timeMs - US_LEAD_MS) byTime.push(ours[k++]);
-        matched.set(t.tapId, k < ours.length && ours[k].timeMs! <= t.timeMs + US_LAG_MS ? ours[k++].athleteId : null);
+        while (k < ours.length && ours[k].timeMs! < t.timeMs - US_WINDOW_MS) byTime.push(ours[k++]);
+        matched.set(t.tapId, k < ours.length && ours[k].timeMs! <= t.timeMs + US_WINDOW_MS ? ours[k++].athleteId : null);
       }
     }
     const tapped: PlaceEntry[] = list.map((t) =>

@@ -73,7 +73,8 @@ describe("racePlaces", () => {
   });
 
   it("keeps earlier names by time when a phone switches to places only partway", () => {
-    const p = places([name("emma", 1000), tick("other", 4000), tick("us", 20_000), tick("other", 20_100), name("ava", 20_500)])!;
+    // Emma was named before anyone was counting here; the counting starts 9 s later.
+    const p = places([name("emma", 1000), tick("other", 10_000), tick("us", 20_000), tick("other", 20_100), name("ava", 20_500)])!;
     expect(p.place.get("emma")).toBe(1);
     expect(p.place.get("ava")).toBe(3);
   });
@@ -99,6 +100,30 @@ describe("racePlaces", () => {
     const taps = [a, name("emma", 2000), tick("other", 2500), remove];
     expect(places(taps)!.place.get("emma")).toBe(1);
     expect(places([...taps, tap({ type: "void", targetTapId: remove.clientTapId, serverTimeMs: 6000 })])!.place.get("emma")).toBe(2);
+  });
+
+  it("matches a counter working through a pack several seconds behind the names", () => {
+    // A is named at the front of a pack; the places phone gets to Us 7 s later, after four Others.
+    const p = places([name("a", 100_000), tick("other", 101_000), tick("other", 102_000), tick("other", 103_000), tick("other", 104_000), tick("us", 107_000), tick("other", 108_000)])!;
+    expect(p.entries).toHaveLength(6);
+    expect(p.place.get("a")).toBe(5);
+  });
+
+  it("places a name with no Us tap near it by its own time", () => {
+    // The counter missed A (named at 10 s); the Us at 60 s is B's.
+    const p = places([tick("other", 5_000), name("a", 10_000), tick("other", 30_000), tick("us", 60_000), name("b", 61_000)])!;
+    expect(p.place.get("a")).toBe(2);
+    expect(p.place.get("b")).toBe(4);
+  });
+
+  it("resolves remove, undo and redo", () => {
+    const a = tick("other", 1000);
+    const remove = tap({ type: "void", targetTapId: a.clientTapId, serverTimeMs: 5000 });
+    const undo = tap({ type: "void", targetTapId: remove.clientTapId, serverTimeMs: 6000 });
+    const redo = tap({ type: "void", targetTapId: undo.clientTapId, serverTimeMs: 7000 });
+    const base = [a, name("emma", 2000), tick("other", 2500)];
+    expect(places([...base, remove, undo])!.place.get("emma")).toBe(2);
+    expect(places([...base, remove, undo, redo])!.place.get("emma")).toBe(1);
   });
 
   it("keeps a place for an Us tap whose name nobody tapped", () => {

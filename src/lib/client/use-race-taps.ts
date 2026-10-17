@@ -85,7 +85,8 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
       if (body.official) {
         setOfficial(body.official);
         setOfficialLive(!!body.officialLive);
-        if (body.field) setField(body.field);
+        // Places turned off (or results removed) since: drop the old field rather than keep scoring it.
+        setField(body.field ?? []);
       } else if (liveRef.current && !body.officialLive) {
         // The live feed just ended (imported, or finished): fetch the real official times next.
         // That refetch re-sends every tap; none of them is news.

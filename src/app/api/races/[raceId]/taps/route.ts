@@ -49,7 +49,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
   // Taps whose insert is still in flight have an earlier createdAt than this poll; re-send a
   // generous window (clients dedupe by clientTapId) so a slow write is never skipped.
   const serverTimeMs = Date.now() - 5000;
-  const taps = await collection(db, "taps")
+  const rawTaps = await collection(db, "taps")
     .find(since > 0 ? { raceId, createdAt: { $gt: new Date(since) } } : { raceId })
     .sort({ createdAt: 1 })
     .project({ _id: 0, schoolId: 0, schemaVersion: 0, meetId: 0 })
@@ -61,6 +61,14 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
   const official = live ? await getLiveOfficial(meet, race) : since > 0 ? undefined : await getOfficialTimes(race);
   // The whole field, for team scores: only when the race counts places and this viewer may see them.
   const showPlaces = !!race.places?.on && (race.places.public || can(session, "tap", meet));
+  // Place taps (and the edits and undos aimed at them) go only to viewers who may see places: otherwise
+  // a parent could rebuild private places, and see who was counting, from the raw log.
+  let taps = rawTaps;
+  // (A race that never had places set up has no place taps: the record screen only offers them once on.)
+  if (!showPlaces && race.places) {
+    const tickIds = new Set((await collection(db, "taps").find({ raceId, type: "tick" }, { projection: { clientTapId: 1 } }).toArray()).map((t) => t.clientTapId));
+    taps = rawTaps.filter((t) => t.type !== "tick" && !(t.targetTapId && tickIds.has(t.targetTapId)));
+  }
   const field: FieldEntry[] | undefined = !showPlaces || official === undefined ? undefined : live ? await getLiveField(meet, race) : await getOfficialField(race);
 
   return Response.json(

@@ -170,10 +170,12 @@ function RaceBoard({
     [race, state, taps, gunTimeMs],
   );
   const officialPlaces = useMemo(() => {
-    if (!race.places || field.length === 0) return null;
+    // A division race's official places are the app's ranking within our division: not comparable with
+    // counted overall places, and the field may hold several divisions. No team scores from it either.
+    if (!race.places || field.length === 0 || race.placesDerived) return null;
     const place = new Map(Object.entries(official).flatMap(([id, o]) => (o.place !== null && o.status === "finished" ? [[id, o.place] as const] : [])));
     return { ...fieldScores(field), place };
-  }, [race.places, field, official]);
+  }, [race.places, race.placesDerived, field, official]);
   /** A runner's place at checkpoint i, and the change since the last checkpoint counted the same way (+ = passed people). */
   const placeAt = (athleteId: string, i: number): { place: number; overall: boolean; gained: number | null } | null => {
     const c = race.checkpoints[i];
@@ -326,10 +328,17 @@ function RaceBoard({
   // Remembered on this phone once picked; until then it follows the race (the latest checkpoint
   // with times while it runs) and shows All once it's over.
   const [focusPref, setFocusPref] = useLocalValue(`ls_board_focus_${race.id}`);
-  const latestWithTimes = counts.reduce((last, c, i) => (c.n > 0 ? i : last), -1);
+  // The latest checkpoint about half the field has reached: jumping at the leader would empty the table.
+  const latestWithTimes = counts.reduce((last, c, i) => (c.n > 0 && c.n * 2 >= shownIds.length ? i : last), -1);
   const pickedIndex = focusPref && focusPref !== "all" ? race.checkpoints.findIndex((c) => c.id === focusPref) : -1;
   const focusIndex: number | null =
-    focusPref === "all" ? null : pickedIndex >= 0 ? pickedIndex : !isFinished && gunTimeMs !== null && latestWithTimes >= 0 ? latestWithTimes : null;
+    focusPref === "all"
+      ? null
+      : pickedIndex >= 0
+        ? pickedIndex
+        : !isFinished && !editing && race.checkpoints.length > 1 && gunTimeMs !== null && latestWithTimes >= 0
+          ? latestWithTimes
+          : null;
 
   // Elapsed-from-gun time at a checkpoint (official beats app), for projections and the team line.
   const elapsedAt = (row: Row, i: number): number | null => {
@@ -378,20 +387,26 @@ function RaceBoard({
     if (race.places) {
       if (c.kind === "finish" && officialPlaces && !combined && inRace.some((r) => officialPlaces.place.has(r.athleteId))) {
         // Official results: real places and real team scores.
-        places = inRace.flatMap((r) => (officialPlaces.place.has(r.athleteId) ? [officialPlaces.place.get(r.athleteId)!] : []));
-        points = officialPlaces.scores.find((x) => x.team === "us")?.points ?? null;
+        // The scoring places (incomplete teams and 8th+ runners taken out), so the five add up to the points.
+        const us = officialPlaces.scores.find((x) => x.team === "us");
+        places = us?.places.length ? [...us.places] : inRace.flatMap((r) => (officialPlaces.place.has(r.athleteId) ? [officialPlaces.place.get(r.athleteId)!] : []));
+        points = us?.points ?? null;
         teamPlace = rank(officialPlaces.scores);
       } else {
         const cp = placesByCp.get(c.id);
         if (cp) {
           places = inRace.flatMap((r) => (cp.place.has(r.athleteId) ? [cp.place.get(r.athleteId)!] : []));
           overall = cp.countingAll || race.places.teams.length === 0;
-          // Points need someone to score against: the whole-meet estimate, or the tracked teams.
-          const table = cp.estimate ?? (race.places.teams.length > 0 ? cp.scores : null);
+          // Points need someone to score against (the whole-meet estimate, or the tracked teams), and a
+          // single-gender field: a boys-and-girls race's counted taps mix both, so no team points there.
+          const table = combined ? null : (cp.estimate ?? (race.places.teams.length > 0 ? cp.scores : null));
           if (table) {
-            points = table.find((x) => x.team === "us")?.points ?? null;
+            const us = table.find((x) => x.team === "us");
+            points = us?.points ?? null;
             teamPlace = rank(table.filter((x) => x.team !== "*"));
             approx = !!cp.estimate;
+            // The scoring places that make up those points.
+            if (us?.places.length) places = [...us.places];
           }
         }
       }
@@ -416,7 +431,8 @@ function RaceBoard({
    */
   const checkpointTable = (i: number) => {
     const c = race.checkpoints[i];
-    const timeOf = (cell: Cell | undefined) => (cell ? (cell.official ?? cell.elapsedMs) : null);
+    // From the gun; with no gun recorded, the clock times (splits between them still work).
+    const timeOf = (cell: Cell | undefined) => (cell ? (cell.official ?? cell.elapsedMs ?? (gunTimeMs === null ? cell.absoluteMs : null)) : null);
     const segMeters = c.meters - (i > 0 ? race.checkpoints[i - 1].meters : 0);
     const prevSegMeters = i > 0 ? race.checkpoints[i - 1].meters - (i > 1 ? race.checkpoints[i - 2].meters : 0) : 0;
     const list = rows.map((r) => {
@@ -461,7 +477,7 @@ function RaceBoard({
               const paceChange = split !== null && prevSplit !== null && segMeters > 0 && prevSegMeters > 0 ? paceMsPerMile(split, segMeters) - paceMsPerMile(prevSplit, prevSegMeters) : null;
               const m = cell.mark;
               const flag = cell.official !== null ? "" : m && !cell.missed && here !== null ? (m.estimate ? "~" : m.edited ? "*" : "") : "";
-              const place = race.places && here !== null ? placeAt(r.athleteId, i) : null;
+              const place = race.places && (cell.official !== null || cell.absoluteMs !== null) ? placeAt(r.athleteId, i) : null;
               const timeNode =
                 projected !== null ? (
                   <span className={staff && overdue(projected) ? "text-gold-text/80" : "text-ink-3"}>
@@ -470,7 +486,7 @@ function RaceBoard({
                   </span>
                 ) : (
                   <Time className={cell.missed || cell.beforeGun ? "text-ink-3 italic" : here !== null ? "font-semibold text-ink" : "text-ink-3"}>
-                    {cell.missed ? "missed" : cell.beforeGun ? "before gun" : here !== null ? ft(here, cell.precision) : "—"}
+                    {cell.missed ? "missed" : cell.beforeGun ? "before gun" : here === null ? "—" : cell.official === null && cell.elapsedMs === null && cell.absoluteMs !== null ? fmt(cell.absoluteMs) : ft(here, cell.precision)}
                     {flag}
                   </Time>
                 );
@@ -728,7 +744,7 @@ function RaceBoard({
                   // Three short lines, one job each: the time from the gun (bold where they are now); the split
                   // and its pace change from the previous segment; the place and its change (when counting
                   // places). A projection is just a light "~" time ("overdue" for staff).
-                  const place = race.places && here !== null ? placeAt(row.athleteId, i) : null;
+                  const place = race.places && (cell.official !== null || cell.absoluteMs !== null) ? placeAt(row.athleteId, i) : null;
                   const segMeters = race.checkpoints[i].meters - (i > 0 ? race.checkpoints[i - 1].meters : 0);
                   const prevSegMeters = i > 0 ? race.checkpoints[i - 1].meters - (i > 1 ? race.checkpoints[i - 2].meters : 0) : 0;
                   const before = i > 1 ? t(row.cells[i - 2]) : i === 1 ? 0 : null;
@@ -753,7 +769,7 @@ function RaceBoard({
                         <span
                           // With places on, ▲ / ▼ are the color in the cell; the split stays gray (its pace change
                           // is in the checkpoint view's Pace ± column and the runner's sheet).
-                          className={`block text-[13px] leading-5 ${race.places || paceChange === null || Math.abs(paceChange) < 1000 ? "text-ink-2" : paceChange < 0 ? "text-brand-text" : "text-danger"}`}
+                          className={`block text-[13px] leading-5 ${place || paceChange === null || Math.abs(paceChange) < 1000 ? "text-ink-2" : paceChange < 0 ? "text-brand-text" : "text-danger"}`}
                           title={paceChange !== null ? `${paceChange <= 0 ? "−" : "+"}${formatElapsed(Math.abs(paceChange)).replace(/\.\d$/, "")} per mile vs the previous segment` : undefined}
                         >
                           <Time>{ft(split)}</Time>
@@ -817,7 +833,8 @@ function RaceBoard({
         />
       </div>
 
-      {race.places && (
+      {/* A boys-and-girls race's counted places mix both: no scores card for it. */}
+      {race.places && !combined && (
         <div className="mt-3">
           <PlacesCard
             config={race.places}
