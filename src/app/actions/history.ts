@@ -21,7 +21,11 @@ export async function loadHistoryAction(_prev: HistoryLoadState, formData: FormD
   try {
     const text = await fromPdfText(new Uint8Array(await file.arrayBuffer()));
     const meets = parseSplitsHistory(text);
-    if (meets.length === 0) return { error: "No meets found. The sheet needs a 'Meet name, Month Dth YYYY' line per meet and a table per gender with Mile 1 … Finish, Place." };
+    if (meets.length === 0)
+      return {
+        error:
+          "No meets found in that PDF. The importer reads the team's split sheets: the multi-season sheet (a 'Meet name, Month Dth YYYY' line per meet) and this season's 'Meet splits' sheets (one meet per file). If this is one of those and it still fails, send the PDF over so the reader can learn its layout.",
+      };
     return { meets, review: await reviewHistory(await getDb(), school, meets) };
   } catch (err) {
     console.error("history load", err);
