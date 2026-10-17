@@ -42,6 +42,7 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
     gunFiredBy(races.map((r) => r._id)),
   ]);
   const setup = can(session, "setup", meet);
+  const staff = can(session, "tap", meet);
   const gun = can(session, "gun", meet);
   const label = (list: { id: string; label: string }[] | undefined, id: string) => list?.find((x) => x.id === id)?.label ?? id;
 
@@ -114,17 +115,23 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
                   raceId={race._id}
                   name={race.name}
                   startLabel={race.scheduledStart ? formatTimeOfDay(race.scheduledStart) : null}
-                  details={`${label(program?.settings.raceCategories, race.raceCategoryId)} · ${race.levelIds.map((l) => label(program?.settings.levels, l)).join(" + ")} · ${
-                    distances.find((d) => d._id === race.distanceId)?.label ?? race.distanceId
-                  } · ${race.lineup.length} athletes · ${race.checkpoints.map((c) => c.label).join(", ") || "no checkpoints"}`}
+                  // The public sees the race; coaches and managers also the lineup size and checkpoints.
+                  details={[
+                    label(program?.settings.raceCategories, race.raceCategoryId),
+                    race.levelIds.map((l) => label(program?.settings.levels, l)).join(" + "),
+                    distances.find((d) => d._id === race.distanceId)?.label ?? race.distanceId,
+                    ...(staff ? [`${race.lineup.length} athletes`, race.checkpoints.map((c) => c.label).join(", ") || "no checkpoints"] : []),
+                  ].join(" · ")}
                   editHref={setup ? `/meets/${meet._id}/races/${race._id}` : null}
                   csvHref={can(session, "export", meet) ? `/api/meets/${meet._id}/export?race=${race._id}` : null}
                   compareHref={race.officialImportId && can(session, "export", meet) ? `/meets/${meet._id}/compare?race=${race._id}` : null}
                   gunTimeMs={race.gunTimeMs}
                   liveFeed={race.liveFeed ?? null}
-                  places={race.places ?? null}
+                  places={staff ? (race.places ?? null) : null}
+                  staff={staff}
                   finishedAt={race.finishedAt?.toISOString() ?? null}
-                  firedBy={firedBy[race._id] ?? null}
+                  // Who fired the gun is staff information: not even sent to the public.
+                  firedBy={staff ? (firedBy[race._id] ?? null) : null}
                   timeZone={meet.timeZone}
                   canGun={gun}
                   hasOfficial={!!race.officialImportId}

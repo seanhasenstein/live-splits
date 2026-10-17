@@ -34,8 +34,10 @@ type Props = {
   hasOfficial: boolean;
   /** The timing company's live feed, polled while the race runs. */
   liveFeed: { url: string; contestName: string | null } | null;
-  /** Place counting (tracked teams), if set up. */
+  /** Place counting (tracked teams), if set up. Coaches and managers only. */
   places: RacePlaces | null;
+  /** Coaches and managers: the gun's exact time and who fired it. The public sees when it started. */
+  staff: boolean;
   /** Record splits / Live results, rendered inside the card; one version per race state so it can match. */
   actions?: Record<RaceState, React.ReactNode>;
 };
@@ -45,7 +47,7 @@ type Props = {
  * Start race…), in progress (big elapsed time; changes live behind "Adjust"),
  * finished (frozen). Nothing destructive is a single tap.
  */
-export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref, compareHref, gunTimeMs: initialGun, finishedAt: initialFinished, firedBy, timeZone, canGun, hasOfficial, liveFeed, places, actions }: Props) {
+export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref, compareHref, gunTimeMs: initialGun, finishedAt: initialFinished, firedBy, timeZone, canGun, hasOfficial, liveFeed, places, staff, actions }: Props) {
   const router = useRouter();
   const clock = useClock();
   const [gunTimeMs, setGunTimeMs] = useState(initialGun);
@@ -102,7 +104,7 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
         )}
       </div>
       <div className="mt-0.5 text-[13px] text-ink-2">{details}</div>
-      {places?.on && (
+      {staff && places?.on && (
         <div className="mt-0.5 text-[13px] text-ink-2">
           <span className="font-medium text-ink">Places</span>
           {places.teams.length > 0 ? ` · ${places.teams.map((t) => t.short).join(", ")}` : " · no tracked teams"}
@@ -116,12 +118,20 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
               the race "took" is when the last runner finished, which is nobody's result. */}
           {!finishedAt && <RunningClock gunTimeMs={gunTimeMs} now={clock.now} className="text-3xl font-semibold tracking-tight text-ink" />}
           <div className="mt-0.5 text-[13px] text-ink-2">
-            Gun <Time>{formatClock(gunTimeMs, timeZone)}</Time>
-            {firedBy && ` · by ${firedBy}`}
-            {finishedAt && (
+            {staff ? (
               <>
-                {" · finished "}
-                <Time>{formatClock(new Date(finishedAt).getTime(), timeZone, false)}</Time>
+                Gun <Time>{formatClock(gunTimeMs, timeZone)}</Time>
+                {firedBy && ` · by ${firedBy}`}
+                {finishedAt && (
+                  <>
+                    {" · finished "}
+                    <Time>{formatClock(new Date(finishedAt).getTime(), timeZone, false)}</Time>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                Started <Time>{new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", minute: "2-digit" }).format(gunTimeMs)}</Time>
               </>
             )}
           </div>
