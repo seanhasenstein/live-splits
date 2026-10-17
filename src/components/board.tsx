@@ -15,7 +15,7 @@ import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type AthleteStatus, type CheckpointState, expectedAt, type Mark, replay, replayStatuses, type Slot, STATUS_LABEL, STATUS_LONG } from "@/lib/replay";
 import type { AthleteRaceStatus, Precision, RacePlaces } from "@/lib/db/schema";
 import { type CheckpointPlaces, fieldScores, ordinal as placeText, type OurTeam, racePlaces, replayTicks } from "@/lib/race-places";
-import { paceMsPerMile, projectElapsed } from "@/lib/pace";
+import { METERS_PER_MILE, paceMsPerMile, projectElapsed } from "@/lib/pace";
 import { RECORD_LABEL, recordBadge } from "@/lib/records";
 import type { LineupBests, PriorFinish } from "@/lib/results/bests";
 import { formatClock, formatDateWithYear, formatElapsed, formatLocalDate, parseTypedTime } from "@/lib/time";
@@ -746,15 +746,18 @@ function RaceBoard({
                   const flag = cell.official !== null ? "" : m && !cell.missed && shown !== "—" ? (m.estimate ? "~" : m.edited ? "*" : "") : "";
                   const projected = here === null && !cell.missed ? projectAt(row, i) : null;
                   const fresh = isFresh(m?.tapId);
-                  // Three short lines, one job each: the time from the gun (bold where they are now); the split
-                  // and its pace change from the previous segment; the place and its change (when counting
-                  // places). A projection is just a light "~" time ("overdue" for staff).
+                  // Short lines, one job each: the split, colored by its pace change (the first checkpoint's
+                  // time is its split); the time from the gun (bold where they are now); the place and its
+                  // change (when counting places). A projection is just a light "~" time ("overdue" for staff).
                   const place = race.places && (cell.official !== null || cell.absoluteMs !== null) ? placeAt(row.athleteId, i) : null;
                   const segMeters = race.checkpoints[i].meters - (i > 0 ? race.checkpoints[i - 1].meters : 0);
                   const prevSegMeters = i > 0 ? race.checkpoints[i - 1].meters - (i > 1 ? race.checkpoints[i - 2].meters : 0) : 0;
                   const before = i > 1 ? t(row.cells[i - 2]) : i === 1 ? 0 : null;
                   const prevSplit = i > 0 && prev !== null && before !== null ? prev - before : null;
                   const paceChange = split !== null && prevSplit !== null && segMeters > 0 && prevSegMeters > 0 ? paceMsPerMile(split, segMeters) - paceMsPerMile(prevSplit, prevSegMeters) : null;
+                  // A segment that isn't a mile (the last 1.1) also gets its pace per mile, to compare with the mile splits.
+                  const oddPace = i > 0 && split !== null && segMeters > 0 && Math.abs(segMeters - METERS_PER_MILE) > 50 ? paceMsPerMile(split, segMeters) : null;
+                  const strong = i === row.reached && here !== null;
                   const cellNode = (
                     <>
                       {projected !== null ? (
@@ -762,25 +765,30 @@ function RaceBoard({
                           <Time className="block">~{formatElapsed(projected).replace(/\.\d$/, "")}</Time>
                           {staff && overdue(projected) && <span className="block text-[11px]">overdue</span>}
                         </span>
-                      ) : (
-                        <Time className={`block ${cell.missed || cell.beforeGun ? "italic" : i === row.reached && here !== null ? "font-semibold text-ink" : ""}`}>
+                      ) : i === 0 || split === null ? (
+                        <Time className={`block ${cell.missed || cell.beforeGun ? "italic" : strong ? "font-semibold text-ink" : ""}`}>
                           {shown}
                           {flag}
                         </Time>
-                      )}
-                      {/* The split, colored by its pace against the segment before: green faster, red slower, gray
-                          within a second. The exact change is in the checkpoint view and the runner's sheet. */}
-                      {i > 0 && split !== null && (
+                      ) : (
                         <span
-                          // With places on, ▲ / ▼ are the color in the cell; the split stays gray (its pace change
-                          // is in the checkpoint view's Pace ± column and the runner's sheet).
-                          className={`block text-[13px] leading-5 ${place || paceChange === null || Math.abs(paceChange) < 1000 ? "text-ink-2" : paceChange < 0 ? "text-brand-text" : "text-danger"}`}
+                          // Green faster, red slower, gray within a second. With places on, ▲ / ▼ are the color in
+                          // the cell and the split stays plain (its pace change is in the checkpoint view and the sheet).
+                          className={`block ${place || paceChange === null || Math.abs(paceChange) < 1000 ? "" : paceChange < 0 ? "text-brand-text" : "text-danger"}`}
                           title={paceChange !== null ? `${paceChange <= 0 ? "−" : "+"}${formatElapsed(Math.abs(paceChange)).replace(/\.\d$/, "")} per mile vs the previous segment` : undefined}
                         >
                           <Time>{ft(split)}</Time>
                         </span>
                       )}
-                      {/* The first checkpoint has no split (it is the time): an empty line keeps its place level with the others. */}
+                      {oddPace !== null && projected === null && <Time className="block text-[11px] leading-4 text-ink-3">{formatElapsed(oddPace).replace(/\.\d$/, "")}/mi</Time>}
+                      {/* The time from the gun under the split. The first checkpoint's time is its split, so an empty
+                          line keeps its place level with the others. */}
+                      {projected === null && i > 0 && split !== null && (
+                        <Time className={`block text-[13px] leading-5 ${strong ? "font-semibold text-ink" : "text-ink-2"}`}>
+                          {shown}
+                          {flag}
+                        </Time>
+                      )}
                       {i === 0 && place && <span aria-hidden className="block text-[13px] leading-5">&nbsp;</span>}
                       {/* The place in a fixed-width slot, so down a column the ▲ / ▼ / ↔ beside it line up. */}
                       {place && (
@@ -874,8 +882,8 @@ function RaceBoard({
         {!editing && "Tap a runner for their splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a light ~ time is a projection from the runner's last split${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : race.placesDerived ? "Official times replace app taps where imported; the timing company scored the divisions as one field, so places here are ranked by the app within our division. " : "Official times replace app taps where imported. ")}{" "}
         {focusIndex === null
           ? race.places
-            ? "Time from the gun, the split beneath it, then the place. Pick a checkpoint above the table for each split's pace change."
-            : "Time from the gun; beneath it the split, green when that segment was faster than the one before, red when slower (the exact change is in the checkpoint view)."
+            ? "The split, the time from the gun beneath it, then the place. Pick a checkpoint above the table for each split's pace change."
+            : "The split, green when that segment was faster per mile than the one before, red when slower (the exact change is in the checkpoint view); beneath it the time from the gun. A segment that isn't a mile also shows its pace per mile."
           : "Time from the gun, the split for this segment, and Pace ±: the change in pace per mile from the previous segment (+ slower, − faster)."}{" "}
         Updates every few seconds.
         {race.places && placesByCp.size > 0 && (
