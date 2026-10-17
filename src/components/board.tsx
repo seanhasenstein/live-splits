@@ -1793,7 +1793,7 @@ function FinishList({
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const tag = (text: string) => (
-    <span key={text} className="rounded border border-line px-1 text-[10px] font-semibold tracking-wide text-ink-2 uppercase">
+    <span key={text} className={`rounded px-1 text-[10px] font-semibold tracking-wide uppercase ${tagLook(text)}`}>
       {text}
     </span>
   );
@@ -1842,7 +1842,7 @@ function FinishList({
       <div key="today" className="flex items-center gap-x-2 bg-brand-soft px-2 py-1.5 text-sm">
         <span className="min-w-0 flex-1 truncate font-semibold text-ink">{meetName}</span>
         {today.tags.map((text) => (
-          <span key={text} className="rounded bg-brand px-1 text-[10px] font-semibold tracking-wide text-brand-ink uppercase">
+          <span key={text} className={`rounded px-1 text-[10px] font-semibold tracking-wide uppercase ${text === "this race" ? "bg-brand text-brand-ink" : tagLook(text)}`}>
             {text}
           </span>
         ))}
@@ -1859,6 +1859,13 @@ function FinishList({
       <div className="flex flex-col divide-y divide-line px-1 pt-1">{items}</div>
     </div>
   );
+}
+
+/** Same colors as RecordPill: PR green, SB gold, anything else a quiet outline. */
+function tagLook(text: string): string {
+  if (text === "PR") return "bg-brand text-brand-ink";
+  if (text === "SB") return "bg-gold text-gold-ink";
+  return "border border-line text-ink-2";
 }
 
 /** The small print, together and labelled rather than loose under the buttons. Nothing when there's nothing to say. */
