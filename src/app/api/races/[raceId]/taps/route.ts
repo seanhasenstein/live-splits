@@ -89,7 +89,8 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
   const field: FieldEntry[] | undefined = !showPlaces || official === undefined ? undefined : live ? await getLiveField(meet, race) : await getOfficialField(race);
 
   return Response.json(
-    { taps, gunTimeMs: race.gunTimeMs, serverTimeMs, official, field, officialLive: live, finished: !!race.finishedAt, recording },
+    // The current places setup rides along, so open screens follow it being turned on or off mid-race.
+    { taps, gunTimeMs: race.gunTimeMs, serverTimeMs, official, field, places: staff ? (race.places ?? null) : showPlaces ? race.places : null, officialLive: live, finished: !!race.finishedAt, recording },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

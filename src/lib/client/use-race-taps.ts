@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { offsetForTap } from "@/lib/client/clock";
 import { outboxAdd, outboxAll, outboxRemove, type OutboxTap } from "@/lib/client/outbox";
 import type { TapLike } from "@/lib/replay";
+import type { RacePlaces } from "@/lib/db/schema";
 import type { FieldEntry, OfficialTimes } from "@/lib/results/import";
 import type { TapInput } from "@/lib/taps";
 
@@ -40,6 +41,8 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
   const [official, setOfficial] = useState<OfficialTimes>({});
   /** Every team's finishers (live feed or import), when the race counts places: for team scores. */
   const [field, setField] = useState<FieldEntry[]>([]);
+  /** The race's places setup as of the last poll (undefined until then: use the page's). */
+  const [places, setPlaces] = useState<RacePlaces | null | undefined>(undefined);
   /** The official times are coming from the timing company's live feed, not an import. */
   const [officialLive, setOfficialLive] = useState(false);
   const liveRef = useRef(false);
@@ -74,8 +77,9 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
     try {
       const res = await fetch(`/api/races/${raceId}/taps?since=${since.current}${atRef.current ? `&at=${encodeURIComponent(atRef.current)}&job=${jobRef.current ?? "times"}` : ""}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const body = (await res.json()) as { taps: ServerTap[]; gunTimeMs: number | null; serverTimeMs: number; official?: OfficialTimes; field?: FieldEntry[]; officialLive?: boolean; finished?: boolean; recording?: Recording[] };
+      const body = (await res.json()) as { taps: ServerTap[]; gunTimeMs: number | null; serverTimeMs: number; official?: OfficialTimes; field?: FieldEntry[]; places?: RacePlaces | null; officialLive?: boolean; finished?: boolean; recording?: Recording[] };
       if (body.recording) setRecording(body.recording);
+      if ("places" in body) setPlaces(body.places ?? null);
       since.current = body.serverTimeMs;
       // A poll that started before this device fired the gun can land after it; keep the gun.
       if (body.gunTimeMs === null && adoptedAt.current && Date.now() - adoptedAt.current < 15_000) body.gunTimeMs = stateRef.current.gunTimeMs;
@@ -322,6 +326,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
     gunTimeMs,
     official,
     field,
+    places,
     officialLive,
     recording,
     seenAt,

@@ -133,7 +133,7 @@ function RaceBoard({
   meetId,
   meetName,
   meetDate,
-  race,
+  race: raceIn,
   timeZone,
   athletes,
   genders,
@@ -157,7 +157,10 @@ function RaceBoard({
   canTap: boolean;
 }) {
   const clock = useClock();
-  const { taps, gunTimeMs, official, field, officialLive, finished, longRunning, staleMinutes, send, online, loaded, recording, seenAt } = useRaceTaps(race.id, race.gunTimeMs);
+  const { taps, gunTimeMs, official, field, places: livePlaces, officialLive, finished, longRunning, staleMinutes, send, online, loaded, recording, seenAt } = useRaceTaps(raceIn.id, raceIn.gunTimeMs);
+  // Places as of the last poll (on and visible to this viewer, as the page had it): turning places off
+  // mid-race clears them here within seconds, and turning them on shows them.
+  const race = useMemo(() => (livePlaces === undefined ? raceIn : { ...raceIn, places: livePlaces?.on ? livePlaces : null }), [raceIn, livePlaces]);
   const isFinished = race.finished || finished;
   const hasOfficial = Object.keys(official).length > 0;
   const state = useMemo(

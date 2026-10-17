@@ -151,7 +151,11 @@ export function TapScreen({ meetId, meetName, session, initial, timeZone, hasCou
       hasCourse={hasCourse}
       canGun={canGun}
       onSwitch={setSel}
-      pickerFor={(current) => <SwitchControl races={races} race={race} checkpointId={race.checkpoints[cpIndex].id} current={current} onSwitch={setSel} canSetUp={canGun} />}
+      pickerFor={(current) => {
+        // The race on screen with its places setup as of the last poll.
+        const live = current.places !== undefined ? { ...race, places: current.places } : race;
+        return <SwitchControl races={races.map((r) => (r.id === live.id ? live : r))} race={live} checkpointId={race.checkpoints[cpIndex].id} current={current} onSwitch={setSel} canSetUp={canGun} />;
+      }}
     />
   );
 }
@@ -160,7 +164,7 @@ export function TapScreen({ meetId, meetName, session, initial, timeZone, hasCou
  * Where taps go. Changing it is deliberate: open the sheet, pick, confirm.
  * A stray tap on a segmented control was too easy to make mid-race.
  */
-type RaceSummary = { counts: Record<string, number>; gunTimeMs: number | null; recording: Recording[] };
+type RaceSummary = { counts: Record<string, number>; gunTimeMs: number | null; recording: Recording[]; places?: RacePlaces | null };
 
 function SwitchControl({
   races,
@@ -401,7 +405,7 @@ function RaceTapper({
   meetName,
   session,
   timeZone,
-  race,
+  race: raceIn,
   cpIndex,
   athletes,
   hasCourse,
@@ -423,12 +427,20 @@ function RaceTapper({
   pickerFor: (current: RaceSummary) => React.ReactNode;
 }) {
   const clock = useClock();
-  const checkpoint = race.checkpoints[cpIndex];
-  const placesOn = !!race.places?.on;
+  const checkpoint = raceIn.checkpoints[cpIndex];
   const [placesModePref] = useLocalValue(PLACES_MODE_KEY);
+  const { taps, gunTimeMs, official, officialLive, finished, staleMinutes, send, online, signedOut, rejected, loaded, unsent, oldestUnsentAt, refresh, adoptGun, recording, places: livePlaces } = useRaceTaps(
+    raceIn.id,
+    raceIn.gunTimeMs,
+    checkpoint.id,
+    // The job this phone picked (Who's where only shows jobs while places are on).
+    JOB[modeFrom(placesModePref)],
+  );
+  // The places setup as of the last poll: turning places off (or on) mid-race reaches this phone by itself.
+  const race = useMemo(() => (livePlaces === undefined ? raceIn : { ...raceIn, places: livePlaces }), [raceIn, livePlaces]);
+  const placesOn = !!race.places?.on;
   // Chosen in the Switch sheet ("Your job here"), with the race and checkpoint.
   const placesMode: RecordMode = !placesOn ? "names" : modeFrom(placesModePref);
-  const { taps, gunTimeMs, official, officialLive, finished, staleMinutes, send, online, signedOut, rejected, loaded, unsent, oldestUnsentAt, refresh, adoptGun, recording } = useRaceTaps(race.id, race.gunTimeMs, checkpoint.id, JOB[placesMode]);
 
   const isFinished = race.finished || finished;
   const officialAt = (athleteId: string): number | null => {
@@ -855,6 +867,7 @@ function RaceTapper({
           )}
         </div>
         {pickerFor({
+          places: race.places,
           gunTimeMs,
           counts: Object.fromEntries(counts.map((c) => [c.id, c.n])),
           recording,

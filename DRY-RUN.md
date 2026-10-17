@@ -55,8 +55,10 @@
   checkpoint: Times, Times + places, or Places. The header shows it. Every
   phone starts on Times (so two timers can't both count places by accident);
   whoever counts places picks Times + places or Places once, and it sticks.
-- Reload the record screens after changing a race's places setup (teams,
-  on/off): open phones don't pick it up on their own.
+- Changing a race's places setup (on/off, teams) reaches every open record
+  screen and Live results within a few seconds, no reload. Turning places
+  off mid-race is the safety switch: everyone drops back to times and splits,
+  nothing is lost, and turning it back on brings the places back.
   - One phone: Times + places. Tap our names as now and a team button for
     their runners; Other for everyone else (hold Other for a pack of 2–5).
   - Two phones: the name tapper on Times; a helper on Places taps our
