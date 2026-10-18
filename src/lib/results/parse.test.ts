@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { expect, test } from "vitest";
-import { guessRace, isOurTeam, matchAthlete, normalizeName } from "./match";
+import { guessRace, isCombinedRace, isOurTeam, matchAthlete, normalizeName } from "./match";
 import { COLUMN_HEADER_RE, headerLabels, parseArrowResultsHtml, parseColumnResults, parseRaceResultJson, parseResultsText, restrictToDivision } from "./parse";
 
 // Real, unsanitized results stay out of git; these two tests run only where they exist.
@@ -214,4 +214,14 @@ test("column results without a grade column: capitalized last names, a DNF with 
   expect(boys.entries[0]).toMatchObject({ firstName: "Alex", lastName: "ABBOTT", grade: null, bib: "9647" });
   expect(normalizeName(boys.entries[1].name)).toBe(normalizeName("Eddy Giebler"));
   expect(girls.entries).toHaveLength(1);
+});
+
+test("a combined race: no category gender, a boys-and-girls name, or a lineup with both", () => {
+  const g: Record<string, string> = { a: "M", b: "M", c: "F" };
+  const of = (id: string) => g[id];
+  expect(isCombinedRace({ name: "JV", athleteIds: ["a"] }, null, of)).toBe(true);
+  expect(isCombinedRace({ name: "Boys & Girls JV", athleteIds: ["a", "b"] }, "M", of)).toBe(true);
+  expect(isCombinedRace({ name: "JV", athleteIds: ["a", "c"] }, "M", of)).toBe(true);
+  expect(isCombinedRace({ name: "Boys JV", athleteIds: ["a", "b"] }, "M", of)).toBe(false);
+  expect(isCombinedRace({ name: "Girls Varsity", athleteIds: ["c"] }, "F", of)).toBe(false);
 });

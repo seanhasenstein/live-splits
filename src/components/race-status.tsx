@@ -126,7 +126,7 @@ function OfficialPill({ kind, className }: { kind: "imported" | "division" | "li
 }
 
 /**
- * PR / SB / Course PR / Meet PR. Solid once the mats say so; outlined while
+ * PR / SB / Course PR. Solid once the mats say so; outlined while
  * it rests on app taps. How close the call is belongs in words on the sheet.
  */
 export function RecordPill({ badge, size = "sm", className = "" }: { badge: RecordBadge; size?: "sm" | "md"; className?: string }) {
@@ -135,15 +135,14 @@ export function RecordPill({ badge, size = "sm", className = "" }: { badge: Reco
   // sm sits beside a name in a table: a tag, not a button-sized block. md beside the sheet's big finish time.
   // A little wider than tall, with softer corners, so the small one reads as a tag rather than a dot.
   const dims = size === "md" ? "h-7 rounded-md px-2.5 text-[13px]" : "h-4 rounded-[5px] px-1.5 text-[9px]";
-  // School colors: season bests in shield gold, every kind of PR in green.
-  const gold = badge.kind === "sb";
-  const look = badge.unofficial
-    ? gold
-      ? "border border-gold text-gold-text"
-      : "border border-brand text-brand-text"
-    : gold
-      ? "bg-gold text-gold-ink"
-      : "bg-brand text-brand-ink";
+  // School colors for the records that matter most: PR green, SB shield gold. A course PR is a quiet gray, so
+  // from across the tent it doesn't read as a PR. Outlined until official results say so.
+  const look = {
+    pr: badge.unofficial ? "border border-brand text-brand-text" : "bg-brand text-brand-ink",
+    sb: badge.unofficial ? "border border-gold text-gold-text" : "bg-gold text-gold-ink",
+    course: badge.unofficial ? "border border-line-strong text-ink-2" : "bg-surface-2 text-ink ring-1 ring-line ring-inset",
+    meet: badge.unofficial ? "border border-line-strong text-ink-2" : "bg-surface-2 text-ink ring-1 ring-line ring-inset",
+  }[badge.kind];
   return (
     <span title={title} className={`inline-flex shrink-0 items-center font-semibold tracking-[0.04em] uppercase ${dims} ${look} ${className}`}>
       {text}

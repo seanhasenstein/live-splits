@@ -15,7 +15,7 @@ import { useRaceTaps } from "@/lib/client/use-race-taps";
 import { type AthleteStatus, type CheckpointState, expectedAt, type Mark, replay, replayStatuses, type Slot, STATUS_LABEL, STATUS_LONG } from "@/lib/replay";
 import type { AthleteRaceStatus, Precision, RacePlaces } from "@/lib/db/schema";
 import { type CheckpointPlaces, fieldScores, ordinal as placeText, type OurTeam, racePlaces, replayTicks } from "@/lib/race-places";
-import { METERS_PER_MILE, paceMsPerMile, projectElapsed } from "@/lib/pace";
+import { METERS_PER_MILE, openingEstimate, paceMsPerMile, projectElapsed, segmentLength } from "@/lib/pace";
 import { RECORD_LABEL, recordBadge } from "@/lib/records";
 import type { LineupBests, PriorFinish } from "@/lib/results/bests";
 import { formatClock, formatDateWithYear, formatElapsed, formatLocalDate, parseTypedTime } from "@/lib/time";
@@ -354,11 +354,17 @@ function RaceBoard({
    */
   const projectAt = (row: Row, i: number): number | null => {
     if (isFinished || row.status || (row.officialStatus && row.officialStatus !== "finished")) return null;
-    return projectElapsed(
+    const times = race.checkpoints.map((_, j) => elapsedAt(row, j));
+    const fromTimes = projectElapsed(
       race.checkpoints.map((c) => c.meters),
-      race.checkpoints.map((_, j) => elapsedAt(row, j)),
+      times,
       i,
     );
+    if (fromTimes !== null || i !== 0 || gunTimeMs === null || times.some((v) => v !== null)) return fromTimes;
+    // Nothing recorded yet: the first checkpoint from their earlier races this season.
+    const key = String(Math.round(race.checkpoints[0].meters));
+    const earlier = (race.bests[row.athleteId]?.finishes ?? []).filter((f) => f.thisSeason && f.splits[key] !== undefined).map((f) => f.splits[key]);
+    return openingEstimate(earlier);
   };
   // "Overdue" is a cue for the people who can do something about it; viewers just see the projection.
   const staff = canFix || canTap;
@@ -457,7 +463,15 @@ function RaceBoard({
             <tr className="border-b border-line text-left text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
               <th className="px-3 py-2 font-semibold sm:px-4">Athlete</th>
               <th className={th}>Time</th>
-              {i > 0 && <th className={th}>Split</th>}
+              {i > 0 && (
+                <th className={th}>
+                  Split
+                  {(() => {
+                    const seg = segmentLength(race.checkpoints[i].meters - race.checkpoints[i - 1].meters);
+                    return seg && <span className="block text-[10px] font-medium tracking-normal text-ink-3 normal-case">{seg}</span>;
+                  })()}
+                </th>
+              )}
               <th className={`${th} ${race.places ? "" : "pr-3 sm:pr-4"}`} title={i > 0 ? "Pace change from the previous segment (+ slower, − faster)" : "Pace per mile"}>
                 {i > 0 ? "Pace ±" : "Pace"}
               </th>
@@ -676,10 +690,15 @@ function RaceBoard({
           <thead>
             <tr className="border-b border-line text-left text-[11px] font-semibold tracking-[0.08em] text-ink-2 uppercase">
               <th className="px-3 py-2 font-semibold sm:px-4">{hasOfficial ? (race.placesDerived ? "Division place · Athlete" : "Finish place · Athlete") : "Athlete"}</th>
-              {race.checkpoints.map((c) => (
-                // Left-aligned like the cells. No sub-label: the cells read themselves (time, colored split, place).
-                <th key={c.id} className="px-2 py-2 text-left font-semibold whitespace-nowrap last:pr-3 sm:last:pr-4">
+              {race.checkpoints.map((c, ci) => (
+                // Left-aligned like the cells. The only sub-label is a segment that isn't a mile.
+                <th key={c.id} className="px-2 py-2 text-left align-top font-semibold whitespace-nowrap last:pr-3 sm:last:pr-4">
                   {c.label}
+                  {/* The split under it isn't a mile (the last 1.1 of a 5K): say so where the splits are. */}
+                  {(() => {
+                    const seg = segmentLength(c.meters - (ci > 0 ? race.checkpoints[ci - 1].meters : 0));
+                    return seg && <span className="block text-[10px] font-medium tracking-normal text-ink-3 normal-case">{seg}</span>;
+                  })()}
                 </th>
               ))}
             </tr>
@@ -883,7 +902,7 @@ function RaceBoard({
       )}
 
       <p className="mt-3 text-xs text-ink-3">
-        {!editing && "Tap a runner for their splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a light ~ time marked projected is when they should get there at their last split's pace${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : race.placesDerived ? "Official times replace app taps where imported; the timing company scored the divisions as one field, so places here are ranked by the app within our division. " : "Official times replace app taps where imported. ")}{" "}
+        {!editing && "Tap a runner for their splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a light ~ time marked projected is when they should get there at their last split's pace (before their first split, from their races earlier this season)${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : race.placesDerived ? "Official times replace app taps where imported; the timing company scored the divisions as one field, so places here are ranked by the app within our division. " : "Official times replace app taps where imported. ")}{" "}
         {focusIndex === null
           ? race.places
             ? "The split, the time from the gun beneath it, then the place. Pick a checkpoint above the table for each split's pace change."
@@ -1125,6 +1144,16 @@ function AthleteSheet({
       : records && finish !== null && !row?.record && bests && seasonRank !== null && seasonRank <= 3 && season.length >= 2 && bests.sb
         ? `${seasonRank}${ordinal(seasonRank)} fastest this season, behind the season best of ${ft(bests.sb.ms, bests.sb.precision)} at ${bests.sb.meetName} on ${formatDateWithYear(bests.sb.date)}.`
         : null;
+  // The last time they ran this meet, in an earlier season: "Last year at Big East Conference: 21:40 · 1:05 faster".
+  const lastHere = finishes.filter((f) => f.sameMeet && !f.thisSeason).sort((a, b) => b.date.localeCompare(a.date))[0];
+  const lastHereText = lastHere
+    ? (() => {
+        const years = Number(meetDate.slice(0, 4)) - Number(lastHere.date.slice(0, 4));
+        const when = years === 1 ? "Last year" : `In ${lastHere.date.slice(0, 4)}`;
+        return `${when} at ${lastHere.meetName}: ${ft(lastHere.ms, lastHere.precision)}${lastHere.sameCourse ? "" : ", on a different course"}`;
+      })()
+    : null;
+  const lastHereDiff = lastHere && finish !== null ? finish - lastHere.ms : null;
   // "5Ks" reads; "3 mis" doesn't.
   const plural = /[A-Za-z]$/.test(race.distanceLabel) && !/ mi$/.test(race.distanceLabel) ? `${race.distanceLabel}s` : `${race.distanceLabel} races`;
   const raceLink = (f: { meetId: string; raceId: string }) => `/meets/${f.meetId}/results?race=${f.raceId}&athlete=${row?.athleteId ?? ""}`;
@@ -1195,8 +1224,12 @@ function AthleteSheet({
               {(() => {
                 const prev = bests[row.record.kind]!;
                 const what = { pr: "personal best", sb: "season best", course: "best on this course", meet: "best at this meet" }[row.record.kind];
-                const by = row.record.unofficial && row.record.uncertain && row.record.previousMs > finish! ? `, beaten by ${Math.max(1, Math.round((row.record.previousMs - finish!) / 1000))}s` : row.record.unofficial && row.record.uncertain ? ", matched" : "";
-                return `Previous ${what} was ${ft(prev.ms, prev.precision)} at ${prev.meetName} on ${formatDateWithYear(prev.date)}${by}.`;
+                // Lead with the improvement: "25s faster than the previous personal best, 18:20 at …". Under a second, tenths.
+                const gain = prev.ms - finish!;
+                const gainText = gain < 1000 ? `${(gain / 1000).toFixed(1)}s` : gapText(gain);
+                const previous = `the previous ${what}, ${ft(prev.ms, prev.precision)} at ${prev.meetName} on ${formatDateWithYear(prev.date)}`;
+                const tapped = row.record.unofficial && row.record.uncertain ? " Unofficial, so official results could change it." : "";
+                return `${gain <= 0 ? `Matches ${previous}` : `${gainText} faster than ${previous}`}.${tapped}`;
               })()}
             </span>
           ) : nearMiss ? (
@@ -1207,6 +1240,19 @@ function AthleteSheet({
             </span>
           ) : (
             avgPace !== null && <Time className="block text-[13px] text-ink-2">{formatElapsed(avgPace).replace(/\.\d$/, "")}/mi average</Time>
+          )}
+          {lastHereText && (
+            <span className="mt-0.5 block text-[13px] text-ink-2">
+              {lastHereText}
+              {lastHereDiff !== null && Math.round(lastHereDiff / 1000) !== 0 && (
+                <>
+                  {" · "}
+                  <span className={`font-medium ${lastHereDiff < 0 ? "text-brand-bright" : "text-danger"}`}>
+                    {gapText(Math.abs(lastHereDiff))} {lastHereDiff < 0 ? "faster" : "slower"}
+                  </span>
+                </>
+              )}
+            </span>
           )}
         </div>
       )}
@@ -1247,6 +1293,7 @@ function AthleteSheet({
             <div key={c.id} className="flex items-start gap-x-3 px-3 py-2 text-sm">
               <span className="min-w-0 flex-1 font-medium text-ink">
                 {c.label}
+                {segmentLength(segMeters) && <span className="ml-1.5 text-xs font-normal text-ink-3">{segmentLength(segMeters)}</span>}
                 {officialCount > 0 && officialCount < timedCount && cell?.official !== null && cell?.official !== undefined && <span className="ml-1.5 text-[10px] font-semibold tracking-wide text-brand-text uppercase">official</span>}
                 {cell?.mark?.estimate && cell.official === null && <span className="ml-1.5 text-xs text-ink-3">estimate</span>}
                 {(() => {
