@@ -137,7 +137,10 @@ export function parseSplitsHistory(text: string): HistoryMeet[] {
     const timeCells = rest.filter((c) => /^\d+:\d{2}(\.\d+)?$/.test(c)).map((c) => parseElapsed(c)!);
     const placeText = rest.find((c) => /^\d+(st|nd|rd|th)\b/i.test(c)) ?? "";
     const dns = rest.some((c) => /^dns$/i.test(c));
-    const dnf = !dns && rest.some((c) => /^dnf$/i.test(c));
+    // A row that stops early with no place ("Ajani Laster 7:28", a Mile 1 and nothing more) didn't finish:
+    // its last time is a split, not a finish. A full row has one time per segment plus the finish.
+    const stoppedEarly = !placeText && timeCells.length <= labels.length;
+    const dnf = !dns && (rest.some((c) => /^dnf$/i.test(c)) || stoppedEarly);
     const finishMs = dns || dnf ? null : (timeCells.at(-1) ?? null);
     const segMs: (number | null)[] = dns || dnf ? timeCells : timeCells.slice(0, -1);
     // Segment times accumulate; the last segment ends at the finish, so only the earlier ones are splits.
