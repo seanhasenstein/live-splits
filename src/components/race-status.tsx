@@ -150,10 +150,10 @@ export function RecordPill({ badge, size = "sm", className = "" }: { badge: Reco
   );
 }
 
-/** DNS / DNR / DNF beside a name, the same size as a RecordPill and in muted gray: a fact, not an achievement. */
+/** DNS / DNR / DNF beside a name, the same size as a RecordPill and bordered like a Course PR, with lighter text: a fact, not an achievement. */
 export function StatusPill({ label, title, className = "" }: { label: string; title?: string; className?: string }) {
   return (
-    <span title={title} className={`inline-flex h-4 shrink-0 items-center rounded-[5px] bg-surface-2 px-1.5 text-[9px] font-semibold tracking-[0.04em] text-ink-2 uppercase ${className}`}>
+    <span title={title} className={`inline-flex h-4 shrink-0 items-center rounded-[5px] bg-surface-2 px-1.5 text-[9px] font-semibold tracking-[0.04em] text-ink-2 uppercase ring-1 ring-line ring-inset ${className}`}>
       {label}
     </span>
   );
