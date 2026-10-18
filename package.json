@@ -14,7 +14,8 @@
     "db:clear-taps": "tsx --env-file=.env.local scripts/clear-taps.ts",
     "db:migrate": "tsx --env-file=.env.local scripts/migrate.ts",
     "db:delete-meet": "tsx --env-file=.env.local scripts/delete-meet.ts",
-    "db:finish-to-split": "tsx --env-file=.env.local scripts/finish-to-split.ts"
+    "db:finish-to-split": "tsx --env-file=.env.local scripts/finish-to-split.ts",
+    "db:move-result": "tsx --env-file=.env.local scripts/move-result.ts"
   },
   "dependencies": {
     "lucide-react": "^1.50.0",
