@@ -700,7 +700,8 @@ function RaceBoard({
                   {/* The split under it isn't a mile (the last 1.1 of a 5K): say so where the splits are. */}
                   {(() => {
                     const seg = segmentLength(c.meters - (ci > 0 ? race.checkpoints[ci - 1].meters : 0));
-                    return seg && <span className="block text-[10px] font-medium tracking-normal text-ink-3 normal-case">{seg}</span>;
+                    // "last 1.1 mi", not a bare "1.1 mi" that reads as the length of the finish (or the race).
+                    return seg && <span className="block text-[10px] font-medium tracking-normal text-ink-3 normal-case">{ci === race.checkpoints.length - 1 ? `last ${seg}` : seg}</span>;
                   })()}
                 </th>
               ))}
@@ -1289,7 +1290,12 @@ function AthleteSheet({
             <div key={c.id} className="flex items-start gap-x-3 px-3 py-2 text-sm">
               <span className="min-w-0 flex-1 font-medium text-ink">
                 {c.label}
-                {segmentLength(segMeters) && <span className="ml-1.5 text-xs font-normal text-ink-3">{segmentLength(segMeters)}</span>}
+                {segmentLength(segMeters) && (
+                  <span className="ml-1.5 text-xs font-normal text-ink-3">
+                    · {i === race.checkpoints.length - 1 ? "last " : ""}
+                    {segmentLength(segMeters)}
+                  </span>
+                )}
                 {officialCount > 0 && officialCount < timedCount && cell?.official !== null && cell?.official !== undefined && <span className="ml-1.5 text-[10px] font-semibold tracking-wide text-brand-text uppercase">official</span>}
                 {cell?.mark?.estimate && cell.official === null && <span className="ml-1.5 text-xs text-ink-3">estimate</span>}
                 {(() => {
