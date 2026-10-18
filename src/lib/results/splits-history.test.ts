@@ -81,6 +81,20 @@ test("segments that don't add up to the finish are dropped rather than written w
   expect(c.splits).toEqual({ "Mile 1": 5 * 60_000 + 46_000, "Mile 2": 12 * 60_000 + 4_000 });
 });
 
+test("a row that stops early with no place is a DNF with its splits, not a finish at its last time", () => {
+  const meets = parseSplitsHistory(
+    sheet([
+      "Ajani Laster \t7:28", // only a Mile 1
+      "Isaac Hasler \t7:33 \t7:34", // two splits, nothing more
+      "Avery Abbott \t5:46 \t6:47 \t18:51 \t16th", // a missing cell, but a place: still a finish
+    ]),
+  );
+  const [a, b, c] = meets[0].rows;
+  expect(a).toMatchObject({ status: "dnf", finishMs: null, place: null, splits: { "Mile 1": 7 * 60_000 + 28_000 } });
+  expect(b).toMatchObject({ status: "dnf", finishMs: null, splits: { "Mile 1": 7 * 60_000 + 33_000, "Mile 2": 15 * 60_000 + 7_000 } });
+  expect(c).toMatchObject({ status: "finished", finishMs: 18 * 60_000 + 51_000, place: 16 });
+});
+
 test("a 'Mile 3' last column is a 5K", () => {
   const meets = parseSplitsHistory(["Sample Invite, September 10th 2025", "Boys \tMile 1 \tMile 2 \tMile 3 \tFinish \tPlace", "Eddy Giebler \t5:46 \t5:48 \t6:21 \t17:55 \t6th"].join("\n"));
   expect(meets[0].distanceMeters).toBe(5000);
