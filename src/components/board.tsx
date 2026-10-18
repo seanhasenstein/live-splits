@@ -5,7 +5,7 @@ import { Fragment, type ReactNode, type SyntheticEvent, useCallback, useEffect, 
 import { ChevronLeft, ChevronRight, History as HistoryIcon, Info, MoveHorizontal, Pencil, Share } from "lucide-react";
 import { PlacesCard } from "@/components/places-card";
 import { TeamCard, type TeamRow } from "@/components/team-card";
-import { CheckpointCounts, DeltaText, RaceStatusBar, RecordPill, RunningClock } from "@/components/race-status";
+import { CheckpointCounts, DeltaText, RaceStatusBar, RecordPill, RunningClock, StatusPill } from "@/components/race-status";
 import { SessionMenu } from "@/components/session-menu";
 import { Alert, AppHeader, Badge, Button, Card, Checkbox, Field, Input, LinkButton, LiveDot, SectionLabel, Segmented, Sheet, Time, Toast } from "@/components/ui";
 import { useClock } from "@/lib/client/clock";
@@ -512,20 +512,23 @@ function RaceBoard({
               return (
                 <tr key={r.athleteId} onClick={editing ? undefined : () => setAthleteSheet(r.athleteId)} className={`${here === null ? "text-ink-3" : ""} ${editing ? "" : "cursor-pointer hover:bg-surface-2 active:bg-surface-2"}`}>
                   <td className={`px-3 py-2.5 align-top font-medium sm:px-4 ${here === null ? "" : "text-ink"}`}>
-                    {editing ? (
-                      <button type="button" onClick={() => setStatusFor(r.athleteId)} className="-mx-1.5 rounded px-1.5 py-0.5 text-left hover:bg-gold-soft" title="Set DNS / DNR / DNF">
-                        {athletes[r.athleteId]}
-                      </button>
-                    ) : (
-                      <span>
-                        <NameWithPill name={athletes[r.athleteId] ?? "?"} pill={c.kind === "finish" && r.record ? <RecordPill badge={r.record} className="ml-1.5 align-[2px]" /> : null} />
-                      </span>
-                    )}
-                    {out && (
-                      <span className="mt-0.5 block">
-                        <Badge tone="neutral">{r.status ? STATUS_LABEL[r.status.status] : (r.officialStatus ?? "").toUpperCase()}</Badge>
-                      </span>
-                    )}
+                    {(() => {
+                      // DNS / DNR / DNF sits on the name's line like a PR pill (someone out of the race has no record).
+                      const pill = out ? (
+                        <StatusPill label={r.status ? STATUS_LABEL[r.status.status] : (r.officialStatus ?? "").toUpperCase()} title={r.status ? STATUS_LONG[r.status.status] : undefined} className="ml-1.5 align-[2px]" />
+                      ) : c.kind === "finish" && r.record ? (
+                        <RecordPill badge={r.record} className="ml-1.5 align-[2px]" />
+                      ) : null;
+                      return editing ? (
+                        <button type="button" onClick={() => setStatusFor(r.athleteId)} className="-mx-1.5 rounded px-1.5 py-0.5 text-left hover:bg-gold-soft" title="Set DNS / DNR / DNF">
+                          <NameWithPill name={athletes[r.athleteId] ?? "?"} pill={out ? pill : null} />
+                        </button>
+                      ) : (
+                        <span>
+                          <NameWithPill name={athletes[r.athleteId] ?? "?"} pill={pill} />
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-1.5 py-2.5 text-right align-top whitespace-nowrap">
                     {editing && cell.official === null ? (
@@ -722,27 +725,20 @@ function RaceBoard({
                   <span className="flex items-start gap-2">
                     {hasOfficial && <span className="tnum w-8 shrink-0 py-1 text-right text-ink-3">{row.officialPlace ?? ""}</span>}
                     <span className="min-w-0">
-                      {editing ? (
-                        <button type="button" onClick={() => setStatusFor(row.athleteId)} className="-mx-1.5 rounded px-1.5 py-1 text-left hover:bg-gold-soft" title="Set DNS / DNR / DNF">
-                          {athletes[row.athleteId]}
-                        </button>
-                      ) : (
-                        <button type="button" onClick={() => setAthleteSheet(row.athleteId)} className="-mx-1.5 rounded px-1.5 py-1 text-left">
-                          <NameWithPill name={athletes[row.athleteId] ?? "?"} pill={row.record ? <RecordPill badge={row.record} className="ml-1.5 align-[2px]" /> : null} />
-                        </button>
-                      )}
-                      {row.status ? (
-                        <span className="mt-0.5 block">
-                          <Badge tone="neutral">{STATUS_LABEL[row.status.status]}</Badge>
-                        </span>
-                      ) : (
-                        row.officialStatus &&
-                        row.officialStatus !== "finished" && (
-                          <span className="mt-0.5 block">
-                            <Badge tone="neutral">{row.officialStatus.toUpperCase()}</Badge>
-                          </span>
-                        )
-                      )}
+                      {(() => {
+                        // DNS / DNR / DNF sits on the name's line like a PR pill (someone out of the race has no record).
+                        const status = row.status ? STATUS_LABEL[row.status.status] : row.officialStatus && row.officialStatus !== "finished" ? row.officialStatus.toUpperCase() : null;
+                        const statusPill = status ? <StatusPill label={status} title={row.status ? STATUS_LONG[row.status.status] : undefined} className="ml-1.5 align-[2px]" /> : null;
+                        return editing ? (
+                          <button type="button" onClick={() => setStatusFor(row.athleteId)} className="-mx-1.5 rounded px-1.5 py-1 text-left hover:bg-gold-soft" title="Set DNS / DNR / DNF">
+                            <NameWithPill name={athletes[row.athleteId] ?? "?"} pill={statusPill} />
+                          </button>
+                        ) : (
+                          <button type="button" onClick={() => setAthleteSheet(row.athleteId)} className="-mx-1.5 rounded px-1.5 py-1 text-left">
+                            <NameWithPill name={athletes[row.athleteId] ?? "?"} pill={statusPill ?? (row.record ? <RecordPill badge={row.record} className="ml-1.5 align-[2px]" /> : null)} />
+                          </button>
+                        );
+                      })()}
                     </span>
                   </span>
                 </td>
