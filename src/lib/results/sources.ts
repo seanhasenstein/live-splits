@@ -1,10 +1,11 @@
 import "server-only";
-import { COLUMN_HEADER_RE, type ParsedContest, parseArrowResultsHtml, parseColumnResults, parseRaceResultJson, parseResultsText, stripTags } from "./parse";
+import { COLUMN_HEADER_RE, type ParsedContest, parseArrowResultsHtml, parseAthleticLiveJson, parseColumnResults, parseRaceResultJson, parseResultsText, stripTags } from "./parse";
 
 /**
  * Turn what a coach hands us (a URL, pasted text, a PDF) into contests.
- * Vendors supported by URL: RACE RESULT (api.raceresult.com) and Badger State
- * Timing meet pages (which list their contests' RACE RESULT feeds).
+ * Vendors supported by URL: RACE RESULT (api.raceresult.com), Badger State
+ * Timing meet pages (which list their contests' RACE RESULT feeds), Arrow / XM
+ * Timing, and AthleticLIVE race pages (Trackside Timing and others).
  */
 
 export class SourceError extends Error {}
@@ -16,7 +17,26 @@ const RACE_RESULT_HOST = "api.raceresult.com";
 const BADGER_HOSTS = new Set(["badgerstatetiming.live", "www.badgerstatetiming.live"]);
 const ARROW_HOSTS = new Set(["arrowliveresults.com", "www.arrowliveresults.com"]);
 const XM_HOSTS = new Set(["xmtiming.com", "www.xmtiming.com"]);
-const ANY_KNOWN_HOST = (h: string) => h === RACE_RESULT_HOST || BADGER_HOSTS.has(h) || ARROW_HOSTS.has(h) || XM_HOSTS.has(h) || h.endsWith(".supabase.co");
+/** Where AthleticLIVE keeps each race's results document; a race page on any timer's domain points here by its id. */
+const ATHLETIC_LIVE_DOCS = "https://athleticlive.blob.core.windows.net/$web/ind_res_list/_doc/";
+const ANY_KNOWN_HOST = (h: string) =>
+  h === RACE_RESULT_HOST || BADGER_HOSTS.has(h) || ARROW_HOSTS.has(h) || XM_HOSTS.has(h) || h.endsWith(".supabase.co") || h === new URL(ATHLETIC_LIVE_DOCS).host;
+
+/**
+ * The race id in an AthleticLIVE race page link ("…/meets/79348/events/xc/2933040"). Timers serve these
+ * pages on their own domains (results.tracksidetiming.com, <timer>.anet.live, live.athletic.net), so the
+ * host isn't checked: only the id is used, and the app fetches from AthleticLIVE's own storage, never
+ * from the link's host.
+ */
+export function athleticLiveRaceId(url: string): string | null {
+  try {
+    const u = new URL(url.trim());
+    if (u.protocol !== "https:") return null;
+    return u.pathname.match(/\/meets\/\d+\/events\/[a-z]+\/(\d{1,12})\/?$/i)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /** Fetch from a known host; a redirect must land on a known https host too, and the body is capped. */
 async function getResponse(url: string, headers: Record<string, string> = {}): Promise<Response> {
@@ -42,7 +62,7 @@ async function getText(url: string): Promise<string> {
 export function isLiveFeedUrl(url: string): boolean {
   try {
     const u = new URL(url);
-    return u.protocol === "https:" && (u.host === RACE_RESULT_HOST || ARROW_HOSTS.has(u.host));
+    return u.protocol === "https:" && (u.host === RACE_RESULT_HOST || ARROW_HOSTS.has(u.host) || athleticLiveRaceId(url) !== null);
   } catch {
     return false;
   }
@@ -156,8 +176,17 @@ export async function fromXmTimingUrl(pageUrl: string): Promise<ParsedContest[]>
   return contests;
 }
 
-/** A single race feed by its link, for live polling: RACE RESULT or Arrow. */
+/** One AthleticLIVE race by its page link: the results document its page reads. */
+export async function fromAthleticLiveUrl(pageUrl: string, options: { live?: boolean } = {}): Promise<ParsedContest> {
+  const id = athleticLiveRaceId(pageUrl);
+  if (!id) throw new SourceError("That AthleticLIVE link isn't a race page (…/meets/<meet>/events/xc/<race>).");
+  const doc = await getJson<unknown>(`${ATHLETIC_LIVE_DOCS}${id}`);
+  return parseAthleticLiveJson(doc, pageUrl.trim(), options);
+}
+
+/** A single race feed by its link, for live polling: RACE RESULT, Arrow or AthleticLIVE. */
 export async function fromFeedUrl(url: string, contestName: string | undefined, options: { live?: boolean } = {}): Promise<ParsedContest> {
+  if (athleticLiveRaceId(url)) return fromAthleticLiveUrl(url, options);
   const u = checkHost(url, (h) => h === RACE_RESULT_HOST || ARROW_HOSTS.has(h));
   return ARROW_HOSTS.has(u.host) ? fromArrowUrl(u.toString(), options) : fromRaceResultUrl(u.toString(), contestName, options);
 }
@@ -174,6 +203,9 @@ export async function fromUrl(url: string): Promise<ParsedContest[]> {
   if (BADGER_HOSTS.has(u.host)) return fromBadgerStateUrl(u.toString());
   if (ARROW_HOSTS.has(u.host)) return [await fromArrowUrl(u.toString())];
   if (XM_HOSTS.has(u.host)) return fromXmTimingUrl(u.toString());
+  if (athleticLiveRaceId(u.toString())) return [await fromAthleticLiveUrl(u.toString())];
+  if (/(^|\.)(tracksidetiming\.com|anet\.live|athletic\.net)$/.test(u.host))
+    throw new SourceError("Open the race itself on the results site (Boys Varsity, Girls JV…) and paste that page's link, one per line for several races.");
   throw new SourceError(`No importer for ${u.host} yet. Paste the results as text or upload the PDF instead.`);
 }
 

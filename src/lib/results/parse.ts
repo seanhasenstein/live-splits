@@ -30,7 +30,7 @@ export type ParsedContest = {
   splitLabels: string[];
   entries: ParsedEntry[];
   /** Where it came from, for the import record. */
-  source: { kind: "raceresult" | "arrow" | "text"; url?: string };
+  source: { kind: "raceresult" | "arrow" | "athleticlive" | "text"; url?: string };
   /** Decimals the sheet carries: whole seconds, tenths, hundredths. Never shown finer than this. */
   precision: Precision;
   /** Set when the field was cut down to a division's teams and places recomputed by the app (see restrictToDivision). */
@@ -229,6 +229,57 @@ export function parseResultsText(text: string, contestName = "Pasted results"): 
     });
   }
   return { name: contestName, distanceMeters: null, splitLabels: splitLabels ?? [], entries, source: { kind: "text" }, precision: precisionOf(timeStrings) };
+}
+
+/**
+ * AthleticLIVE (athletic.net's live results, used by Trackside Timing and other timers): one race's
+ * document, `ind_res_list/_doc/<race id>`, the same JSON its race page reads. `r` holds one row per
+ * runner: place `p`, the mark as printed `m` and in ms `im`, and the athlete `a` (first `fn`, last `l`,
+ * grade `y`, bib `cm`, team `t.n`). `live`: a row without a finish is still running, not a DNF.
+ */
+export function parseAthleticLiveJson(doc: unknown, pageUrl: string, options: { live?: boolean } = {}): ParsedContest {
+  type Row = { p?: unknown; m?: unknown; im?: unknown; a?: { n?: unknown; fn?: unknown; l?: unknown; y?: unknown; cm?: unknown; t?: { n?: unknown; f?: unknown } } };
+  const src = ((doc ?? {}) as { _source?: { n?: unknown; ab?: unknown; r?: unknown } })._source ?? {};
+  const rows: Row[] = Array.isArray(src.r) ? (src.r as Row[]) : [];
+  const str = (v: unknown) => (v === null || v === undefined ? "" : String(v).trim());
+  const timeStrings: string[] = [];
+  const entries = rows.flatMap((r): ParsedEntry[] => {
+    const firstName = str(r.a?.fn);
+    const lastName = str(r.a?.l);
+    const name = `${firstName} ${lastName}`.trim() || str(r.a?.n);
+    if (!name) return [];
+    const mark = str(r.m);
+    const fromPlace = placeAndStatus(str(r.p));
+    // A status can sit in the place or in the mark ("DNF").
+    const status = fromPlace.status !== "finished" ? fromPlace.status : placeAndStatus(mark).status;
+    const ms = typeof r.im === "number" && r.im > 0 ? Math.round(r.im) : status === "finished" ? parseElapsed(mark) : null;
+    const finishMs = status === "finished" ? ms : null;
+    if (finishMs !== null) timeStrings.push(mark);
+    return [
+      {
+        firstName,
+        lastName,
+        name,
+        team: str(r.a?.t?.n) || str(r.a?.t?.f) || null,
+        grade: toGrade(r.a?.y),
+        bib: str(r.a?.cm) || null,
+        place: status === "finished" && finishMs !== null ? fromPlace.place : null,
+        // Final results: no finish and no status word is a DNF. Live: they just haven't finished yet.
+        status: status === "finished" && finishMs === null && !options.live ? "dnf" : status,
+        finishMs,
+        splits: {},
+      },
+    ];
+  });
+  const meters = str(src.ab).match(/^(\d+(?:\.\d+)?)\s*m$/i);
+  return {
+    name: str(src.n) || "AthleticLIVE race",
+    distanceMeters: meters ? Number(meters[1]) : null,
+    splitLabels: [],
+    entries,
+    source: { kind: "athleticlive", url: pageUrl },
+    precision: precisionOf(timeStrings),
+  };
 }
 
 /** A column-per-cell header ("Place Points Bib Name School Gender Grade Time Pace"), told apart from the "… Finish" layouts above. */

@@ -81,7 +81,7 @@ const ParsedContestSchema = z.object({
       splits: z.record(z.string(), z.int().nonnegative()),
     }),
   ),
-  source: z.object({ kind: z.enum(["raceresult", "arrow", "text"]), url: z.string().optional() }),
+  source: z.object({ kind: z.enum(["raceresult", "arrow", "athleticlive", "text"]), url: z.string().optional() }),
   precision: z.enum(["seconds", "tenths", "hundredths", "thousandths"]),
   division: z.object({ teams: z.array(z.string().min(1)).min(1) }).optional(),
 });

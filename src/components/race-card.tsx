@@ -372,7 +372,7 @@ function AdjustSheet({
         {!hasOfficial && !finished && (
           <Option
             title="Live official results"
-            description="Paste the timing company's results link. While the race runs, the board polls it (at most every 15 s) and shows official finishes as they post. Import the results after the race as usual."
+            description="Paste the timing company's link for this race (for Trackside Timing, open the race on their results site and copy that page's link). While the race runs, the board polls it (at most every 15 s) and shows official finishes as they post. Import the results after the race as usual."
             action={<LiveFeedControl raceId={raceId} liveFeed={liveFeed} onSaved={() => onChanged({})} />}
           />
         )}

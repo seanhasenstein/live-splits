@@ -316,7 +316,7 @@ export async function setLiveFeedAction(raceId: string, feed: { url: string; con
   const parsed = z.object({ url: z.url(), contestName: z.string().max(200).nullable() }).nullable().safeParse(feed);
   if (!parsed.success) return { error: "That isn't a valid link." };
   // Only feeds the server knows how to read get polled.
-  if (parsed.data && !isLiveFeedUrl(parsed.data.url)) return { error: "Only RACE RESULT feeds (api.raceresult.com) and Arrow Live Results pages (arrowliveresults.com) can be polled live." };
+  if (parsed.data && !isLiveFeedUrl(parsed.data.url)) return { error: "Only RACE RESULT feeds (api.raceresult.com), Arrow Live Results pages (arrowliveresults.com) and AthleticLIVE race pages (Trackside Timing and others) can be polled live." };
   await collection(await getDb(), "races").updateOne({ _id: race._id }, { $set: { liveFeed: parsed.data, updatedAt: new Date(), updatedBy: sessionActor(session!) } });
   return {};
 }

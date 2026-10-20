@@ -35,7 +35,7 @@ export function ImportWizard({ meetId, races, athletes, teamAliases, resultsUrl 
             ]}
           />
           {kind === "url" && (
-            <Field label="Results links" hint="A Badger State Timing or XM Timing meet page (every race at once), or single-race links (RACE RESULT feed, Arrow Live Results page), one per line — several for a combined race.">
+            <Field label="Results links" hint="A Badger State Timing or XM Timing meet page (every race at once), or single-race links, one per line: a Trackside Timing (AthleticLIVE) race page, an Arrow Live Results page, or a RACE RESULT feed. Several for a combined race.">
               <textarea
                 name="url"
                 defaultValue={resultsUrl ?? ""}

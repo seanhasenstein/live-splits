@@ -6,8 +6,8 @@
 import { readFileSync } from "node:fs";
 import { afterEach, expect, test, vi } from "vitest";
 import { isOurTeam } from "./match";
-import { COLUMN_HEADER_RE, parseArrowResultsHtml, parseColumnResults, parseRaceResultJson, parseResultsText } from "./parse";
-import { fromUrl, SourceError } from "./sources";
+import { COLUMN_HEADER_RE, parseArrowResultsHtml, parseAthleticLiveJson, parseColumnResults, parseRaceResultJson, parseResultsText } from "./parse";
+import { athleticLiveRaceId, fromFeedUrl, fromUrl, isLiveFeedUrl, SourceError } from "./sources";
 
 const F = `${process.cwd()}/src/lib/results/fixtures`;
 const read = (name: string) => readFileSync(`${F}/${name}`, "utf8");
@@ -76,6 +76,44 @@ test("Trackside every-race PDF (read with a tab per text item): one contest per 
 test("the column layout's header doesn't claim the Finish-column PDFs", () => {
   expect(COLUMN_HEADER_RE.test(read("badger-pdf-text.txt"))).toBe(false);
   expect(COLUMN_HEADER_RE.test(read("hand-split-pdf-text.txt"))).toBe(false);
+});
+
+test("AthleticLIVE race document (Trackside Timing): places, names, teams, grades, bibs, ms finishes", () => {
+  const c = parseAthleticLiveJson(JSON.parse(read("athleticlive-race.json")), "https://results.tracksidetiming.com/meets/1/events/xc/1001");
+  expect(c.name).toBe("Boys Varsity");
+  expect(c.distanceMeters).toBe(5000);
+  expect(c.entries).toHaveLength(58);
+  expect(c.entries.map((e) => e.place)).toEqual(c.entries.map((_, i) => i + 1));
+  expect(c.entries[1]).toMatchObject({ name: "Eddy Giebler", firstName: "Eddy", lastName: "Giebler", team: "Sheboygan Area Lutheran", grade: 10, bib: "7817", status: "finished", finishMs: 16 * 60_000 + 41_900 });
+  expect(c.entries.at(-1)?.finishMs).toBe(41 * 60_000 + 26_100);
+  expect(c.precision).toBe("tenths");
+  expect(c.source).toEqual({ kind: "athleticlive", url: "https://results.tracksidetiming.com/meets/1/events/xc/1001" });
+  expect(c.entries.filter((e) => isOurTeam(e.team, ALIASES))).toHaveLength(1);
+});
+
+test("AthleticLIVE statuses: a DNF in the place or the mark; no finish is a DNF in final results, still running live", () => {
+  const doc = { _source: { n: "Girls JV", ab: "5000m", r: [
+    { p: "1", m: "19:02.3", im: 1142300, a: { fn: "Alex", l: "Abbott", y: "11", t: { n: "North Academy" } } },
+    { p: "DNF", m: "", im: 0, a: { fn: "Blake", l: "Barlow", y: "09", t: { n: "South Academy" } } },
+    { p: "", m: "DNS", a: { fn: "Casey", l: "Cole", y: "10", t: { n: "East Academy" } } },
+    { p: "", m: "", a: { fn: "Drew", l: "Dalton", y: "12", t: { n: "West Academy" } } },
+  ] } };
+  const final = parseAthleticLiveJson(doc, "x");
+  expect(final.entries.map((e) => [e.name, e.status, e.place, e.finishMs])).toEqual([
+    ["Alex Abbott", "finished", 1, 1142300],
+    ["Blake Barlow", "dnf", null, null],
+    ["Casey Cole", "dns", null, null],
+    ["Drew Dalton", "dnf", null, null],
+  ]);
+  expect(parseAthleticLiveJson(doc, "x", { live: true }).entries[3]).toMatchObject({ status: "finished", finishMs: null, place: null });
+});
+
+test("AthleticLIVE race links: the race id on any timer's domain, never a meet page", () => {
+  expect(athleticLiveRaceId("https://results.tracksidetiming.com/meets/79348/events/xc/2933040")).toBe("2933040");
+  expect(athleticLiveRaceId("https://dakotatiming.anet.live/meets/5/events/xc/77/")).toBe("77");
+  expect(athleticLiveRaceId("https://results.tracksidetiming.com/meets/79348")).toBeNull();
+  expect(athleticLiveRaceId("http://results.tracksidetiming.com/meets/1/events/xc/2")).toBeNull();
+  expect(isLiveFeedUrl("https://results.tracksidetiming.com/meets/79348/events/xc/2933040")).toBe(true);
 });
 
 // ---- The fetch chain, with the network replaced by fixtures.
@@ -163,4 +201,16 @@ test("a redirect off the known hosts, or a huge body, is refused", async () => {
 test("several links at once: a bad one names itself", async () => {
   serve(arrowRoutes());
   await expect(fromUrl(`${ARROW}/BoysJVSmSchool2026SampleInvite`)).rejects.toThrow(/no event on it/);
+});
+
+test("an AthleticLIVE race page: fetched from AthleticLIVE's storage by its id, never from the page's host", async () => {
+  const DOCS = "https://athleticlive.blob.core.windows.net/$web/ind_res_list/_doc/";
+  const calls = serve({ [`${DOCS}1001`]: read("athleticlive-race.json") });
+  const page = "https://results.tracksidetiming.com/meets/1/events/xc/1001";
+  const [c] = await fromUrl(page);
+  expect(c.entries).toHaveLength(58);
+  expect(calls).toEqual([`${DOCS}1001`]);
+  const live = await fromFeedUrl(page, undefined, { live: true });
+  expect(live.entries[0].finishMs).toBe(16 * 60_000 + 4_500);
+  await expect(fromUrl("https://results.tracksidetiming.com/meets/1")).rejects.toThrow(/race itself/);
 });
