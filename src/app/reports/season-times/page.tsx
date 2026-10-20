@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ReportShell, Sheet, td, teamBrand, th } from "@/components/report/report";
 import { getSession, isSchoolWide } from "@/lib/auth/session";
@@ -79,7 +80,9 @@ export default async function SeasonTimesPage({ searchParams }: PageProps<"/repo
               {byGender[g.key].map((r) => (
                 <tr key={r.athlete.id}>
                   <td className={`${td} pr-2 font-medium`}>
-                    {r.athlete.name}
+                    <Link href={`/athletes/${r.athlete.id}`} className="hover:underline">
+                      {r.athlete.name}
+                    </Link>
                     {r.athlete.grade !== null && <span className="ml-1 text-[8.5px] text-[var(--r-ink-3)]">{r.athlete.grade}</span>}
                   </td>
                   {r.cells.map((cell, i) => (

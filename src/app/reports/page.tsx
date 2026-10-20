@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { CalendarRange, ClipboardList, UserRound } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { SectionTabs } from "@/components/section-tabs";
 import { SessionMenu } from "@/components/session-menu";
-import { AppHeader, Card, CardHeader, LinkButton, ListRow, Page, PageTitle } from "@/components/ui";
+import { AppHeader, Card, CardHeader, LinkButton, ListRow, Page, PageTitle, SectionLabel } from "@/components/ui";
 import { getSession, isSchoolCoach, isSchoolWide } from "@/lib/auth/session";
 import { loadSeasonContext } from "@/lib/reports/context";
 import { formatLocalDate } from "@/lib/time";
@@ -30,6 +31,24 @@ export default async function ReportsPage() {
         <Card className="mb-4">
           <CardHeader title="Season" />
           <ListRow href="/reports/season-times" icon={<CalendarRange />} title="Season times" description="Every runner by every meet, boys and girls" />
+        </Card>
+        <Card className="mb-4">
+          <CardHeader title="Athletes" description="Each runner's career: every race, by season, with splits and places" />
+          {(["F", "M"] as const).map((g) => {
+            const group = ctx.roster.filter((a) => a.gender === g).sort((a, b) => a.displayName.localeCompare(b.displayName));
+            return group.length === 0 ? null : (
+              <div key={g} className="border-t border-line px-4 py-3">
+                <SectionLabel className="mb-2">{g === "F" ? "Girls" : "Boys"}</SectionLabel>
+                <div className="flex flex-wrap gap-1.5">
+                  {group.map((a) => (
+                    <Link key={a._id} href={`/athletes/${a._id}`} className="rounded-md border border-line px-2 py-1 text-[13px] text-ink hover:bg-surface-2">
+                      {a.displayName}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </Card>
         <Card>
           <CardHeader title="Meet reports" description="Before a meet: the race day sheet for the mile marks, and a preview page for each runner" />

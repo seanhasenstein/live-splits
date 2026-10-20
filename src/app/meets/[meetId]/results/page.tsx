@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { Board } from "@/components/board";
-import { can, getSession, isSchoolCoach } from "@/lib/auth/session";
+import { can, getSession, isSchoolCoach, isSchoolWide } from "@/lib/auth/session";
 import { getMeet, getProgram, getSchool, listAthletes, listDistances, listRaces } from "@/lib/data";
 import { ourTeamOf } from "@/lib/race-places";
 import { getDb } from "@/lib/db/client";
@@ -37,6 +37,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps<"/
       meetName={meet.name}
       meetDate={meet.date}
       session={{ name: session.name, role: isSchoolCoach(session) ? "coach" : session.role }}
+      careerLinks={isSchoolWide(session)}
       initialRaceId={typeof race === "string" ? race : null}
       timeZone={meet.timeZone}
       races={races.map((r, i) => ({

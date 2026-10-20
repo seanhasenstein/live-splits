@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Fragment, type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, History as HistoryIcon, Info, MoveHorizontal, Pencil, Share } from "lucide-react";
+import { ChevronLeft, ChevronRight, History as HistoryIcon, Info, MoveHorizontal, Pencil, Share, UserRound } from "lucide-react";
 import { PlacesCard } from "@/components/places-card";
 import { TeamCard, type TeamRow } from "@/components/team-card";
 import { CheckpointCounts, DeltaText, RaceStatusBar, RecordPill, RunningClock, StatusPill } from "@/components/race-status";
@@ -61,6 +61,8 @@ type Props = {
   initialAthleteId: string | null;
   canFix: boolean;
   canTap: boolean;
+  /** School-wide sessions can open an athlete's career page from their sheet. */
+  careerLinks?: boolean;
 };
 
 /** A time that just arrived glows this long. */
@@ -72,7 +74,7 @@ const OVERDUE_MS = 60_000;
 const eventTimeMs = (_e: SyntheticEvent) => Date.now();
 
 
-export function Board({ meetId, meetName, meetDate, session, initialRaceId, timeZone, races, athletes, genders, grades, initialAthleteId, canFix, canTap }: Props) {
+export function Board({ meetId, meetName, meetDate, session, initialRaceId, timeZone, races, athletes, genders, grades, initialAthleteId, canFix, canTap, careerLinks = false }: Props) {
   const [raceId, setRaceId] = useState(() => (races.some((r) => r.id === initialRaceId) ? initialRaceId! : (races[0]?.id ?? "")));
   const race = races.find((r) => r.id === raceId) ?? races[0];
 
@@ -119,6 +121,7 @@ export function Board({ meetId, meetName, meetDate, session, initialRaceId, time
           onInitialAthleteShown={() => setPendingAthlete(null)}
           canFix={canFix}
           canTap={canTap}
+          careerLinks={careerLinks}
         />
       </main>
     </>
@@ -142,6 +145,7 @@ function RaceBoard({
   onInitialAthleteShown,
   canFix,
   canTap,
+  careerLinks,
 }: {
   meetId: string;
   meetName: string;
@@ -155,6 +159,7 @@ function RaceBoard({
   onInitialAthleteShown: () => void;
   canFix: boolean;
   canTap: boolean;
+  careerLinks: boolean;
 }) {
   const clock = useClock();
   const { taps, gunTimeMs, official, field, places: livePlaces, officialLive, finished, longRunning, staleMinutes, send, online, loaded, recording, seenAt } = useRaceTaps(raceIn.id, raceIn.gunTimeMs);
@@ -934,6 +939,7 @@ function RaceBoard({
             return { prev: prev ? { id: prev, name: athletes[prev] ?? "?" } : null, next: next ? { id: next, name: athletes[next] ?? "?" } : null };
           })()}
           onPick={setAthleteSheet}
+          careerHref={careerLinks ? `/athletes/${openAthlete}` : null}
           projectAt={(i) => {
             const r = allRows.find((x) => x.athleteId === openAthlete);
             return r ? projectAt(r, i) : null;
@@ -1002,6 +1008,7 @@ type Send = ReturnType<typeof useRaceTaps>["send"];
 
 /** One runner's race at a readable size, with how it compares to their last meet. */
 function AthleteSheet({
+  careerHref,
   race,
   meetName,
   meetDate,
@@ -1031,6 +1038,7 @@ function AthleteSheet({
   onPick: (id: string) => void;
   /** Projected elapsed time at checkpoint i while the race runs, else null. */
   projectAt: (i: number) => number | null;
+  careerHref: string | null;
   /** Their place at checkpoint i when places were counted there (null otherwise). */
   placeAt: (i: number) => { place: number; overall: boolean; gained: number | null } | null;
   overdue: (projected: number) => boolean;
@@ -1357,6 +1365,14 @@ function AthleteSheet({
           );
         })}
       </div>
+      {careerHref && (
+        <Link href={careerHref} className="mt-3 flex items-center gap-2 rounded-lg border border-line px-3 py-2.5 text-sm font-medium text-ink hover:bg-surface-2">
+          <UserRound className="size-4 text-ink-2" />
+          <span className="flex-1">Career page</span>
+          <span className="text-[13px] font-normal text-ink-2">every race, every season</span>
+          <ChevronRight className="size-4 text-ink-3" />
+        </Link>
+      )}
       {finishes.length > 0 && (
         <div className="mt-3 rounded-lg border border-line">
           {/* The row is the section's header; open, the lists and the chart sit inside the same card. */}
