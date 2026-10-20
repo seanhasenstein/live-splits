@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CalendarRange, ClipboardList, UserRound } from "lucide-react";
+import { CalendarRange, ClipboardList, MapPin, UserRound } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { SectionTabs } from "@/components/section-tabs";
 import { SessionMenu } from "@/components/session-menu";
@@ -51,7 +51,7 @@ export default async function ReportsPage() {
           })}
         </Card>
         <Card>
-          <CardHeader title="Meet reports" description="Before a meet: the race day sheet for the mile marks, and a preview page for each runner" />
+          <CardHeader title="Meet reports" description="Before a meet: the race day sheet for the mile marks, a preview page for each runner, and every earlier race on the course" />
           {[...upcoming, ...past].map((m) => (
             <div key={m._id} className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line px-4 py-3">
               <div className="min-w-0 flex-1 basis-48">
@@ -66,6 +66,10 @@ export default async function ReportsPage() {
                 <LinkButton href={`/meets/${m._id}/reports/previews`} size="sm" variant="secondary">
                   <UserRound className="size-4" />
                   Previews
+                </LinkButton>
+                <LinkButton href={`/meets/${m._id}/reports/on-this-course`} size="sm" variant="secondary">
+                  <MapPin className="size-4" />
+                  This course
                 </LinkButton>
               </div>
             </div>
