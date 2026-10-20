@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { CalendarRange, ClipboardList } from "lucide-react";
+import { CalendarRange, ClipboardList, UserRound } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { SectionTabs } from "@/components/section-tabs";
 import { SessionMenu } from "@/components/session-menu";
-import { AppHeader, Card, CardHeader, ListRow, Page, PageTitle } from "@/components/ui";
+import { AppHeader, Card, CardHeader, LinkButton, ListRow, Page, PageTitle } from "@/components/ui";
 import { getSession, isSchoolCoach, isSchoolWide } from "@/lib/auth/session";
 import { loadSeasonContext } from "@/lib/reports/context";
 import { formatLocalDate } from "@/lib/time";
@@ -32,9 +32,24 @@ export default async function ReportsPage() {
           <ListRow href="/reports/season-times" icon={<CalendarRange />} title="Season times" description="Every runner by every meet, boys and girls" />
         </Card>
         <Card>
-          <CardHeader title="Race day sheets" description="Bests and splits on the clock from earlier races, with blank columns for today" />
+          <CardHeader title="Meet reports" description="Before a meet: the race day sheet for the mile marks, and a preview page for each runner" />
           {[...upcoming, ...past].map((m) => (
-            <ListRow key={m._id} href={`/meets/${m._id}/reports/race-day`} icon={<ClipboardList />} title={m.name} description={formatLocalDate(m.date)} />
+            <div key={m._id} className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line px-4 py-3">
+              <div className="min-w-0 flex-1 basis-48">
+                <div className="truncate text-sm font-medium text-ink">{m.name}</div>
+                <div className="text-[13px] text-ink-2">{formatLocalDate(m.date)}</div>
+              </div>
+              <div className="flex gap-2">
+                <LinkButton href={`/meets/${m._id}/reports/race-day`} size="sm" variant="secondary">
+                  <ClipboardList className="size-4" />
+                  Race day sheet
+                </LinkButton>
+                <LinkButton href={`/meets/${m._id}/reports/previews`} size="sm" variant="secondary">
+                  <UserRound className="size-4" />
+                  Previews
+                </LinkButton>
+              </div>
+            </div>
           ))}
         </Card>
       </Page>
