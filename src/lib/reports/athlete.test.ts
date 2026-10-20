@@ -1,12 +1,14 @@
 import { expect, test } from "vitest";
 import { ordinal, segmentsAt, summarizeAthlete, worthKnowing } from "./athlete";
 import type { HistoryRow } from "./history";
+import { shortMeetName } from "./season-times";
 
 const MILE = 1609.344;
 const row = (athleteId: string, raceId: string, meetName: string, date: string, ms: number, extra: Partial<HistoryRow> = {}): HistoryRow => ({
   athleteId,
   meetId: raceId,
   meetName,
+  meetShort: shortMeetName(meetName),
   date,
   seasonId: `s${date.slice(0, 4)}`,
   courseId: null,
@@ -19,6 +21,7 @@ const row = (athleteId: string, raceId: string, meetName: string, date: string, 
   finishMs: ms,
   precision: "tenths",
   place: 10,
+  grade: null,
   fieldSize: 80,
   splits: [
     { label: "Mile 1", meters: MILE, ms: 330_000 },

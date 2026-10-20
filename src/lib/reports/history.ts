@@ -3,6 +3,7 @@ import type { Meet, Precision, Program } from "@/lib/db/schema";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
 import { normalizeName } from "@/lib/results/match";
+import { shortMeetName } from "./season-times";
 
 /**
  * Every race our athletes have on file, one row per athlete per race, for the reports. The same
@@ -14,6 +15,8 @@ export type HistoryRow = {
   athleteId: string;
   meetId: string;
   meetName: string;
+  /** The meet's code for columns and labels: its short name, else one made from its name. */
+  meetShort: string;
   date: string;
   seasonId: string;
   courseId: string | null;
@@ -27,6 +30,8 @@ export type HistoryRow = {
   finishMs: number | null;
   precision: Precision;
   place: number | null;
+  /** Their grade that season, when known. */
+  grade: number | null;
   /** Runners in the race's full field, when the field was imported. */
   fieldSize: number | null;
   /** Cumulative ms by checkpoint, in course order, labelled; the finish isn't included. */
@@ -81,6 +86,7 @@ export async function getTeamHistory(schoolId: string, program: Pick<Program, "_
       athleteId: r.athleteId,
       meetId: meet._id,
       meetName: meet.name,
+      meetShort: meet.shortName ?? shortMeetName(meet.name),
       date: meet.date,
       seasonId: meet.seasonId,
       courseId: meet.courseId,
@@ -93,6 +99,7 @@ export async function getTeamHistory(schoolId: string, program: Pick<Program, "_
       finishMs: finish?.value ?? null,
       precision: finish?.precision ?? "seconds",
       place: r.place,
+      grade: r.gradeSnapshot,
       fieldSize: fieldSize.get(race._id) ?? null,
       splits,
       counts,

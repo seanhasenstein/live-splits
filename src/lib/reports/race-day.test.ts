@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import type { HistoryRow } from "./history";
+import { shortMeetName } from "./season-times";
 import { buildRaceDay } from "./race-day";
 
 const MILE = 1609.344;
@@ -7,6 +8,7 @@ const row = (athleteId: string, meetId: string, meetName: string, date: string, 
   athleteId,
   meetId,
   meetName,
+  meetShort: shortMeetName(meetName),
   date,
   seasonId: date.startsWith("2026") ? "s26" : "s25",
   courseId: null,
@@ -19,6 +21,7 @@ const row = (athleteId: string, meetId: string, meetName: string, date: string, 
   finishMs: ms,
   precision: "tenths",
   place: 1,
+  grade: null,
   fieldSize: null,
   splits: [
     { label: "Mile 1", meters: MILE, ms: Math.round(ms * 0.31) },

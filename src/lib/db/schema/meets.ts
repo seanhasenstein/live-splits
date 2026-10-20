@@ -27,6 +27,8 @@ export const Meet = tenantDoc({
   venueId: Id.nullable(),
   courseId: Id.nullable(),
   name: z.string().min(1),
+  /** The team's code for the meet in reports and grid columns ("KML", "CC", "SECT"). Null: one made from the name. */
+  shortName: z.string().trim().min(1).max(16).nullable().default(null),
   /** Local calendar date + IANA zone, so a Friday night meet never shows as Saturday. */
   date: LocalDate,
   timeZone: TimeZone,

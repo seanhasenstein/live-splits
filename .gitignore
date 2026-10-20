@@ -58,3 +58,6 @@ next-env.d.ts
 
 # Report examples from past meets: other schools' athletes, like official-results/.
 /meet-pdf-examples/
+
+# Other schools' logos, before they go to Blob storage.
+/sectional-meet-logos/

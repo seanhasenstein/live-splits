@@ -2,61 +2,71 @@ import type { AthleteRace } from "@/lib/reports/athlete";
 import { ordinal, segmentsAt } from "@/lib/reports/athlete";
 import { segmentLength } from "@/lib/pace";
 import { formatElapsed } from "@/lib/time";
-import { Pill, td, th } from "./report";
+import { Grade, Pill, td, th } from "./report";
 
 /**
- * An athlete's races as the reports list them: segment splits, finish with its badges, place in the
- * field and among the team, and the change from the race before. The row holding the career best is
- * tinted green; the season best (when it isn't also the career best) gold.
+ * An athlete's races as the reports list them: the finish, each mile on its own, place in the field
+ * and among our runners in that race. The career-best row is tinted green; the season best (when it
+ * isn't also the career best) gold. `career` adds the field size and the change from the race before.
  */
-export function AthleteRacesTable({ races, splitLabels, finishMeters, showVsPrev = true, tintBests = true }: { races: AthleteRace[]; splitLabels: { label: string; meters: number }[]; finishMeters: number | null; showVsPrev?: boolean; tintBests?: boolean }) {
+export function AthleteRacesTable({
+  races,
+  splitLabels,
+  finishMeters,
+  label,
+  career = false,
+}: {
+  races: AthleteRace[];
+  splitLabels: { label: string; meters: number }[];
+  finishMeters: number | null;
+  /** The first column's text for a race ("2025 Crusader Challenge", "KML"). */
+  label: (r: AthleteRace) => string;
+  career?: boolean;
+}) {
   const t = (ms: number | null) => (ms === null ? "—" : formatElapsed(ms, "seconds"));
   const last = finishMeters !== null && splitLabels.length > 0 ? segmentLength(finishMeters - splitLabels[splitLabels.length - 1].meters) : null;
-  const segHeads = [...splitLabels.map((s) => s.label), last ? `Last ${last}` : "To finish"];
+  const segHeads = [...splitLabels.map((s) => s.label), last ? `Final ${last.replace(" mi", "")}` : "To finish"];
   return (
     <table className="w-full border-collapse">
       <thead>
         <tr>
           <th className={th}>Race</th>
+          <th className={`${th} text-right`}>Time</th>
           {segHeads.map((h) => (
             <th key={h} className={`${th} text-right`}>
               {h}
             </th>
           ))}
-          <th className={`${th} text-right`}>Finish</th>
           <th className={`${th} text-right`}>Place</th>
-          <th className={`${th} text-right`}>Team</th>
-          {showVsPrev && <th className={`${th} text-right`}>Vs prev</th>}
+          <th className={`${th} text-right`}>Team place</th>
+          {career && <th className={`${th} text-right`}>Vs prev</th>}
         </tr>
       </thead>
       <tbody>
         {races.map((r) => {
-          const tint = tintBests && r.pr ? "bg-[#eef4ec]" : tintBests && r.sb ? "bg-[var(--r-cream)]" : "";
+          const tint = r.pr ? "bg-[var(--r-green-tint)]" : r.sb ? "bg-[var(--r-cream)]" : "";
           const segs = segmentsAt(r, splitLabels);
           return (
             <tr key={r.raceId} className={tint}>
               <td className={`${td} pr-2`}>
-                <span className="font-medium">{r.label}</span>
-                {r.levelId === "jv" && <Pill kind="jv" className="ml-1" />}
-                {r.courseBest && <Pill kind="course" className="ml-1" />}
+                {label(r)}
+                {r.grade !== null && r.grade <= 12 && <Grade>Gr {r.grade}</Grade>}
+                {r.courseBest && <Pill kind="course" className="ml-1.5" />}
               </td>
+              <td className={`${td} text-right font-bold ${r.pr ? "text-[var(--r-green)]" : r.sb ? "text-[var(--r-gold-text)]" : ""}`}>{r.status === "finished" ? t(r.finishMs) : r.status.toUpperCase()}</td>
               {segs.map((ms, i) => (
-                <td key={i} className={`${td} text-right text-[var(--r-ink-2)]`}>
+                <td key={i} className={`${td} text-right`}>
                   {t(ms)}
                 </td>
               ))}
-              <td className={`${td} text-right font-semibold ${r.pr ? "text-[var(--r-green-text)]" : ""}`}>
-                {r.status === "finished" ? t(r.finishMs) : r.status.toUpperCase()}
-                {r.pr && <Pill kind="pr" className="ml-1" />}
-                {r.sb && !r.pr && <Pill kind="sb" className="ml-1" />}
-              </td>
               <td className={`${td} text-right`}>
                 {r.place ? ordinal(r.place) : "—"}
-                {r.place && r.fieldSize ? <span className="text-[var(--r-ink-3)]"> of {r.fieldSize}</span> : null}
+                {r.place && r.levelId === "jv" ? <span className="text-[var(--r-ink-2)]"> JV</span> : null}
+                {career && r.place && r.fieldSize ? <span className="text-[var(--r-ink-3)]"> of {r.fieldSize}</span> : null}
               </td>
-              <td className={`${td} text-right text-[var(--r-ink-2)]`}>{r.teamPlace ? `${r.teamPlace.place} of ${r.teamPlace.of}` : "—"}</td>
-              {showVsPrev && (
-                <td className={`${td} text-right font-medium ${r.vsPrev === null ? "" : r.vsPrev < 0 ? "text-[var(--r-green-text)]" : r.vsPrev > 0 ? "text-[var(--r-red)]" : ""}`}>
+              <td className={`${td} text-right`}>{r.teamPlace ? `${r.teamPlace.place} of ${r.teamPlace.of}` : "—"}</td>
+              {career && (
+                <td className={`${td} text-right font-medium ${r.vsPrev === null ? "" : r.vsPrev < 0 ? "text-[var(--r-green)]" : r.vsPrev > 0 ? "text-[var(--r-red)]" : ""}`}>
                   {r.vsPrev === null ? "" : r.vsPrev === 0 ? "±0:00" : `${r.vsPrev < 0 ? "−" : "+"}${formatElapsed(Math.abs(r.vsPrev), "seconds")}`}
                 </td>
               )}
@@ -65,20 +75,5 @@ export function AthleteRacesTable({ races, splitLabels, finishMeters, showVsPrev
         })}
       </tbody>
     </table>
-  );
-}
-
-/** The big-number strip at the top of an athlete page. */
-export function KpiStrip({ items }: { items: { label: string; value: string; note?: string; tone?: "green" | "gold" }[] }) {
-  return (
-    <div className="mb-5 grid grid-cols-4 gap-px overflow-hidden rounded-md bg-[var(--r-line)] max-sm:grid-cols-2">
-      {items.map((k) => (
-        <div key={k.label} className="bg-[var(--r-cream)] px-3 py-2.5">
-          <div className="text-[8px] font-bold tracking-[0.12em] text-[var(--r-ink-2)] uppercase">{k.label}</div>
-          <div className={`mt-0.5 text-[20px] leading-tight font-extrabold ${k.tone === "gold" ? "text-[var(--r-gold-text)]" : k.tone === "green" ? "text-[var(--r-green)]" : "text-[var(--r-ink)]"}`}>{k.value}</div>
-          {k.note && <div className="mt-0.5 truncate text-[9px] text-[var(--r-ink-2)]">{k.note}</div>}
-        </div>
-      ))}
-    </div>
   );
 }

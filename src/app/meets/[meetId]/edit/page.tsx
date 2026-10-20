@@ -36,6 +36,7 @@ export default async function EditMeetPage({ params }: PageProps<"/meets/[meetId
             venueState: venue?.state ?? "",
             courseId: meet.courseId,
             resultsUrl: meet.resultsUrl ?? "",
+            shortName: meet.shortName ?? "",
             recordsExclusionReason: meet.recordsExclusion ? (meet.recordsExclusion.reason ?? "") : null,
           }}
           cancelHref={`/meets/${meet._id}`}

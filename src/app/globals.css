@@ -206,38 +206,82 @@ input[type="time"] {
 }
 
 /*
- * Reports: Letter-size sheets in the team's print look (the meet PDFs). Always light, whatever the
- * app theme, so the page on screen is the page on paper. On a phone the sheet narrows to the screen.
+ * Reports (the team's meet PDFs). One markup, two looks:
+ * - paper: a Letter page in the print colors, always light. This is what prints, and the
+ *   "Print layout" view on screen.
+ * - web: the same report as an app page, in the app's light or dark theme ("Web" view).
+ * Printing always gives paper, whichever view is on screen.
  */
 .report-sheet {
+  --r-bg: #ffffff;
   --r-ink: #17241a;
   --r-ink-2: #5b6159;
-  --r-ink-3: #9a9e97;
-  --r-green: #184a23;
-  --r-green-text: #1d5a2b;
+  --r-ink-3: #a0a39c;
+  --r-line: #e4e4df;
+  --r-rule: #6b6f69;
+  --r-green: #1f4d2a;
+  --r-green-fill: #184a23;
+  --r-green-tint: #eaf2e8;
   --r-gold: #c9a227;
   --r-gold-text: #8a6b00;
-  --r-cream: #fbf6e6;
-  --r-line: #e3e3dd;
+  --r-cream: #fbf6e3;
   --r-red: #b42318;
+  --r-panel: #f3f3f0;
   color-scheme: light;
-  background: #ffffff;
+  background: var(--r-bg);
   color: var(--r-ink);
   width: 8.5in;
   min-height: 11in;
   margin: 0 auto 24px;
-  padding: 0.5in 0.55in 0.45in;
+  padding: 0.5in 0.55in 0.4in;
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow);
   font-variant-numeric: tabular-nums;
 }
-@media (max-width: 8.9in) {
+@media screen and (max-width: 8.9in) {
   .report-sheet {
     width: 100%;
     min-height: 0;
     padding: 20px 14px;
   }
+}
+@media screen {
+  .report-web .report-sheet {
+    --r-bg: var(--surface);
+    --r-ink: var(--ink);
+    --r-ink-2: var(--ink-2);
+    --r-ink-3: var(--ink-3);
+    --r-line: var(--line);
+    --r-rule: var(--line-strong);
+    --r-green: var(--brand-text);
+    --r-green-fill: var(--brand);
+    --r-green-tint: var(--brand-soft);
+    --r-gold: #d4ae2c;
+    --r-gold-text: var(--gold-text);
+    --r-cream: color-mix(in oklab, var(--gold-soft) 55%, var(--surface));
+    --r-red: var(--danger);
+    --r-panel: var(--surface-2);
+    color-scheme: inherit;
+    width: auto;
+    max-width: 64rem;
+    min-height: 0;
+    margin: 0 auto 20px;
+    padding: 28px 32px 22px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+  }
+}
+@media screen and (max-width: 640px) {
+  .report-web .report-sheet {
+    padding: 18px 14px;
+    border-radius: 0;
+    border-width: 1px 0;
+  }
+}
+/* A darker rule after every third row, so a long table reads in small groups. */
+.report-grouped > tbody > tr:nth-child(3n):not(:last-child) > td {
+  border-bottom: 1px solid var(--r-rule);
 }
 @media print {
   @page {
@@ -255,7 +299,7 @@ input[type="time"] {
     width: 8.5in;
     min-height: 11in;
     margin: 0;
-    padding: 0.5in 0.55in 0.45in;
+    padding: 0.5in 0.55in 0.4in;
     box-shadow: none;
     break-after: page;
     -webkit-print-color-adjust: exact;

@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ReportShell, Sheet, td, teamBrand, th } from "@/components/report/report";
+import { MajorHeading, ReportShell, Sheet, TableWrap, td, teamBrand, th } from "@/components/report/report";
 import { getSession, isSchoolWide } from "@/lib/auth/session";
 import { loadSeasonContext, mainDistance } from "@/lib/reports/context";
 import { buildSeasonTimes } from "@/lib/reports/season-times";
-import { formatDateWithYear, formatElapsed } from "@/lib/time";
+import { formatElapsed, formatLocalDateLong } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Season times" };
 
@@ -26,7 +26,7 @@ export default async function SeasonTimesPage({ searchParams }: PageProps<"/repo
 
   const season = ctx.history.filter((r) => r.seasonId === ctx.season._id);
   const { columns, byGender } = buildSeasonTimes({
-    meets: ctx.meets.map((m) => ({ id: m._id, name: m.name, date: m.date })),
+    meets: ctx.meets.map((m) => ({ id: m._id, name: m.name, shortName: m.shortName, date: m.date })),
     athletes: ctx.roster.map((a) => ({ id: a._id, name: a.displayName, gender: a.gender, grade: a.grade })),
     rows: season,
     distanceId: mainDistance(season),
@@ -36,7 +36,7 @@ export default async function SeasonTimesPage({ searchParams }: PageProps<"/repo
   const latestMeet = latest && ctx.meets.find((m) => m._id === latest.meetId);
   const team = teamBrand(ctx.school);
   const t = (ms: number) => formatElapsed(ms, "seconds");
-  const md = (date: string) => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
+  const updated = formatLocalDateLong(ctx.today).replace(/^[A-Za-z]+, /, "");
 
   return (
     <ReportShell back={{ href: "/reports", label: "Reports" }} title="Season times" subtitle={ctx.season.label}>
@@ -45,63 +45,60 @@ export default async function SeasonTimesPage({ searchParams }: PageProps<"/repo
           key={g.key}
           team={team}
           header={{
-            title: `Season Times · ${g.label}`,
+            title: "Season Times",
             subline: (
               <>
-                <span className="font-semibold text-[var(--r-ink)]">{ctx.season.label} season</span>
-                {latestMeet ? ` · through the ${latestMeet.name}` : " · no results yet"}
+                <span className="font-semibold text-[var(--r-ink)]">{ctx.season.label} Season</span>
+                {latestMeet ? ` · through the ${latestMeet.name} · ${formatLocalDateLong(latestMeet.date).replace(/^[A-Za-z]+, /, "")}` : " · no results yet"}
               </>
             ),
           }}
           legend={
             <>
-              <span className="font-semibold text-[var(--r-green-text)]">Bold green</span>: season best. <span className="text-[var(--r-ink-3)]">Gray columns</span>: meets still to come. <sup>JV</sup>: ran the JV race. Times are
-              the team&apos;s official finishes, in whole seconds.
+              <span className="font-bold text-[var(--r-green)]">Bold green</span> season best · <sup>JV</sup> ran the JV race · blank = did not run · gray columns are still to come · times truncated to whole seconds
             </>
           }
-          tag={`Updated ${formatDateWithYear(ctx.today)}`}
+          tag={`Updated ${updated}`}
         >
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th className={th}>Athlete</th>
-                {columns.map((c) => (
-                  <th key={c.meetId} className={`${th} text-center ${c.future ? "text-[var(--r-ink-3)]" : ""}`}>
-                    <span className={`block normal-case ${c.latest ? "text-[var(--r-ink)]" : ""}`} style={{ letterSpacing: 0 }}>
+          <MajorHeading>{g.label}</MajorHeading>
+          <TableWrap>
+            <table className="report-grouped w-full border-collapse">
+              <thead>
+                <tr>
+                  <th className={th}>Athlete</th>
+                  {columns.map((c) => (
+                    <th key={c.meetId} className={`${th} text-center ${c.future ? "text-[var(--r-ink-3)]!" : c.latest ? "text-[var(--r-ink)]!" : ""}`}>
                       {c.label}
-                    </span>
-                    <span className="block font-medium">{md(c.date)}</span>
-                  </th>
-                ))}
-                <th className={`${th} text-right`}>Best</th>
-              </tr>
-            </thead>
-            <tbody>
-              {byGender[g.key].map((r) => (
-                <tr key={r.athlete.id}>
-                  <td className={`${td} pr-2 font-medium`}>
-                    <Link href={`/athletes/${r.athlete.id}`} className="hover:underline">
-                      {r.athlete.name}
-                    </Link>
-                    {r.athlete.grade !== null && <span className="ml-1 text-[8.5px] text-[var(--r-ink-3)]">{r.athlete.grade}</span>}
-                  </td>
-                  {r.cells.map((cell, i) => (
-                    <td key={columns[i].meetId} className={`${td} text-center ${columns[i].future ? "bg-[#f7f7f4]" : ""} ${columns[i].latest ? "font-semibold" : ""}`}>
-                      {cell && (
-                        <span className={cell.best ? "font-bold text-[var(--r-green-text)]" : ""}>
-                          {t(cell.ms)}
-                          {cell.jv && <sup className="ml-px text-[6.5px] font-semibold text-[var(--r-ink-3)]">JV</sup>}
-                        </span>
-                      )}
-                    </td>
+                    </th>
                   ))}
-                  <td className={`${td} text-right font-bold text-[var(--r-green-text)]`}>{r.bestMs !== null ? t(r.bestMs) : ""}</td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {byGender[g.key].map((r) => (
+                  <tr key={r.athlete.id}>
+                    <td className={`${td} pr-3 font-semibold`}>
+                      <Link href={`/athletes/${r.athlete.id}`} className="hover:underline">
+                        {r.athlete.name}
+                      </Link>
+                    </td>
+                    {r.cells.map((cell, i) => (
+                      <td key={columns[i].meetId} className={`${td} text-center ${columns[i].latest ? "font-semibold" : ""}`}>
+                        {cell && (
+                          <span className={cell.best ? "font-bold text-[var(--r-green)]" : ""}>
+                            {t(cell.ms)}
+                            {cell.jv && <sup className="ml-px text-[6.5px] font-semibold text-[var(--r-ink-3)]">JV</sup>}
+                          </span>
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
         </Sheet>
       ))}
     </ReportShell>
   );
 }
+

@@ -5,7 +5,7 @@ import type { HistoryRow } from "./history";
  * board after each meet. Pure, so it can be tested without a database.
  */
 
-export type SeasonMeet = { id: string; name: string; date: string };
+export type SeasonMeet = { id: string; name: string; shortName?: string | null; date: string };
 export type SeasonAthlete = { id: string; name: string; gender: string; grade: number | null };
 
 export type SeasonColumn = { meetId: string; label: string; date: string; future: boolean; latest: boolean };
@@ -17,7 +17,7 @@ export function buildSeasonTimes(input: { meets: SeasonMeet[]; athletes: SeasonA
   // A meet with results is past whatever its date; one without, on or after today, is still to come.
   const withResults = new Set(input.rows.map((r) => r.meetId));
   const latestId = [...meets].reverse().find((m) => withResults.has(m.id))?.id ?? null;
-  const columns = meets.map((m) => ({ meetId: m.id, label: shortMeetName(m.name), date: m.date, future: !withResults.has(m.id) && m.date >= input.today, latest: m.id === latestId }));
+  const columns = meets.map((m) => ({ meetId: m.id, label: m.shortName ?? shortMeetName(m.name), date: m.date, future: !withResults.has(m.id) && m.date >= input.today, latest: m.id === latestId }));
 
   const timed = input.rows.filter((r) => r.finishMs !== null && r.status === "finished" && (input.distanceId === null || r.distanceId === input.distanceId));
   const byGender: Record<string, SeasonRow[]> = {};

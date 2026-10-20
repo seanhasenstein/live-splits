@@ -1,6 +1,5 @@
 import { formatElapsed } from "@/lib/time";
 import type { HistoryRow } from "./history";
-import { shortMeetName } from "./season-times";
 
 /**
  * One athlete's races, ready for the athlete pages and race previews: segment splits (Mile 1,
@@ -58,7 +57,7 @@ export function summarizeAthlete(input: {
     const teamPlace = finished && mates.length > 0 ? { place: 1 + mates.filter((m) => m.finishMs! < r.finishMs!).length, of: mates.length } : null;
     const vsPrev = finished && prevMs !== null ? r.finishMs! - prevMs : null;
     if (finished && r.counts) prevMs = r.finishMs;
-    return { ...r, label: `'${r.date.slice(2, 4)} ${shortMeetName(r.meetName)}`, teamPlace, vsPrev, pr: false, sb: false, courseBest: false };
+    return { ...r, label: `'${r.date.slice(2, 4)} ${r.meetShort}`, teamPlace, vsPrev, pr: false, sb: false, courseBest: false };
   });
 
   const fastest = (rs: AthleteRace[]) => rs.filter((r) => r.counts && r.finishMs !== null).reduce<AthleteRace | null>((b, r) => (b === null || r.finishMs! < b.finishMs! ? r : b), null);
@@ -119,10 +118,10 @@ export function worthKnowing(s: AthleteSummary, opts: { series: string; team: st
   if (streak >= 2) facts.push(`First ${opts.team} runner across the line in each of the last ${streak} races.`);
   const first = s.season.find((r) => r.finishMs !== null);
   if (first && s.seasonBest && s.seasonBest !== first && s.seasonBest.finishMs! < first.finishMs!) {
-    facts.push(`${t(first.finishMs! - s.seasonBest.finishMs!)} faster than the first race of the season (${t(first.finishMs!)} at ${shortMeetName(first.meetName)}).`);
+    facts.push(`${t(first.finishMs! - s.seasonBest.finishMs!)} faster than the first race of the season (${t(first.finishMs!)} at ${first.meetShort}).`);
   }
   if (s.courseBest && facts.length < (opts.max ?? 3)) {
-    facts.push(`Best on this course: ${t(s.courseBest.finishMs!)} at ${shortMeetName(s.courseBest.meetName)} ${s.courseBest.date.slice(0, 4)}.`);
+    facts.push(`Best on this course: ${t(s.courseBest.finishMs!)} at ${s.courseBest.meetShort} ${s.courseBest.date.slice(0, 4)}.`);
   }
   return facts.slice(0, opts.max ?? 3);
 }

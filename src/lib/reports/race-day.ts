@@ -1,5 +1,4 @@
 import type { HistoryRow } from "./history";
-import { shortMeetName } from "./season-times";
 
 /**
  * Race Day Sheet: for the clipboard at the mile marks. Each runner's career and season bests, and
@@ -29,7 +28,7 @@ export function buildRaceDay(input: {
   const year = (r: HistoryRow) => `'${r.date.slice(2, 4)}`;
   const refs: RefRace[] = [];
   const add = (r: HistoryRow | undefined, note: string | null) => {
-    if (r && !refs.some((x) => x.meetId === r.meetId)) refs.push({ meetId: r.meetId, label: `${year(r)} ${shortMeetName(r.meetName)}`, note });
+    if (r && !refs.some((x) => x.meetId === r.meetId)) refs.push({ meetId: r.meetId, label: `${year(r)} ${r.meetShort}`, note });
   };
   const sameMeet = meets.find((r) => r.series === meet.series);
   add(sameMeet, meet.courseId !== null && sameMeet?.courseId === meet.courseId ? "this course" : "last year");

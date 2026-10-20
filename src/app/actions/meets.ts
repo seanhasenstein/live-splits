@@ -49,6 +49,7 @@ const MeetForm = z.object({
     .default("")
     .transform((v) => (v && !/^https?:\/\//i.test(v) ? `https://${v}` : v))
     .pipe(z.union([z.literal(""), z.url("That results link doesn't look like a web address")])),
+  shortName: z.string().trim().max(16, "Keep the short name to 16 characters").default(""),
   /** An existing course at the venue, or "new" to create `newCourseName`; blank = the venue's current layout (created if none). */
   courseId: z.string().trim().max(64).default(""),
   newCourseName: z.string().trim().max(120).default(""),
@@ -95,6 +96,7 @@ export async function createMeetAction(_prev: MeetFormState, formData: FormData)
     venueId,
     courseId,
     name: input.name,
+    shortName: input.shortName || null,
     date: input.date,
     timeZone: input.timeZone,
     weather: null,
@@ -157,6 +159,7 @@ export async function updateMeetAction(meetId: string, _prev: MeetFormState, for
     {
       $set: {
         name: input.name,
+        shortName: input.shortName || null,
         date: input.date,
         timeZone: input.timeZone,
         seasonId: season._id,

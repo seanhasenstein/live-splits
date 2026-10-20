@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { AthleteRacesTable, KpiStrip } from "@/components/report/athlete-races";
-import { ReportShell, Sheet, SheetSection, teamBrand } from "@/components/report/report";
+import { AthleteRacesTable } from "@/components/report/athlete-races";
+import { KpiStrip, MajorHeading, ReportShell, Sheet, TableWrap, teamBrand } from "@/components/report/report";
 import { TimeChart } from "@/components/report/time-chart";
 import { getSession, isSchoolWide } from "@/lib/auth/session";
 import { getProgram, getSchool } from "@/lib/data";
@@ -52,21 +52,7 @@ export default async function AthletePage({ params }: PageProps<"/athletes/[athl
     <ReportShell back={{ href: "/reports", label: "Reports" }} title={athlete.displayName} subtitle="Career">
       <Sheet
         team={teamBrand(school)}
-        header={{
-          kicker: (
-            <>
-              Career · <span className="text-[var(--r-gold-text)]">{school.shortName} Cross Country</span>
-            </>
-          ),
-          title: athlete.displayName,
-          subline: (
-            <>
-              {athlete.graduationYear !== null && <span className="font-semibold text-[var(--r-ink)]">Class of {athlete.graduationYear}</span>}
-              {grade !== null && grade <= 12 ? ` · Grade ${grade}` : ""}
-              {` · ${finished.length} race${finished.length === 1 ? "" : "s"} over ${seasonIds.length} season${seasonIds.length === 1 ? "" : "s"}`}
-            </>
-          ),
-        }}
+        header={{ title: "Athlete Career", subline: <span className="font-semibold text-[var(--r-ink)]">{school.name}</span> }}
         legend={
           <>
             Every race on file at the main distance. <span className="font-semibold text-[var(--r-green-text)]">Green row</span>: career best. <span className="font-semibold text-[var(--r-gold-text)]">Gold row</span>: that season&apos;s best. Splits are
@@ -75,6 +61,14 @@ export default async function AthletePage({ params }: PageProps<"/athletes/[athl
         }
         tag={`Updated ${formatDateWithYear(new Date().toISOString().slice(0, 10))}`}
       >
+        <div className="mb-3 flex flex-wrap items-baseline gap-x-3 border-b border-[var(--r-rule)] pb-2">
+          <span className="text-[30px] leading-none font-extrabold tracking-tight max-sm:text-[24px]">{athlete.displayName}</span>
+          <span className="text-[13px] text-[var(--r-ink-2)]">
+            {athlete.graduationYear !== null ? `Class of ${athlete.graduationYear}` : ""}
+            {grade !== null && grade <= 12 ? ` · Grade ${grade}` : ""}
+            {` · ${finished.length} race${finished.length === 1 ? "" : "s"} over ${seasonIds.length} season${seasonIds.length === 1 ? "" : "s"}`}
+          </span>
+        </div>
         <KpiStrip
           items={[
             { label: "Career best", value: t(career.careerBest?.finishMs), note: career.careerBest?.label, tone: "green" },
@@ -91,26 +85,24 @@ export default async function AthletePage({ params }: PageProps<"/athletes/[athl
           const g = athlete.graduationYear !== null && season ? gradeForSeason(athlete.graduationYear, season.endDate) : null;
           const timed = races.filter((r) => r.finishMs !== null);
           return (
-            <SheetSection
-              key={sid}
-              title={
-                <>
-                  {season?.label ?? "Season"}
-                  {g !== null && g <= 12 ? ` · Grade ${g}` : ""}
-                </>
-              }
-              aside={s.seasonBest ? `Season best ${t(s.seasonBest.finishMs)} · ${timed.length} race${timed.length === 1 ? "" : "s"}` : undefined}
-            >
-              <AthleteRacesTable races={races} splitLabels={splitLabels} finishMeters={5000} />
+            <div key={sid} className="mb-5 break-inside-avoid-page">
+              <MajorHeading>
+                {season?.label ?? "Season"}
+                {g !== null && g <= 12 ? <span className="ml-2 text-[13px] font-semibold tracking-normal text-[var(--r-ink-2)] normal-case">Grade {g}</span> : null}
+                {s.seasonBest ? <span className="ml-2 text-[13px] font-semibold tracking-normal text-[var(--r-gold-text)] normal-case">season best {t(s.seasonBest.finishMs)}</span> : null}
+              </MajorHeading>
+              <TableWrap>
+                <AthleteRacesTable races={races} splitLabels={splitLabels} finishMeters={5000} label={(r) => r.meetName} career />
+              </TableWrap>
               {timed.length >= 3 && (
-                <div className="mt-2">
-                  <TimeChart height={140} points={timed.map((r) => ({ label: r.label.slice(4), sub: r.levelId === "jv" ? "JV" : undefined, ms: r.finishMs!, mark: r.pr ? "best" : r.sb ? "gold" : undefined }))} />
+                <div className="mt-3">
+                  <TimeChart points={timed.map((r) => ({ label: r.meetShort, ms: r.finishMs!, mark: r.sb ? "gold" : r.pr ? "best" : undefined }))} />
                 </div>
               )}
-            </SheetSection>
+            </div>
           );
         })}
-        {seasonIds.length === 0 && <p className="text-[11px] text-[var(--r-ink-2)]">No races on file yet.</p>}
+        {seasonIds.length === 0 && <p className="text-[12px] text-[var(--r-ink-2)]">No races on file yet.</p>}
       </Sheet>
     </ReportShell>
   );

@@ -9,6 +9,7 @@ import type { VenueWithCourses } from "@/lib/data";
 
 export type MeetFormValues = {
   name: string;
+  shortName: string;
   date: string;
   timeZone: string;
   venueName: string;
@@ -68,9 +69,14 @@ export function MeetForm({ action, venues, defaultTimeZone, defaultState, meet, 
       <input type="hidden" name="courseId" value={selected} />
       <Card>
         <CardBody className="space-y-4 border-t-0">
-          <Field label="Meet name">
-            <Input name="name" defaultValue={meet?.name} placeholder="Nightfall Classic" required maxLength={120} />
-          </Field>
+          <div className="grid grid-cols-[1fr_9rem] gap-3">
+            <Field label="Meet name">
+              <Input name="name" defaultValue={meet?.name} placeholder="Nightfall Classic" required maxLength={120} />
+            </Field>
+            <Field label="Short name" hint="For report columns">
+              <Input name="shortName" defaultValue={meet?.shortName} placeholder="KML, CTY, SECT" maxLength={16} />
+            </Field>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Date">
               <Input name="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
