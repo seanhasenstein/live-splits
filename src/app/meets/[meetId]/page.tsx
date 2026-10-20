@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ExternalLink, Pencil, Plus, TableProperties, Timer, Upload, Users } from "lucide-react";
+import { ClipboardList, ExternalLink, Pencil, Plus, TableProperties, Timer, Upload, Users } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { ShareMeet } from "@/components/share-meet";
@@ -66,6 +66,12 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
                   Official timing
                   <ExternalLink className="size-3.5 text-ink-2" />
                 </a>
+              )}
+              {isSchoolWide(session) && (
+                <LinkButton href={`/meets/${meet._id}/reports/race-day`} variant="secondary" size="sm" title="Race day sheet" aria-label="Race day sheet">
+                  <ClipboardList className="size-4" />
+                  <span className="max-sm:sr-only">Race day sheet</span>
+                </LinkButton>
               )}
               {can(session, "export", meet) && <ShareMeet meetId={meet._id} codes={readJoinCodes(meet)} canRegenerate={setup} />}
               {setup && (

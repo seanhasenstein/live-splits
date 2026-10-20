@@ -204,3 +204,64 @@ input[type="time"] {
     transition: none !important;
   }
 }
+
+/*
+ * Reports: Letter-size sheets in the team's print look (the meet PDFs). Always light, whatever the
+ * app theme, so the page on screen is the page on paper. On a phone the sheet narrows to the screen.
+ */
+.report-sheet {
+  --r-ink: #17241a;
+  --r-ink-2: #5b6159;
+  --r-ink-3: #9a9e97;
+  --r-green: #184a23;
+  --r-green-text: #1d5a2b;
+  --r-gold: #c9a227;
+  --r-gold-text: #8a6b00;
+  --r-cream: #fbf6e6;
+  --r-line: #e3e3dd;
+  --r-red: #b42318;
+  color-scheme: light;
+  background: #ffffff;
+  color: var(--r-ink);
+  width: 8.5in;
+  min-height: 11in;
+  margin: 0 auto 24px;
+  padding: 0.5in 0.55in 0.45in;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 8.9in) {
+  .report-sheet {
+    width: 100%;
+    min-height: 0;
+    padding: 20px 14px;
+  }
+}
+@media print {
+  @page {
+    size: letter;
+    margin: 0;
+  }
+  html,
+  body {
+    background: #ffffff !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .report-sheet {
+    width: 8.5in;
+    min-height: 11in;
+    margin: 0;
+    padding: 0.5in 0.55in 0.45in;
+    box-shadow: none;
+    break-after: page;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .report-sheet:last-child {
+    break-after: auto;
+  }
+}

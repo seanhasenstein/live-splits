@@ -55,3 +55,6 @@ next-env.d.ts
 
 # official results PDFs (other schools' athletes)
 /official-results/
+
+# Report examples from past meets: other schools' athletes, like official-results/.
+/meet-pdf-examples/
