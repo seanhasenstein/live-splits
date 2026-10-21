@@ -45,7 +45,7 @@ export default async function SeasonTimesPage({ searchParams }: PageProps<"/repo
   const t = (ms: number) => formatElapsed(Math.floor(ms / 1000) * 1000, "seconds");
 
   return (
-    <RptShell back={{ href: "/reports", label: "Reports" }} title="Season times" subtitle={ctx.season.label}>
+    <RptShell back={{ href: "/reports", label: "Season" }} title="Season times" subtitle={ctx.season.label}>
       {GENDERS.filter((g) => byGender[g.key]?.length).map((g) => (
         <RptPage
           key={g.key}

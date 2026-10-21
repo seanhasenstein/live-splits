@@ -124,7 +124,7 @@ export default async function AthletePage({ params }: PageProps<"/athletes/[athl
   }
 
   return (
-    <RptShell back={{ href: "/reports", label: "Reports" }} title={athlete.displayName} subtitle="Athlete profile">
+    <RptShell back={{ href: "/athletes", label: "Athletes" }} title={athlete.displayName} subtitle="Athlete profile">
       <RptPage
         title="Athlete Profile"
         meetLine={<HeroMeet name={`${year} season`} parts={latest ? [`through the ${latest.meetName}`, formatMonthDayYear(latest.date)] : ["no races yet"]} />}

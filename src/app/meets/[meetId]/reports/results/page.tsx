@@ -4,52 +4,34 @@ import { notFound, redirect } from "next/navigation";
 import { FieldFilter } from "@/components/rpt/field-filter";
 import { RptPage, RptShell } from "@/components/rpt/rpt";
 import { can, getSession } from "@/lib/auth/session";
-import {
-  getMeet,
-  getProgram,
-  getSchool,
-  getSeasonFor,
-  listRaces,
-} from "@/lib/data";
+import { getMeet, getProgram, getSchool, getSeasonFor, listRaces } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
 import type { Weather } from "@/lib/db/schema";
 import { gradeForSeason } from "@/lib/grade";
 import { ordinal, segmentsAt } from "@/lib/reports/athlete";
 import { getTeamHistory } from "@/lib/reports/history";
-import {
-  officialSegments,
-  type ResultEntry,
-  scoreRace,
-  splitLabels,
-  topFive,
-} from "@/lib/reports/race-results";
+import { officialSegments, type ResultEntry, scoreRace, splitLabels, topFive } from "@/lib/reports/race-results";
 import { teamKey } from "@/lib/race-places";
 import { displayCase } from "@/lib/names";
 import { formatElapsed, formatMonthDayYear } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Race results" };
 
-const t = (ms: number | null) =>
-  ms === null ? "" : formatElapsed(Math.floor(ms / 1000) * 1000, "seconds");
+const t = (ms: number | null) => (ms === null ? "" : formatElapsed(Math.floor(ms / 1000) * 1000, "seconds"));
 
 function weatherLine(w: Weather | null): string | null {
   if (!w) return null;
-  const parts = [
-    w.tempF !== null ? `${Math.round(w.tempF)}°` : null,
-    w.conditions,
-    w.windMph !== null && !/\bwind\b/i.test(w.conditions ?? "")
-      ? `wind ${Math.round(w.windMph)} mph`
-      : null,
-  ].filter(Boolean);
+  const parts = [w.tempF !== null ? `${Math.round(w.tempF)}°` : null, w.conditions, w.windMph !== null && !/\bwind\b/i.test(w.conditions ?? "") ? `wind ${Math.round(w.windMph)} mph` : null].filter(
+    Boolean,
+  );
   return parts.length ? parts.join(", ") : null;
 }
 
 /** Who published the results, from the link they were imported from; null when it doesn't say. */
 function timer(source: string | null | undefined): string | null {
   const s = (source ?? "").toLowerCase();
-  if (/trackside|athletic\.?live|anet\.live|athletic\.net/.test(s))
-    return "TrackSide Timing";
+  if (/trackside|athletic\.?live|anet\.live|athletic\.net/.test(s)) return "TrackSide Timing";
   if (/arrowliveresults|xmtiming/.test(s)) return "XM Timing";
   if (/badgerstate/.test(s)) return "Badger State Timing";
   if (/raceresult/.test(s)) return "RACE RESULT";
@@ -68,44 +50,33 @@ const SECTION = 44;
  * imported. ?view=teams lists every team the way ours is, in scoring order. Web view and Download PDF
  * like the other reports.
  */
-export default async function RaceResultsPage({
-  params,
-  searchParams,
-}: PageProps<"/meets/[meetId]/reports/results">) {
+export default async function RaceResultsPage({ params, searchParams }: PageProps<"/meets/[meetId]/reports/results">) {
   const { meetId } = await params;
-  const { race: raceParam, view: viewParam } = await searchParams;
+  const { race: raceParam, view: viewParam, q: qParam } = await searchParams;
+  // From search: open with the field filtered to that runner.
+  const needle = typeof qParam === "string" ? qParam.trim().toLowerCase().slice(0, 80) : "";
   const view = viewParam === "teams" ? "teams" : "overall";
   const session = await getSession();
   if (!session) redirect("/join");
   const meet = await getMeet(meetId);
   if (!meet || !can(session, "view", meet)) notFound();
-  const [school, program, races] = await Promise.all([
-    getSchool(meet.schoolId),
-    getProgram(meet.schoolId, "xc"),
-    listRaces(meet._id),
-  ]);
+  const [school, program, races] = await Promise.all([getSchool(meet.schoolId), getProgram(meet.schoolId, "xc"), listRaces(meet._id)]);
   if (!school || !program) notFound();
   const db = await getDb();
   const entriesAll = await collection(db, "raceEntries")
     .find({ raceId: { $in: races.map((r) => r._id) }, deletedAt: null })
     .toArray();
   // Only a race with other teams' runners has its whole field.
-  const withField = races.filter((r) =>
-    entriesAll.some((e) => e.raceId === r._id && e.athleteId === null),
-  );
+  const withField = races.filter((r) => entriesAll.some((e) => e.raceId === r._id && e.athleteId === null));
   const race = withField.find((r) => r._id === raceParam) ?? withField[0];
 
-  const venue = meet.venueId
-    ? await collection(db, "venues").findOne({ _id: meet.venueId })
-    : null;
+  const venue = meet.venueId ? await collection(db, "venues").findOne({ _id: meet.venueId }) : null;
   const back = { href: `/meets/${meet._id}`, label: meet.name };
   if (!race) {
     return (
       <RptShell back={back} title="Race results" subtitle={meet.name}>
         <p className="no-print mx-auto max-w-xl px-4 text-sm text-ink-2">
-          No race in this meet has the whole field&apos;s results yet. Import
-          the official results (a link or the overall PDF) and every team&apos;s
-          results appear here.
+          No race in this meet has the whole field&apos;s results yet. Import the official results (a link or the overall PDF) and every team&apos;s results appear here.
         </p>
       </RptShell>
     );
@@ -128,15 +99,11 @@ export default async function RaceResultsPage({
   const name = new Map(athletes.map((a) => [a._id, a]));
   const grade = (id: string) => {
     const a = name.get(id);
-    return a?.graduationYear != null && season
-      ? gradeForSeason(a.graduationYear, season.endDate)
-      : null;
+    return a?.graduationYear != null && season ? gradeForSeason(a.graduationYear, season.endDate) : null;
   };
 
   const field: ResultEntry[] = entries.map((e) => ({
-    name: e.athleteId
-      ? (name.get(e.athleteId)?.displayName ?? e.name)
-      : displayCase(e.name),
+    name: e.athleteId ? (name.get(e.athleteId)?.displayName ?? e.name) : displayCase(e.name),
     team: e.teamName,
     place: e.place,
     status: e.status,
@@ -145,58 +112,29 @@ export default async function RaceResultsPage({
   }));
   const { teams, incomplete, points } = scoreRace(field);
   const us = teams.find((x) => x.ours);
-  const order = field
-    .map((f, i) => ({ f, i, e: entries[i] }))
-    .sort(
-      (a, b) =>
-        (a.f.place ?? Infinity) - (b.f.place ?? Infinity) ||
-        (a.f.timeMs ?? Infinity) - (b.f.timeMs ?? Infinity),
-    );
-  const finishers = order.filter(
-    (o) => o.f.status === "finished" && o.f.place !== null,
-  ).length;
+  const order = field.map((f, i) => ({ f, i, e: entries[i] })).sort((a, b) => (a.f.place ?? Infinity) - (b.f.place ?? Infinity) || (a.f.timeMs ?? Infinity) - (b.f.timeMs ?? Infinity));
+  const finishers = order.filter((o) => o.f.status === "finished" && o.f.place !== null).length;
   const ourRows = order.filter((o) => o.f.ours && o.f.status === "finished");
-  const splitCps = race.checkpoints
-    .filter((c) => c.kind === "split")
-    .map((c) => ({ label: c.label, meters: c.distance.meters }));
-  const finishMeters =
-    race.checkpoints.find((c) => c.kind === "finish")?.distance.meters ?? 5000;
-  const segHeads = [
-    ...splitCps.map((c) => c.label),
-    `Mile ${(finishMeters / 1609.344).toFixed(1)}`,
-  ];
-  const histFor = (athleteId: string) =>
-    history.find((h) => h.raceId === race._id && h.athleteId === athleteId);
+  const splitCps = race.checkpoints.filter((c) => c.kind === "split").map((c) => ({ label: c.label, meters: c.distance.meters }));
+  const finishMeters = race.checkpoints.find((c) => c.kind === "finish")?.distance.meters ?? 5000;
+  const segHeads = [...splitCps.map((c) => c.label), `Mile ${(finishMeters / 1609.344).toFixed(1)}`];
+  const histFor = (athleteId: string) => history.find((h) => h.raceId === race._id && h.athleteId === athleteId);
   // The results' own mat splits, when they publish any, for every team; otherwise our taps for us alone.
   const official = splitLabels(entries);
-  const officialHeads = [
-    ...official,
-    `Mile ${(finishMeters / 1609.344).toFixed(1)}`,
-  ];
+  const officialHeads = [...official, `Mile ${(finishMeters / 1609.344).toFixed(1)}`];
   const ourKey = teams.find((x) => x.ours)?.key;
-  const keyOf = (f: ResultEntry) =>
-    f.ours ? (ourKey ?? "__ours__") : f.team ? teamKey(f.team) : null;
+  const keyOf = (f: ResultEntry) => (f.ours ? (ourKey ?? "__ours__") : f.team ? teamKey(f.team) : null);
   const pts = (i: number) => {
     const p = points[i];
     return p === null ? "—" : p.displacer ? `(${p.points})` : String(p.points);
   };
 
   // Lay the whole field out over pages: what's left of page 1, then full pages.
-  const used =
-    108 +
-    (us ? 72 : 0) +
-    SECTION +
-    HEAD +
-    teams.length * ROW +
-    (incomplete.length ? 22 : 0) +
-    (ourRows.length ? SECTION + HEAD + ourRows.length * ROW : 0) +
-    SECTION +
-    HEAD;
+  const used = 108 + (us ? 72 : 0) + SECTION + HEAD + teams.length * ROW + (incomplete.length ? 22 : 0) + (ourRows.length ? SECTION + HEAD + ourRows.length * ROW : 0) + SECTION + HEAD;
   const first = Math.max(0, Math.floor((PAGE - used) / ROW));
   const rest = Math.floor((PAGE - HEAD - 8) / ROW) + 1;
   const chunks = [order.slice(0, first)];
-  for (let k = first; k < order.length; k += rest)
-    chunks.push(order.slice(k, k + rest));
+  for (let k = first; k < order.length; k += rest) chunks.push(order.slice(k, k + rest));
 
   const date = `${new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: "UTC" }).format(new Date(`${meet.date}T12:00:00Z`))}, ${formatMonthDayYear(meet.date)}`;
   const by = timer(`${imp?.fileName ?? ""} ${imp?.raw.slice(0, 4000) ?? ""}`);
@@ -206,27 +144,21 @@ export default async function RaceResultsPage({
   };
   /** A team's runners in place order: team rank, place, grade, splits when there are any, time and points. */
   const teamBlock = (key: string, title?: string) => {
-    const rows = order.filter(
-      (o) => keyOf(o.f) === key && o.f.status === "finished",
-    );
+    const rows = order.filter((o) => keyOf(o.f) === key && o.f.status === "finished");
     const all = order.filter((o) => keyOf(o.f) === key);
     if (all.length === 0) return null;
     const tm = teams.find((x) => x.key === key);
     const ours = all[0].f.ours;
-    const five = topFive(
-      rows.map((o) => o.f.timeMs).filter((x): x is number => x !== null),
-    );
+    const five = topFive(rows.map((o) => o.f.timeMs).filter((x): x is number => x !== null));
     const segsOf = (o: (typeof order)[number]): (number | null)[] | null => {
-      if (official.length)
-        return officialSegments(o.e.splits, official, o.f.timeMs);
+      if (official.length) return officialSegments(o.e.splits, official, o.f.timeMs);
       if (!ours || !o.e.athleteId) return null;
       const h = histFor(o.e.athleteId);
       return h ? segmentsAt(h, splitCps) : segHeads.map(() => null);
     };
     const segs = all.map(segsOf);
     const heads = official.length ? officialHeads : ours ? segHeads : [];
-    const showSplits =
-      heads.length > 0 && segs.some((x) => x?.some((v) => v !== null));
+    const showSplits = heads.length > 0 && segs.some((x) => x?.some((v) => v !== null));
     const gradeOf = (o: (typeof order)[number]) => {
       const g = o.e.athleteId ? grade(o.e.athleteId) : o.e.grade;
       return g !== null && g <= 12 ? g : null;
@@ -313,18 +245,8 @@ export default async function RaceResultsPage({
                         {t(ms)}
                       </td>
                     ))}
-                  <td className="t vl">
-                    {f.status === "finished"
-                      ? t(f.timeMs)
-                      : f.status.toUpperCase()}
-                  </td>
-                  <td
-                    className={
-                      points[i]?.displacer || points[i] === null ? "d" : ""
-                    }
-                  >
-                    {f.status === "finished" ? pts(i) : ""}
-                  </td>
+                  <td className="t vl">{f.status === "finished" ? t(f.timeMs) : f.status.toUpperCase()}</td>
+                  <td className={points[i]?.displacer || points[i] === null ? "d" : ""}>{f.status === "finished" ? pts(i) : ""}</td>
                 </tr>
               );
             })}
@@ -353,23 +275,12 @@ export default async function RaceResultsPage({
       </thead>
       <tbody>
         {rows.map(({ f, i }) => (
-          <tr
-            key={i}
-            className={f.ours ? "us" : ""}
-            data-team={f.team ?? ""}
-            data-name={f.name.toLowerCase()}
-          >
+          <tr key={i} className={f.ours ? "us" : ""} data-team={f.team ?? ""} data-name={f.name.toLowerCase()} hidden={!!needle && !f.name.toLowerCase().includes(needle)}>
             <td className="pl">{f.place ?? ""}</td>
             <td className="name">{f.name}</td>
             <td className="tm">{f.team ?? ""}</td>
-            <td className="t">
-              {f.status === "finished" ? t(f.timeMs) : f.status.toUpperCase()}
-            </td>
-            <td
-              className={points[i]?.displacer || points[i] === null ? "d" : ""}
-            >
-              {f.status === "finished" ? pts(i) : ""}
-            </td>
+            <td className="t">{f.status === "finished" ? t(f.timeMs) : f.status.toUpperCase()}</td>
+            <td className={points[i]?.displacer || points[i] === null ? "d" : ""}>{f.status === "finished" ? pts(i) : ""}</td>
           </tr>
         ))}
       </tbody>
@@ -380,14 +291,12 @@ export default async function RaceResultsPage({
     <>
       <div className="meet">{meet.name}</div>
       <div className="hero-meet">
-        {[venue?.name, date, weatherLine(meet.weather)]
-          .filter(Boolean)
-          .map((p, k) => (
-            <span key={k} className="contents">
-              {k > 0 && <span className="dv">•</span>}
-              {p}
-            </span>
-          ))}
+        {[venue?.name, date, weatherLine(meet.weather)].filter(Boolean).map((p, k) => (
+          <span key={k} className="contents">
+            {k > 0 && <span className="dv">•</span>}
+            {p}
+          </span>
+        ))}
       </div>
     </>
   );
@@ -413,21 +322,11 @@ export default async function RaceResultsPage({
   );
 
   // The Teams view on paper: whole team blocks packed onto pages, what fits after the hero first.
-  const blockKeys = [
-    ...teams.map((x) => x.key),
-    ...[
-      ...new Set(
-        order.map((o) => keyOf(o.f)).filter((k): k is string => k !== null),
-      ),
-    ]
-      .filter((k) => !teams.some((x) => x.key === k))
-      .sort(),
-  ];
+  const blockKeys = [...teams.map((x) => x.key), ...[...new Set(order.map((o) => keyOf(o.f)).filter((k): k is string => k !== null))].filter((k) => !teams.some((x) => x.key === k)).sort()];
   const teamPages: string[][] = [[]];
   let room = PAGE - 108 - (us ? 72 : 0);
   for (const k of blockKeys) {
-    const need =
-      SECTION + HEAD + order.filter((o) => keyOf(o.f) === k).length * ROW;
+    const need = SECTION + HEAD + order.filter((o) => keyOf(o.f) === k).length * ROW;
     if (need > room && teamPages[teamPages.length - 1].length > 0) {
       teamPages.push([]);
       room = PAGE;
@@ -435,15 +334,10 @@ export default async function RaceResultsPage({
     teamPages[teamPages.length - 1].push(k);
     room -= need;
   }
-  const tab = (v: "overall" | "teams") =>
-    `?race=${race._id}${v === "teams" ? "&view=teams" : ""}`;
+  const tab = (v: "overall" | "teams") => `?race=${race._id}${v === "teams" ? "&view=teams" : ""}`;
 
   return (
-    <RptShell
-      back={back}
-      title="Race results"
-      subtitle={`${meet.name} · ${race.name}`}
-    >
+    <RptShell back={back} title="Race results" subtitle={`${meet.name} · ${race.name}`}>
       {withField.length > 1 && (
         <nav className="no-print mx-auto mb-3 flex max-w-5xl flex-wrap justify-center gap-2 px-4">
           {withField.map((r) => (
@@ -457,10 +351,7 @@ export default async function RaceResultsPage({
           ))}
         </nav>
       )}
-      <nav
-        className="no-print mx-auto mb-3 flex max-w-5xl justify-center px-4"
-        aria-label="Results view"
-      >
+      <nav className="no-print mx-auto mb-3 flex max-w-5xl justify-center px-4" aria-label="Results view">
         <div className="inline-flex rounded-lg border border-line bg-surface p-0.5">
           {(["overall", "teams"] as const).map((v) => (
             <Link
@@ -476,48 +367,26 @@ export default async function RaceResultsPage({
       </nav>
       {view === "teams" ? (
         teamPages.map((keys, n) => (
-          <RptPage
-            key={n}
-            title={n === 0 ? race.name : null}
-            meetLine={n === 0 ? meetLine : undefined}
-            legend={footer.legend}
-            right={footer.right}
-          >
+          <RptPage key={n} title={n === 0 ? race.name : null} meetLine={n === 0 ? meetLine : undefined} legend={footer.legend} right={footer.right}>
             {n === 0 && statbar}
             {n === 0 && (
               <nav className="team-jump no-print" aria-label="Jump to a team">
                 {blockKeys.map((k) => {
                   const o = order.find((x) => keyOf(x.f) === k)!;
                   return (
-                    <a
-                      key={k}
-                      href={`#team-${k}`}
-                      className={o.f.ours ? "us" : ""}
-                    >
+                    <a key={k} href={`#team-${k}`} className={o.f.ours ? "us" : ""}>
                       {o.f.ours ? school.shortName : o.f.team}
                     </a>
                   );
                 })}
               </nav>
             )}
-            {keys.map((k) =>
-              teamBlock(
-                k,
-                order.find((x) => keyOf(x.f) === k)?.f.ours
-                  ? school.shortName
-                  : undefined,
-              ),
-            )}
+            {keys.map((k) => teamBlock(k, order.find((x) => keyOf(x.f) === k)?.f.ours ? school.shortName : undefined))}
           </RptPage>
         ))
       ) : (
         <>
-          <RptPage
-            title={race.name}
-            meetLine={meetLine}
-            legend={footer.legend}
-            right={footer.right}
-          >
+          <RptPage title={race.name} meetLine={meetLine} legend={footer.legend} right={footer.right}>
             {statbar}
             <div className="sec">Team Scores</div>
             <table className="rs">
@@ -545,12 +414,8 @@ export default async function RaceResultsPage({
                         {tm.places[k] ?? ""}
                       </td>
                     ))}
-                    <td className="c d vl">
-                      {tm.places[5] !== undefined ? `(${tm.places[5]})` : ""}
-                    </td>
-                    <td className="c d">
-                      {tm.places[6] !== undefined ? `(${tm.places[6]})` : ""}
-                    </td>
+                    <td className="c d vl">{tm.places[5] !== undefined ? `(${tm.places[5]})` : ""}</td>
+                    <td className="c d">{tm.places[6] !== undefined ? `(${tm.places[6]})` : ""}</td>
                     <td className="t vl">{tm.points}</td>
                   </tr>
                 ))}
@@ -558,29 +423,22 @@ export default async function RaceResultsPage({
             </table>
             {incomplete.length > 0 && (
               <div className="incomplete">
-                <b>Incomplete teams</b> (fewer than five finishers, no team
-                score): {incomplete.join(", ")}
+                <b>Incomplete teams</b> (fewer than five finishers, no team score): {incomplete.join(", ")}
               </div>
             )}
-            {ourRows.length > 0 &&
-              teamBlock(keyOf(ourRows[0].f)!, school.shortName)}
-            <div className="sec">Individual Results</div>
+            {ourRows.length > 0 && teamBlock(keyOf(ourRows[0].f)!, school.shortName)}
+            <div className="sec" id="field" style={{ scrollMarginTop: 72 }}>
+              Individual Results
+            </div>
             <FieldFilter
-              teams={[
-                ...new Set(
-                  order.map((o) => o.f.team).filter((x): x is string => !!x),
-                ),
-              ].sort((a, b) => a.localeCompare(b))}
+              initialQ={needle}
+              initialShown={needle ? order.filter((o) => o.f.name.toLowerCase().includes(needle)).length : null}
+              teams={[...new Set(order.map((o) => o.f.team).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b))}
             />
             {individual(chunks[0])}
           </RptPage>
           {chunks.slice(1).map((rows, k) => (
-            <RptPage
-              key={k}
-              title={null}
-              legend={footer.legend}
-              right={footer.right}
-            >
+            <RptPage key={k} title={null} legend={footer.legend} right={footer.right}>
               {individual(rows)}
             </RptPage>
           ))}

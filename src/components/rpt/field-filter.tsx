@@ -6,10 +6,11 @@ import { useEffect, useState } from "react";
  * Search and team filter over the whole field (screen only). The rows are server-rendered across the
  * report's pages, so this hides the ones that don't match (rows carry data-name and data-team).
  */
-export function FieldFilter({ teams }: { teams: string[] }) {
-  const [q, setQ] = useState("");
+/** `initialQ` / `initialShown`: a search link opens filtered (the server renders the other rows hidden). */
+export function FieldFilter({ teams, initialQ = "", initialShown = null }: { teams: string[]; initialQ?: string; initialShown?: number | null }) {
+  const [q, setQ] = useState(initialQ);
   const [team, setTeam] = useState("");
-  const [shown, setShown] = useState<number | null>(null);
+  const [shown, setShown] = useState<number | null>(initialShown);
   const apply = (nextQ: string, nextTeam: string) => {
     setQ(nextQ);
     setTeam(nextTeam);

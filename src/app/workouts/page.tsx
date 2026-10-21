@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Dumbbell, Plus } from "lucide-react";
 import { redirect } from "next/navigation";
+import { SearchButton } from "@/components/search";
 import { SectionTabs } from "@/components/section-tabs";
 import { SessionMenu } from "@/components/session-menu";
 import { WorkoutCodePanel } from "@/components/workout-code-panel";
@@ -45,9 +46,16 @@ export default async function WorkoutsPage() {
 
   return (
     <>
-      <AppHeader right={<SessionMenu name={session!.name} role={coach ? "coach" : "manager"} />} />
+      <AppHeader
+        right={
+          <div className="flex items-center gap-2">
+            {coach && <SearchButton />}
+            <SessionMenu name={session!.name} role={coach ? "coach" : "manager"} />
+          </div>
+        }
+      />
       <Page>
-        {coach && <SectionTabs active="workouts" />}
+        {coach && <SectionTabs active="workouts" workouts />}
         <PageTitle
           title="Workouts"
           description={coach ? "Reps timed on phones, against each runner's goal." : "Pick today's workout and the group you're timing."}

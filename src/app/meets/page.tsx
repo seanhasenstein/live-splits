@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { CalendarDays, ChevronDown, History, Plus } from "lucide-react";
 import { redirect } from "next/navigation";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { SearchButton } from "@/components/search";
 import { SectionTabs } from "@/components/section-tabs";
 import { SessionMenu } from "@/components/session-menu";
 import { ShareSeason } from "@/components/share-season";
@@ -97,10 +98,17 @@ export default async function MeetsPage() {
 
   return (
     <>
-      <AppHeader right={<SessionMenu name={session.name} role={coach ? "coach" : "viewer"} />} />
+      <AppHeader
+        right={
+          <div className="flex items-center gap-2">
+            <SearchButton />
+            <SessionMenu name={session.name} role={coach ? "coach" : "viewer"} />
+          </div>
+        }
+      />
       <Page>
         <AutoRefresh everyMs={anyLive ? 10000 : 60000} />
-        {coach && <SectionTabs active="meets" />}
+        <SectionTabs active="meets" workouts={coach} />
         <PageTitle
           title="Meets"
           description={school?.name ?? "This season"}

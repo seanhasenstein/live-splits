@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ClipboardList, ExternalLink, Pencil, Plus, TableProperties, Timer, Upload, Users } from "lucide-react";
+import { ClipboardList, ExternalLink, ListOrdered, MapPin, Pencil, Plus, TableProperties, Timer, Upload, UserRound, Users } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { ShareMeet } from "@/components/share-meet";
@@ -10,6 +10,7 @@ import {
   Card,
   CardHeader,
   EmptyState,
+  ListRow,
   LinkButton,
   LiveDot,
   Page,
@@ -44,6 +45,13 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
   const setup = can(session, "setup", meet);
   const staff = can(session, "tap", meet);
   const gun = can(session, "gun", meet);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: meet.timeZone }).format(new Date());
+  const base = `/meets/${meet._id}/reports`;
+  const results = { href: `${base}/results`, icon: <ListOrdered />, title: "Results", description: "Team scores, every team's runners, the whole field" };
+  const splits = { href: `${base}/splits`, icon: <TableProperties />, title: "Meet splits", description: "Our runners' splits, bests and letter points" };
+  const raceDay = { href: `${base}/race-day`, icon: <ClipboardList />, title: "Race day sheet", description: "A page per race with the lineup, for the clipboard at the mile marks" };
+  const previews = { href: `${base}/previews`, icon: <UserRound />, title: "Previews", description: "A page for each runner, looking back from this meet" };
+  const onCourse = { href: `${base}/on-this-course`, icon: <MapPin />, title: "On this course", description: "Every earlier race we've run here" };
   const label = (list: { id: string; label: string }[] | undefined, id: string) => list?.find((x) => x.id === id)?.label ?? id;
 
   return (
@@ -173,6 +181,15 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
           )}
         </Card>
 
+        {isSchoolWide(session) && (
+          <Card id="reports" className="scroll-mt-20">
+            <CardHeader title="Reports" description="Each opens on screen, ready to print or save as a PDF" />
+            {/* Before the meet, the race-day reports lead; after it, the results. */}
+            {(meet.date >= today ? [raceDay, previews, onCourse, results, splits] : [results, splits, raceDay, previews, onCourse]).map((r) => (
+              <ListRow key={r.href} href={r.href} icon={r.icon} title={r.title} description={r.description} />
+            ))}
+          </Card>
+        )}
       </Page>
     </>
   );

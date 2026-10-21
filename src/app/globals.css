@@ -309,3 +309,10 @@ input[type="time"] {
     break-after: auto;
   }
 }
+
+/* Room for the phone tab bar (SectionTabs) under the page's last row. */
+@media (max-width: 639px) {
+  body:has(nav[data-tabbar]) {
+    padding-bottom: calc(3.5rem + env(safe-area-inset-bottom));
+  }
+}
