@@ -309,9 +309,12 @@ export function meetSplitsAsHistory(text: string): string {
     const row = cells.map((c, i) => {
       // "Eddy Giebler ★": a mark after the name isn't part of it.
       if (i === 0) return c.replace(/[^\p{L}\p{M}.'’\- ]+$/u, "").trim();
-      if (/^letter$/i.test(c)) return "Yes";
-      if (section === "jv" && /^\d+(st|nd|rd|th)$/i.test(c)) return `${c} JV`;
-      return c;
+      // The LETTER pill, letter-spaced on newer sheets ("L E T T E R").
+      if (/^letter$/i.test(c.replace(/\s+/g, ""))) return "Yes";
+      // A PR / SB badge printed after the finish ("16:06 PR") isn't part of the time.
+      const time = c.replace(/\s+(PR|SB)$/i, "");
+      if (section === "jv" && /^\d+(st|nd|rd|th)$/i.test(time)) return `${time} JV`;
+      return time;
     });
     out.push(row.join("\t"));
   }

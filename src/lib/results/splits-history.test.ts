@@ -134,3 +134,22 @@ test("earlier 2026 MEET SPLITS sheets: weather after the date, gender and level 
   expect(m.rows.find((r) => r.name === "Ellis Evans")).toMatchObject({ level: "jv", place: 52, letter: false });
   expect(m.summaries[0]).toBe("Boys Varsity - 89 Pts. 5th Place. 17 Teams. 143 Runners. Letter standard 94th · 22:03.");
 });
+
+test("newest MEET SPLITS sheets: a PR / SB badge after the finish and a letter-spaced LETTER pill", () => {
+  const meets = parseSplitsHistory(
+    [
+      "MEET SPLITS",
+      "Sample Invite • October 17, 2026 • 52°, sunny, southwest wind 12 mph, 44% humidity",
+      "BOYS VARSITY",
+      "AT H L E T E \tM I L E 1 \tM I L E 2 \tM I L E 3 . 1 \tF I N I S H \tP L A C E \tL E T T E R",
+      "Avery Abbott \t5:10 \t5:14 \t5:42 \t16:06 PR \t2nd \tL E T T E R",
+      "Blake Barlow \t5:20 \t5:30 \t5:50 \t16:40 SB \t9th \tL E T T E R",
+      "Casey Cole \t5:40 \t6:11 \t6:42 \t18:33 \t34th",
+    ].join("\n"),
+  );
+  expect(meets[0].rows.map((r) => [r.name, r.finishMs, r.place, r.letter, r.splitsUnreadable])).toEqual([
+    ["Avery Abbott", 16 * 60_000 + 6_000, 2, true, false],
+    ["Blake Barlow", 16 * 60_000 + 40_000, 9, true, false],
+    ["Casey Cole", 18 * 60_000 + 33_000, 34, false, false],
+  ]);
+});
