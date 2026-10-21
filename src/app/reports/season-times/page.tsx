@@ -3,10 +3,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { RptPage, RptShell } from "@/components/rpt/rpt";
 import { getSession, isSchoolWide } from "@/lib/auth/session";
-import { getDb } from "@/lib/db/client";
-import { collection } from "@/lib/db/collections";
 import { loadSeasonContext, mainDistance } from "@/lib/reports/context";
-import { type FieldRow, letterStandard } from "@/lib/reports/meet-splits";
+import { letterStandards } from "@/lib/reports/letters";
 import { buildSeasonTimes } from "@/lib/reports/season-times";
 import { formatElapsed, formatMonthDayYear } from "@/lib/time";
 
@@ -27,22 +25,11 @@ export default async function SeasonTimesPage({ searchParams }: PageProps<"/repo
   const ctx = await loadSeasonContext(session.schoolId, onDate);
   if (!ctx) notFound();
 
-  // Each meet's varsity letter standard by gender: from the whole field, else the split sheet's.
-  const db = await getDb();
-  const races = await collection(db, "races").find({ meetId: { $in: ctx.meets.map((m) => m._id) }, deletedAt: null }).toArray();
-  const entries = await collection(db, "raceEntries")
-    .find({ raceId: { $in: races.filter((r) => r.levelIds.includes("varsity")).map((r) => r._id) }, deletedAt: null }, { projection: { raceId: 1, teamName: 1, place: 1, status: 1, timeMs: 1, athleteId: 1 } })
-    .toArray();
-  const fields: Record<string, FieldRow[]> = {};
-  for (const e of entries) (fields[e.raceId] ??= []).push({ team: e.teamName, place: e.place, status: e.status, timeMs: e.timeMs, ours: !!e.athleteId });
-  const categoryGender = new Map(ctx.program.settings.raceCategories.map((c) => [c.id, c.gender]));
-  const letterMs: Record<string, Partial<Record<string, number>>> = {};
-  for (const r of races) {
-    const g = categoryGender.get(r.raceCategoryId) ?? (/\bgirls?\b/i.test(r.name) ? "F" : /\bboys?\b/i.test(r.name) ? "M" : null);
-    if (!r.levelIds.includes("varsity") || (g !== "M" && g !== "F")) continue;
-    const standard = letterStandard(fields[r._id] ?? [], r.sheetSummary);
-    if (standard) (letterMs[r.meetId] ??= {})[g] = standard.ms;
-  }
+  // Each meet's varsity letter standard by gender: the split sheet's, else from the whole field.
+  const letterMs = await letterStandards(
+    ctx.meets.map((m) => m._id),
+    ctx.program,
+  );
 
   const season = ctx.history.filter((r) => r.seasonId === ctx.season._id);
   const { columns, byGender } = buildSeasonTimes({

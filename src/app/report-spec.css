@@ -467,3 +467,164 @@
 .rpt .incomplete b {
   color: var(--ink);
 }
+
+/* Athlete Profile (after the team's profile PDF) */
+.rpt .lead {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 10px;
+}
+.rpt .lead .nm {
+  font-size: 22pt;
+  font-weight: 800;
+  line-height: 1.05;
+  color: var(--ink);
+}
+.rpt .lead .mt {
+  font-size: 9.5pt;
+  color: var(--soft);
+}
+.rpt .statbar .n.gold {
+  color: var(--gold);
+}
+.rpt .statbar .n.ink {
+  color: var(--ink);
+}
+/* The profile's stat bar is a step smaller, so its longer labels hold one line. */
+.rpt .statbar.pf .n {
+  font-size: 17pt;
+}
+.rpt .statbar.pf .l {
+  font-size: 6pt;
+  letter-spacing: 0.12em;
+}
+.rpt table.vs td {
+  padding: 2.5px 5px 3px;
+}
+.rpt .sub {
+  margin-top: 12px;
+  font-size: 7.5pt;
+  letter-spacing: 0.2em;
+  color: var(--green);
+  font-weight: 800;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--green);
+  padding-bottom: 3px;
+}
+.rpt .sub span {
+  margin-left: 10px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--soft);
+  font-weight: 400;
+}
+.rpt .legend-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 7.5pt;
+  color: var(--soft);
+}
+.rpt .legend-row i {
+  display: inline-block;
+  width: 22px;
+  border-top: 2.5px solid var(--green);
+  vertical-align: middle;
+  margin-right: 5px;
+}
+.rpt .legend-row i.d1 {
+  border-top: 1.6px dashed var(--green);
+  opacity: 0.75;
+}
+.rpt .legend-row i.d2 {
+  border-top: 1.6px dotted var(--green);
+  opacity: 0.5;
+}
+.rpt table.pg th,
+.rpt table.pg td {
+  text-align: center;
+  padding: 3px 2px;
+}
+.rpt table.pg th.l,
+.rpt table.pg td.l {
+  text-align: left;
+}
+.rpt table.pg th {
+  font-size: 6.2pt;
+  letter-spacing: 0.06em;
+  color: var(--soft);
+  font-weight: 600;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.rpt table.pg td .tm {
+  font-size: 9pt;
+  display: inline-block;
+}
+.rpt table.pg td .pl {
+  display: block;
+  font-size: 6.5pt;
+  color: var(--soft);
+}
+.rpt table.pg td.sb {
+  background: color-mix(in oklab, var(--green) 9%, var(--paper));
+}
+.rpt table.pg td.sb .tm {
+  color: var(--green);
+  font-weight: 800;
+}
+.rpt table.pg td.cb {
+  background: var(--cream);
+}
+.rpt table.pg td.cb .tm {
+  color: var(--gold);
+  font-weight: 800;
+}
+.rpt table.pg td.let .tm {
+  text-decoration: underline;
+  text-decoration-thickness: 0.8px;
+  text-underline-offset: 2px;
+}
+.rpt table.pg td.let .pl {
+  text-decoration: none;
+}
+.rpt table.pg tr.now td {
+  font-weight: 700;
+}
+.rpt table.pg .gr {
+  font-size: 6.5pt;
+  color: var(--soft);
+  font-weight: 400;
+  margin-left: 3px;
+}
+.rpt table.vs td.f {
+  color: var(--green);
+  font-weight: 800;
+}
+.rpt table.vs td.s {
+  color: var(--gold);
+  font-weight: 800;
+}
+.rpt table.vs tr.avg td {
+  font-weight: 700;
+  border-top: 1.2pt solid var(--green);
+}
+.rpt .nextbar {
+  margin-top: 14px;
+  background: var(--cream);
+  border-left: 3pt solid var(--gold);
+  padding: 7px 12px;
+  font-size: 9pt;
+  color: var(--soft);
+}
+.rpt .nextbar b {
+  color: var(--green);
+  letter-spacing: 0.2em;
+  font-size: 7.5pt;
+  margin-right: 8px;
+}
+.rpt .nextbar strong {
+  color: var(--ink);
+}
