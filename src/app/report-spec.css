@@ -353,11 +353,18 @@
   .rpt.web .paper:has(+ .paper.cont) .footer {
     display: none;
   }
+  /* Without a border or padding at the join, a child's margin would collapse through and open a seam. */
+  .rpt.web .paper {
+    display: flow-root;
+  }
   .rpt.web .paper.cont {
     padding-top: 0;
     border-top: 0;
     border-top-left-radius: 0;
     border-top-right-radius: 0;
+  }
+  .rpt.web .paper.cont .page > table:first-child {
+    margin-top: 0;
   }
   .rpt.web .paper.cont .page > table:first-child > thead {
     display: none;

@@ -116,7 +116,13 @@ export default async function RaceResultsPage({ params, searchParams }: PageProp
     right: `${meet.name} · ${race.name}`,
   };
   const individual = (rows: typeof order) => (
-    <table className="rs">
+    <table className="rs" style={{ tableLayout: "fixed" }}>
+      {/* Fixed widths, so the columns line up from one page's table to the next. */}
+      <colgroup>
+        {[5, 35, 40, 11, 9].map((w, k) => (
+          <col key={k} style={{ width: `${w}%` }} />
+        ))}
+      </colgroup>
       <thead>
         <tr>
           <th className="l">Pl</th>
