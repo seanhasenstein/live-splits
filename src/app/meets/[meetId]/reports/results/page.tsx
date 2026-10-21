@@ -16,7 +16,8 @@ import { teamKey } from "@/lib/race-places";
 import { displayCase } from "@/lib/names";
 import { formatElapsed, formatMonthDayYear } from "@/lib/time";
 
-export const metadata: Metadata = { title: "Race results" };
+// Public when a coach shares a meet's results; still kept out of search engines (high school runners).
+export const metadata: Metadata = { title: "Race results", robots: { index: false, follow: false } };
 
 const t = (ms: number | null) => (ms === null ? "" : formatElapsed(Math.floor(ms / 1000) * 1000, "seconds"));
 
@@ -57,9 +58,15 @@ export default async function RaceResultsPage({ params, searchParams }: PageProp
   const needle = typeof qParam === "string" ? qParam.trim().toLowerCase().slice(0, 80) : "";
   const view = viewParam === "teams" ? "teams" : "overall";
   const session = await getSession();
-  if (!session) redirect("/join");
   const meet = await getMeet(meetId);
-  if (!meet || !can(session, "view", meet)) notFound();
+  if (!meet) notFound();
+  // Anyone may open a meet whose official results a coach made public; they see only what the timing company posted.
+  const member = !!session && can(session, "view", meet);
+  const publicView = !member && meet.publicResults === true;
+  if (!member && !publicView) {
+    if (!session) redirect("/join");
+    notFound();
+  }
   const [school, program, races] = await Promise.all([getSchool(meet.schoolId), getProgram(meet.schoolId, "xc"), listRaces(meet._id)]);
   if (!school || !program) notFound();
   const db = await getDb();
@@ -71,7 +78,7 @@ export default async function RaceResultsPage({ params, searchParams }: PageProp
   const race = withField.find((r) => r._id === raceParam) ?? withField[0];
 
   const venue = meet.venueId ? await collection(db, "venues").findOne({ _id: meet.venueId }) : null;
-  const back = { href: `/meets/${meet._id}`, label: meet.name };
+  const back = member ? { href: `/meets/${meet._id}`, label: meet.name } : undefined;
   if (!race) {
     return (
       <RptShell back={back} title="Race results" subtitle={meet.name}>
@@ -152,7 +159,8 @@ export default async function RaceResultsPage({ params, searchParams }: PageProp
     const five = topFive(rows.map((o) => o.f.timeMs).filter((x): x is number => x !== null));
     const segsOf = (o: (typeof order)[number]): (number | null)[] | null => {
       if (official.length) return officialSegments(o.e.splits, official, o.f.timeMs);
-      if (!ours || !o.e.athleteId) return null;
+      // Our recorded splits are ours to share: not on the public page.
+      if (!ours || !o.e.athleteId || publicView) return null;
       const h = histFor(o.e.athleteId);
       return h ? segmentsAt(h, splitCps) : segHeads.map(() => null);
     };

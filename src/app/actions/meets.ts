@@ -55,6 +55,8 @@ const MeetForm = z.object({
   newCourseName: z.string().trim().max(120).default(""),
   /** "on" when nothing from this meet should count for PRs / season bests / course bests. */
   recordsExcluded: z.string().optional(),
+  /** "on" when the official results are open to anyone with the link. */
+  publicResults: z.string().optional(),
   recordsExclusionReason: z.string().trim().max(200).default(""),
 });
 
@@ -101,6 +103,7 @@ export async function createMeetAction(_prev: MeetFormState, formData: FormData)
     timeZone: input.timeZone,
     weather: null,
     resultsUrl: input.resultsUrl || null,
+    publicResults: input.publicResults === "on",
     recordsExclusion: recordsExclusionOf(input),
     joinCodes: hashes,
     ...audit,
@@ -166,6 +169,7 @@ export async function updateMeetAction(meetId: string, _prev: MeetFormState, for
         venueId,
         courseId,
         resultsUrl: input.resultsUrl || null,
+        publicResults: input.publicResults === "on",
         recordsExclusion: recordsExclusionOf(input),
         updatedAt: new Date(),
         updatedBy: actor,

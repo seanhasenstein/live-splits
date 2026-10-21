@@ -41,6 +41,12 @@ export const Meet = tenantDoc({
   /** The timing company's page for this meet (live timing / results), linked from the meet page. */
   resultsUrl: z.url().nullable().default(null),
   /**
+   * The official results (team scores and the whole field, as the timing company posted them) open to
+   * anyone with the link, no code needed. Off until a coach turns it on; meets saved before this
+   * field existed read as off.
+   */
+  publicResults: z.boolean().default(false),
+  /**
    * Join codes: a keyed hash for lookup (what the person typed is hashed and
    * matched) plus the code encrypted at rest, so coaches can see and re-share
    * it. The viewer token backs the read-only link.

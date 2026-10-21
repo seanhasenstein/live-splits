@@ -17,6 +17,7 @@ export type MeetFormValues = {
   venueState: string;
   courseId: string | null;
   resultsUrl: string;
+  publicResults: boolean;
   /** Null when the meet counts for records; otherwise the reason it doesn't (may be blank). */
   recordsExclusionReason: string | null;
 };
@@ -170,6 +171,11 @@ export function MeetForm({ action, venues, defaultTimeZone, defaultState, meet, 
           <Field label="Results link" hint="Optional. The timing company's page for this meet; shown on the meet page and used to import results.">
             <Input name="resultsUrl" defaultValue={meet?.resultsUrl} placeholder="https://www.badgerstatetiming.live/…" inputMode="url" maxLength={500} />
           </Field>
+
+          <div className="space-y-2">
+            <Checkbox name="publicResults" defaultChecked={meet?.publicResults ?? false} label="Share the official results publicly" />
+            <p className="text-[13px] text-ink-2">Anyone with the results link can see team scores and the whole field, without a code. Splits we recorded, athlete pages and season reports stay private.</p>
+          </div>
 
           <div className="space-y-2">
             <Checkbox name="recordsExcluded" checked={recordsExcluded} onChange={(e) => setRecordsExcluded(e.target.checked)} label={<>Doesn&rsquo;t count for PRs, season bests or course bests</>} />

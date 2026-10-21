@@ -47,7 +47,7 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
   const gun = can(session, "gun", meet);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: meet.timeZone }).format(new Date());
   const base = `/meets/${meet._id}/reports`;
-  const results = { href: `${base}/results`, icon: <ListOrdered />, title: "Results", description: "Team scores, every team's runners, the whole field" };
+  const results = { href: `${base}/results`, icon: <ListOrdered />, title: "Results", description: `${meet.publicResults ? "Shared publicly · " : ""}Team scores, every team's runners, the whole field` };
   const splits = { href: `${base}/splits`, icon: <TableProperties />, title: "Meet splits", description: "Our runners' splits, bests and letter points" };
   const raceDay = { href: `${base}/race-day`, icon: <ClipboardList />, title: "Race day sheet", description: "A page per race with the lineup, for the clipboard at the mile marks" };
   const previews = { href: `${base}/previews`, icon: <UserRound />, title: "Previews", description: "A page for each runner, looking back from this meet" };

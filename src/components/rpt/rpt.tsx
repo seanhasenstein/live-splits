@@ -25,7 +25,7 @@ const heros = localFont({
 export const LOGO = "/shield.svg";
 
 /** The page around a document: header, Web / Print layout and Download PDF (none printed). */
-export function RptShell({ back, title, subtitle, children }: { back: { href: string; label: string }; title: string; subtitle?: string; children: ReactNode }) {
+export function RptShell({ back, title, subtitle, children }: { back?: { href: string; label: string }; title: string; subtitle?: string; children: ReactNode }) {
   return (
     <div className={`min-h-dvh bg-bg print:bg-white ${heros.variable}`}>
       <div className="no-print">
