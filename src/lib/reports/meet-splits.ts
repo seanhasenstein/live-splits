@@ -120,16 +120,16 @@ export function buildMeetSplits(input: {
 const wholeField = (field: FieldRow[]) => field.some((e) => !e.ours);
 
 /**
- * A varsity race's letter standard: the time of the finisher at floor(0.66 × finishers) in the whole
- * field, else what the split sheet printed. Null when neither is known.
+ * A varsity race's letter standard. The split sheet's, when it printed one: that's what the team
+ * published and awarded (and older seasons didn't always use today's formula). Otherwise, from the
+ * whole field: the time of the finisher at floor(0.66 × finishers). Null when neither is known.
  */
 export function letterStandard(field: FieldRow[], sheet: SheetSummary | null): { place: number; ms: number; runners: number | null } | null {
-  if (wholeField(field)) {
-    const finishers = field.filter((e) => e.status === "finished" && e.place !== null && e.timeMs !== null).sort((a, b) => a.place! - b.place!);
-    const place = letterCutoffPlace(finishers.length);
-    if (place >= 1) return { place, ms: finishers[place - 1].timeMs!, runners: finishers.length };
-  }
-  return sheet?.letter ? { place: sheet.letter.place, ms: sheet.letter.ms, runners: sheet.runners } : null;
+  if (sheet?.letter) return { place: sheet.letter.place, ms: sheet.letter.ms, runners: sheet.runners };
+  if (!wholeField(field)) return null;
+  const finishers = field.filter((e) => e.status === "finished" && e.place !== null && e.timeMs !== null).sort((a, b) => a.place! - b.place!);
+  const place = letterCutoffPlace(finishers.length);
+  return place >= 1 ? { place, ms: finishers[place - 1].timeMs!, runners: finishers.length } : null;
 }
 
 /**

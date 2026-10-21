@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import type { HistoryRow } from "./history";
-import { buildMeetSplits, type FieldRow, letterCutoffPlace, sec } from "./meet-splits";
+import { buildMeetSplits, type FieldRow, letterCutoffPlace, letterStandard, sec } from "./meet-splits";
 
 test("letter cutoff: floor(0.66 × varsity finishers)", () => {
   expect(letterCutoffPlace(143)).toBe(94);
@@ -131,4 +131,15 @@ test("without the whole field (a history import), team numbers and the letter st
   const [bv] = out.M.sections;
   expect(bv.stats).toEqual({ points: 76, place: 2, teams: 12, runners: 79, letter: { place: 52, ms: 1_187_000 }, note: null });
   expect(bv.rows[0].letter).toBe(true); // 18:33 under 19:47
+});
+
+test("letter standard: the split sheet's when it printed one (what was awarded), else worked out from the whole field", () => {
+  // 70 finishers: the formula says 46th; the 2024 sheet printed 47th · 21:00, and that stands.
+  const field: FieldRow[] = Array.from({ length: 70 }, (_, i) => ({ team: i % 2 ? "A" : "B", place: i + 1, status: "finished", timeMs: 1_000_000 + i * 2000, ours: i === 0 }));
+  const sheet = { points: 92, place: 4, teams: 9, runners: 70, letter: { place: 47, ms: 1_260_000 } };
+  expect(letterStandard(field, sheet)).toEqual({ place: 47, ms: 1_260_000, runners: 70 });
+  expect(letterStandard(field, null)).toEqual({ place: 46, ms: 1_090_000, runners: 70 });
+  expect(letterStandard(field, { ...sheet, letter: null })).toEqual({ place: 46, ms: 1_090_000, runners: 70 });
+  // Only our own runners on file and no sheet: unknown.
+  expect(letterStandard([{ team: "Us", place: 3, status: "finished", timeMs: 1_000_000, ours: true }], null)).toBeNull();
 });

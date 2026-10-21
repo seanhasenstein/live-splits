@@ -16,7 +16,8 @@
     "db:delete-meet": "tsx --env-file=.env.local scripts/delete-meet.ts",
     "db:finish-to-split": "tsx --env-file=.env.local scripts/finish-to-split.ts",
     "db:move-result": "tsx --env-file=.env.local scripts/move-result.ts",
-    "db:sheet-summaries": "tsx --env-file=.env.local scripts/sheet-summaries.ts"
+    "db:sheet-summaries": "tsx --env-file=.env.local scripts/sheet-summaries.ts",
+    "db:copy": "tsx --env-file=.env.local scripts/copy-db.ts"
   },
   "dependencies": {
     "lucide-react": "^1.50.0",
