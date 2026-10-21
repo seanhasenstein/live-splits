@@ -63,6 +63,11 @@ export function formatLocalDateLong(date: string): string {
   return `${formatLocalDate(date)}, ${date.slice(0, 4)}`;
 }
 
+/** "October 17, 2026" for a local date: the reports' long form, month spelled out, no weekday. */
+export function formatMonthDayYear(date: string): string {
+  return new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
+}
+
 /** "7:10 PM" for an "HH:mm" string. */
 export function formatTimeOfDay(hhmm: string): string {
   const [h, m] = hhmm.split(":").map(Number);

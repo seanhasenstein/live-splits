@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CalendarRange, ClipboardList, MapPin, UserRound } from "lucide-react";
+import { CalendarRange, ClipboardList, MapPin, TableProperties, UserRound } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { SectionTabs } from "@/components/section-tabs";
 import { SessionMenu } from "@/components/session-menu";
@@ -51,7 +51,7 @@ export default async function ReportsPage() {
           })}
         </Card>
         <Card>
-          <CardHeader title="Meet reports" description="Before a meet: the race day sheet for the mile marks, a preview page for each runner, and every earlier race on the course" />
+          <CardHeader title="Meet reports" description="After a meet: the meet splits. Before one: the race day sheet, a preview page for each runner, and every earlier race on the course" />
           {[...upcoming, ...past].map((m) => (
             <div key={m._id} className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line px-4 py-3">
               <div className="min-w-0 flex-1 basis-48">
@@ -59,6 +59,10 @@ export default async function ReportsPage() {
                 <div className="text-[13px] text-ink-2">{formatLocalDate(m.date)}</div>
               </div>
               <div className="flex gap-2">
+                <LinkButton href={`/meets/${m._id}/reports/splits`} size="sm" variant="secondary">
+                  <TableProperties className="size-4" />
+                  Meet splits
+                </LinkButton>
                 <LinkButton href={`/meets/${m._id}/reports/race-day`} size="sm" variant="secondary">
                   <ClipboardList className="size-4" />
                   Race day sheet

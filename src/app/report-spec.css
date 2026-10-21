@@ -1,0 +1,373 @@
+/*
+ * The team's PDFs, to the letter of design/report-spec.md ("V4B Hairline / Crusader"). Every rule
+ * is scoped to .rpt so nothing leaks into the app. Paper is the default: TeX Gyre Heros, the spec's
+ * colors and sizes, fixed Letter pages with the footer pinned to the bottom. `.rpt.web` (screen
+ * only) is the same markup as an app page: Inter, the app's light or dark colors, pages that grow.
+ */
+.rpt {
+  --green: #184a23;
+  --green-deep: #0f3318;
+  --gold: #c99a06;
+  --soft-gold: #e8cc91;
+  --ink: #1a1a1a;
+  --soft: #5a5a5a;
+  --rule: #707070;
+  --rule-soft: #c4c4c4;
+  --rule-light: #d8d8d8;
+  --cream: #faf6e9;
+  --ghost: #bdbdbd;
+  --tag-gray: #8a8a8a;
+  --paper: #ffffff;
+  font-family: var(--font-heros), "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  font-size: 9.5pt;
+  line-height: 1.3;
+}
+.rpt * {
+  box-sizing: border-box;
+}
+
+/* A Letter page: on screen, a sheet of paper with the 0.4in margins drawn in; printed, the margins come from @page. */
+.rpt .paper {
+  background: var(--paper);
+  color-scheme: light;
+  width: 8.5in;
+  padding: 0.4in;
+  margin: 0 auto 24px;
+  box-shadow: 0 1px 2px rgb(20 23 21 / 0.08), 0 6px 24px rgb(20 23 21 / 0.12);
+}
+.rpt .page {
+  position: relative;
+  height: 10.1in;
+  padding-bottom: 0.75in;
+  overflow: hidden;
+}
+
+.rpt .hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 0 10px;
+  border-bottom: 1pt solid var(--rule);
+}
+.rpt .hero.green {
+  border-bottom: 1.2pt solid var(--green);
+}
+.rpt .hero.nobar {
+  border-bottom: none;
+  padding-bottom: 4px;
+}
+.rpt .hero img {
+  width: 60px;
+}
+.rpt .eyebrow {
+  font-size: 7.5pt;
+  letter-spacing: 0.32em;
+  color: var(--soft);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.rpt .eyebrow b {
+  color: var(--gold);
+  font-weight: 700;
+}
+.rpt h1 {
+  margin: 3px 0 4px;
+  font-size: 22pt;
+  font-weight: 800;
+  color: var(--green);
+  letter-spacing: 0.01em;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+.rpt .hero-meet {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  color: var(--soft);
+  font-size: 9.5pt;
+}
+.rpt .hero-meet .mn {
+  font-weight: 700;
+  color: var(--ink);
+}
+.rpt .dv {
+  color: var(--rule);
+  margin: 0 4px;
+  font-weight: 700;
+  font-size: 11pt;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+.rpt .sec {
+  margin-top: 16px;
+  font-size: 15pt;
+  font-weight: 800;
+  color: var(--green);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--green);
+  padding-bottom: 4px;
+}
+.rpt table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.rpt th {
+  font-size: 6.8pt;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--green);
+  font-weight: 700;
+  padding: 4px 5px 4px;
+  text-align: right;
+  border-bottom: 1.2pt solid var(--green);
+}
+.rpt th.l,
+.rpt td.l {
+  text-align: left;
+}
+.rpt td {
+  padding: 4px 5px 5px;
+  border-bottom: 1px solid var(--rule-light);
+  text-align: right;
+}
+.rpt td.name {
+  font-weight: 700;
+  text-align: left;
+}
+.rpt .star {
+  color: var(--gold);
+  font-weight: 400;
+}
+.rpt .footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--rule-soft);
+  padding-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 7.5pt;
+  color: var(--soft);
+}
+.rpt .footer img {
+  width: 24px;
+}
+.rpt .footer .lg {
+  flex: 1;
+}
+.rpt .footer .lg b {
+  color: var(--ink);
+  font-weight: 700;
+}
+.rpt .footer .rt {
+  text-align: right;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 7.5pt;
+}
+
+/* Meet Splits stat block */
+.rpt .stats {
+  display: flex;
+  align-items: flex-end;
+  gap: 28px;
+  margin-top: 9px;
+}
+.rpt .st .n {
+  font-size: 21pt;
+  font-weight: 800;
+  color: var(--green);
+  line-height: 1;
+}
+.rpt .st .l {
+  font-size: 7pt;
+  letter-spacing: 0.22em;
+  color: var(--soft);
+  text-transform: uppercase;
+  margin-top: 5px;
+}
+.rpt .st.gold .n {
+  color: var(--gold);
+  font-size: 17pt;
+}
+.rpt .st.note {
+  font-size: 7.5pt;
+  letter-spacing: 0.12em;
+  color: var(--soft);
+  font-weight: 700;
+  text-transform: uppercase;
+  padding-bottom: 12px;
+  max-width: 2.7in;
+  line-height: 1.35;
+}
+.rpt table.sp {
+  margin-top: 8px;
+}
+.rpt table.sp td {
+  padding: 5px 5px 6px;
+}
+.rpt td.fin {
+  font-weight: 700;
+}
+.rpt td.plc {
+  color: var(--soft);
+}
+.rpt .lp {
+  display: inline-block;
+  background: var(--green);
+  color: #fff;
+  font-size: 5.6pt;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  padding: 2.5px 6px 2.5px 7px;
+  border-radius: 2px;
+  line-height: 1;
+}
+.rpt .dnr-h {
+  margin-top: 16px;
+  font-size: 7pt;
+  letter-spacing: 0.2em;
+  color: var(--green);
+  font-weight: 800;
+  text-transform: uppercase;
+  border-bottom: 1.2pt solid var(--green);
+  padding-bottom: 4px;
+}
+
+/* PR/SB badges: PR green, SB gold (as in the app) */
+.rpt .sbp {
+  display: inline-block;
+  background: var(--gold);
+  color: #fff;
+  font-size: 5.8pt;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 2px 3px 2.5px;
+  border-radius: 2px;
+  line-height: 1;
+  margin-left: 4px;
+  vertical-align: 1px;
+}
+.rpt .sbp.prp {
+  background: var(--green);
+}
+
+/* Season Times grid */
+.rpt table.grid {
+  margin-top: 6px;
+}
+.rpt table.grid th {
+  font-size: 6.3pt;
+  letter-spacing: 0.1em;
+  padding: 5px 3px;
+  white-space: nowrap;
+  color: var(--soft);
+  border-bottom: 1px solid var(--rule);
+  border-top: 1px solid var(--rule);
+}
+.rpt table.grid th.ghost {
+  color: var(--ghost);
+}
+.rpt table.grid td {
+  padding: 5px 3px 6px;
+  font-size: 9.2pt;
+}
+.rpt table.grid td.name {
+  white-space: nowrap;
+}
+.rpt table.grid tr.g3 td {
+  border-bottom: 1px solid var(--rule);
+}
+.rpt td.let span {
+  text-decoration: underline;
+  text-decoration-thickness: 0.8px;
+  text-underline-offset: 2px;
+}
+.rpt td.best span {
+  color: var(--green);
+  font-weight: 800;
+}
+
+/* The web view: the same report as an app page, in Inter and the app's light or dark colors. */
+@media screen {
+  .rpt.web {
+    --green: var(--brand-text);
+    --green-deep: var(--brand-text);
+    --gold: var(--gold-text);
+    --soft-gold: color-mix(in oklab, var(--gold-text) 40%, var(--surface));
+    --ink: var(--ink);
+    --soft: var(--ink-2);
+    --rule: var(--line-strong);
+    --rule-soft: var(--line);
+    --rule-light: var(--line);
+    --cream: color-mix(in oklab, var(--gold-soft) 55%, var(--surface));
+    --ghost: var(--ink-3);
+    --tag-gray: var(--ink-3);
+    --paper: var(--surface);
+    font-family: var(--font-sans);
+  }
+  .rpt.web .paper {
+    color-scheme: inherit;
+    width: auto;
+    max-width: 64rem;
+    padding: 24px 28px 20px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: none;
+    margin-bottom: 20px;
+  }
+  .rpt.web .page {
+    height: auto;
+    padding-bottom: 0;
+    overflow: visible;
+  }
+  .rpt.web .footer {
+    position: static;
+    margin-top: 22px;
+  }
+  .rpt.web .lp,
+  .rpt.web .sbp.prp {
+    background: var(--brand);
+  }
+  .rpt.web .sbp {
+    background: #c99a06;
+  }
+  .rpt.web .scroll {
+    overflow-x: auto;
+  }
+}
+@media screen and (max-width: 640px) {
+  .rpt.web .paper {
+    padding: 16px 14px;
+    border-radius: 0;
+    border-width: 1px 0;
+  }
+  .rpt .paper {
+    transform-origin: top left;
+  }
+}
+
+@media print {
+  @page {
+    size: letter;
+    margin: 0.4in;
+  }
+  .rpt .paper {
+    width: auto;
+    padding: 0;
+    margin: 0;
+    box-shadow: none;
+    break-after: page;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .rpt .paper:last-child {
+    break-after: auto;
+  }
+}
