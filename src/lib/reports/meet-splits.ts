@@ -48,7 +48,8 @@ export type SplitsStats = {
   place: number;
   teams: number;
   runners: number | null;
-  letter: { place: number; ms: number } | null;
+  /** Place null when only the time is known (from the sheet's LETTER marks). */
+  letter: { place: number | null; ms: number } | null;
   /** "Tied at 123 · 5th on the 6th-runner tiebreak" when another team scored the same. */
   note: string | null;
 };
@@ -73,7 +74,7 @@ export function buildMeetSplits(input: {
   };
 
   // Each gender's letter standard, from its varsity race.
-  const letterFor: Partial<Record<"M" | "F", { place: number; ms: number; runners: number | null }>> = {};
+  const letterFor: Partial<Record<"M" | "F", { place: number | null; ms: number; runners: number | null }>> = {};
   for (const race of input.races) {
     if (!race.varsity || race.gender === null) continue;
     const standard = letterStandard(input.fields[race.id] ?? [], race.sheet ?? null);
@@ -124,7 +125,7 @@ const wholeField = (field: FieldRow[]) => field.some((e) => !e.ours);
  * published and awarded (and older seasons didn't always use today's formula). Otherwise, from the
  * whole field: the time of the finisher at floor(0.66 × finishers). Null when neither is known.
  */
-export function letterStandard(field: FieldRow[], sheet: SheetSummary | null): { place: number; ms: number; runners: number | null } | null {
+export function letterStandard(field: FieldRow[], sheet: SheetSummary | null): { place: number | null; ms: number; runners: number | null } | null {
   if (sheet?.letter) return { place: sheet.letter.place, ms: sheet.letter.ms, runners: sheet.runners };
   if (!wholeField(field)) return null;
   const finishers = field.filter((e) => e.status === "finished" && e.place !== null && e.timeMs !== null).sort((a, b) => a.place! - b.place!);
@@ -136,7 +137,7 @@ export function letterStandard(field: FieldRow[], sheet: SheetSummary | null): {
  * Team points, place and number of scoring teams; field size and letter standard for varsity. From
  * the whole field when it was imported, else from the split sheet's numbers. Null without a team score.
  */
-function statsFor(race: SplitsRace, field: FieldRow[], letter: { place: number; ms: number; runners: number | null } | undefined): SplitsStats | null {
+function statsFor(race: SplitsRace, field: FieldRow[], letter: { place: number | null; ms: number; runners: number | null } | undefined): SplitsStats | null {
   if (!wholeField(field)) {
     const s = race.sheet;
     if (!s || s.points === null || s.place === null || s.teams === null) return null;

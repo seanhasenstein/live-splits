@@ -174,7 +174,8 @@ export const Race = tenantDoc({
       place: z.int().positive().nullable(),
       teams: z.int().positive().nullable(),
       runners: z.int().positive().nullable(),
-      letter: z.object({ place: z.int().positive(), ms: z.int().positive() }).nullable(),
+      /** Place null: worked out from the sheet's LETTER marks (our slowest letter-earner), not printed. */
+      letter: z.object({ place: z.int().positive().nullable(), ms: z.int().positive() }).nullable(),
     })
     .nullable()
     .default(null),

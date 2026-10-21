@@ -327,7 +327,18 @@ export function meetSplitsAsHistory(text: string): string {
 }
 
 
-export type SheetSummary = { points: number | null; place: number | null; teams: number | null; runners: number | null; letter: { place: number; ms: number } | null };
+export type SheetSummary = { points: number | null; place: number | null; teams: number | null; runners: number | null; letter: { place: number | null; ms: number } | null };
+
+/**
+ * A letter standard from a sheet's LETTER marks when it didn't print one: the slowest finish of our
+ * runners of that gender marked LETTER (any level). Every one of our runners at or under it lettered,
+ * so it reproduces the sheet's marks; the place isn't known. Null when nobody was marked.
+ */
+export function letterFromMarks(rows: HistoryRow[], gender: "M" | "F"): number | null {
+  let ms: number | null = null;
+  for (const r of rows) if (r.gender === gender && r.letter && r.status === "finished" && r.finishMs !== null && (ms === null || r.finishMs > ms)) ms = r.finishMs;
+  return ms;
+}
 
 /**
  * A race's numbers from its summary line, either sheet format:
@@ -336,10 +347,16 @@ export type SheetSummary = { points: number | null; place: number | null; teams:
  * Null when the line names another race or carries no numbers.
  */
 export function sheetSummaryFor(summaries: string[], raceName: string): SheetSummary | null {
-  const name = raceName.trim().toLowerCase();
-  const line = summaries.find((l) => l.trim().toLowerCase().startsWith(name) && !/^\s*-?\s*jv/i.test(l.trim().slice(name.length)));
+  // Matched by gender and level, so a sheet's typo ("Boys Varisty") still finds its race.
+  const which = (text: string) => {
+    const m = text.trim().match(/^(boys|girls|men|women)\s+(var\w*|jv)\b/i);
+    return m ? { key: `${/^(boys|men)$/i.test(m[1]) ? "M" : "F"}-${/^jv$/i.test(m[2]) ? "jv" : "varsity"}`, length: m[0].length } : null;
+  };
+  const race = which(raceName);
+  if (!race) return null;
+  const line = summaries.find((l) => which(l)?.key === race.key);
   if (!line) return null;
-  const rest = line.trim().slice(name.length);
+  const rest = line.trim().slice(which(line)!.length);
   const num = (re: RegExp) => {
     const m = rest.match(re);
     return m ? Number(m[1]) : null;

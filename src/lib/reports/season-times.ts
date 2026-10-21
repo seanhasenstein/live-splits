@@ -54,8 +54,11 @@ export function buildSeasonTimes(input: {
     });
     (byGender[athlete.gender] ??= []).push({ athlete, cells, bestMs: best?.finishMs ?? null, races: mine.length });
   }
-  // Fastest season best first; anyone without a time this season at the bottom, by name.
-  for (const rows of Object.values(byGender)) rows.sort((a, b) => (a.bestMs ?? Infinity) - (b.bestMs ?? Infinity) || a.athlete.name.localeCompare(b.athlete.name));
+  // Rows: the latest meet's varsity runners first, then everyone else, then anyone with fewer than
+  // three races this season; each group by season best (none last), then name.
+  const latest = columns.findIndex((c) => c.latest);
+  const group = (r: SeasonRow) => (latest >= 0 && r.cells[latest] && !r.cells[latest]!.jv ? 0 : r.races >= 3 ? 1 : 2);
+  for (const rows of Object.values(byGender)) rows.sort((a, b) => group(a) - group(b) || (a.bestMs ?? Infinity) - (b.bestMs ?? Infinity) || a.athlete.name.localeCompare(b.athlete.name));
   return { columns, byGender };
 }
 

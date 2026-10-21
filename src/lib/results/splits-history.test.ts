@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import { METERS_PER_MILE } from "@/lib/pace";
-import { parseLongDate, parseSplitsHistory, sheetSummaryFor } from "./splits-history";
+import { letterFromMarks, parseLongDate, parseSplitsHistory, sheetSummaryFor } from "./splits-history";
 
 const text = readFileSync(`${process.cwd()}/src/lib/results/fixtures/splits-history.txt`, "utf8");
 
@@ -181,4 +181,19 @@ test("a summary label with a note after it still reads its number (\"LETTER STAN
     ].join("\n"),
   );
   expect(sheetSummaryFor(meets[0].summaries, "Boys Varsity")).toEqual({ points: 47, place: 1, teams: null, runners: null, letter: { place: 40, ms: 20 * 60_000 + 57_000 } });
+});
+
+test("summary lines are matched by gender and level, so a typo on the sheet still finds its race", () => {
+  const sheet = ["Boys Varisty - 110 Pts. 5th Place. 9 Teams. 69 Total Runners. Letter Pts. 46th - 20:45", "Girls Varist - 80 Pts. 2nd Place. 6 Teams. 50 Total Runners."];
+  expect(sheetSummaryFor(sheet, "Boys Varsity")).toEqual({ points: 110, place: 5, teams: 9, runners: 69, letter: { place: 46, ms: 20 * 60_000 + 45_000 } });
+  expect(sheetSummaryFor(sheet, "Girls Varsity")?.points).toBe(80);
+  expect(sheetSummaryFor(sheet, "Boys & Girls JV")).toBeNull();
+});
+
+test("a letter standard from the sheet's LETTER marks: the slowest of our letter-earners of that gender", () => {
+  const r = (name: string, gender: "M" | "F", finishMs: number | null, letter: boolean, status: "finished" | "dnf" = "finished") => ({ name, gender, level: "varsity" as const, splits: {}, finishMs, place: null, status, letter, splitsUnreadable: false });
+  const rows = [r("A", "M", 1_000_000, true), r("B", "M", 1_200_000, true), r("C", "M", 1_150_000, false), r("D", "M", 1_300_000, false), r("E", "F", 1_400_000, true), r("F", "M", null, true, "dnf")];
+  expect(letterFromMarks(rows, "M")).toBe(1_200_000);
+  expect(letterFromMarks(rows, "F")).toBe(1_400_000);
+  expect(letterFromMarks(rows.filter((x) => !x.letter), "M")).toBeNull();
 });

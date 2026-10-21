@@ -106,7 +106,8 @@ export default async function MeetSplitsPage({ params }: PageProps<"/meets/[meet
                         {stats.letter && (
                           <div className="st gold">
                             <div className="n">
-                              {ordinal(stats.letter.place)} · {t(stats.letter.ms)}
+                              {stats.letter.place !== null ? `${ordinal(stats.letter.place)} · ` : ""}
+                              {t(stats.letter.ms)}
                             </div>
                             <div className="l">Letter Standard</div>
                           </div>
