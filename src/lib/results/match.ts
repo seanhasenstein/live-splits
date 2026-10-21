@@ -122,3 +122,13 @@ export function isCombinedRace(race: { name: string; athleteIds: string[] }, cat
   const genders = new Set(race.athleteIds.map(genderOf));
   return genders.has("F") && genders.has("M");
 }
+
+/**
+ * Which meets are "the same meet" across years: the team's short name when set (it's the one name
+ * that stays put while the meet's own name changes: "Kettle Moraine Lutheran Invite", then "KML
+ * Charger Cross Country Classic", both KML), else the series id, else the meet's name.
+ */
+export function meetSeriesKey(m: { shortName?: string | null; meetSeriesId: string | null; name: string }): string {
+  if (m.shortName) return `short:${normalizeName(m.shortName)}`;
+  return m.meetSeriesId ?? `name:${normalizeName(m.name)}`;
+}

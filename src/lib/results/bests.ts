@@ -2,7 +2,7 @@ import "server-only";
 import type { Meet, Precision, Program, Race } from "@/lib/db/schema";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
-import { normalizeName } from "./match";
+import { meetSeriesKey } from "./match";
 
 /**
  * What each runner in a lineup had to beat coming into this race: their best
@@ -50,8 +50,8 @@ export type AthleteBests = {
 
 export type LineupBests = Record<string, AthleteBests>;
 
-/** Meets of the same name are one series; the schema's series id wins where set. */
-const seriesKey = (m: Pick<Meet, "meetSeriesId" | "name">) => m.meetSeriesId ?? `name:${normalizeName(m.name)}`;
+/** The same meet across years: by short name, else series id, else name (see meetSeriesKey). */
+const seriesKey = (m: Pick<Meet, "meetSeriesId" | "name" | "shortName">) => meetSeriesKey(m);
 
 export async function getLineupBests(meet: Meet, race: Pick<Race, "lineup" | "distanceId">, program: Pick<Program, "settings"> | null): Promise<LineupBests> {
   const db = await getDb();
@@ -61,7 +61,7 @@ export async function getLineupBests(meet: Meet, race: Pick<Race, "lineup" | "di
 
   const meets = await collection(db, "meets")
     // Later meets too: only to know whether this race is still a runner's record (see `later`).
-    .find({ schoolId: meet.schoolId, programId: meet.programId, _id: { $ne: meet._id }, deletedAt: null, recordsExclusion: null }, { projection: { _id: 1, name: 1, date: 1, courseId: 1, seasonId: 1, meetSeriesId: 1 } })
+    .find({ schoolId: meet.schoolId, programId: meet.programId, _id: { $ne: meet._id }, deletedAt: null, recordsExclusion: null }, { projection: { _id: 1, name: 1, date: 1, courseId: 1, seasonId: 1, meetSeriesId: 1, shortName: 1 } })
     .toArray();
   if (meets.length === 0) return out;
   const meetById = new Map(meets.map((m) => [m._id, m]));

@@ -2,7 +2,7 @@ import "server-only";
 import type { Meet, Precision, Program } from "@/lib/db/schema";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
-import { normalizeName } from "@/lib/results/match";
+import { meetSeriesKey } from "@/lib/results/match";
 import { shortMeetName } from "./season-times";
 
 /**
@@ -40,7 +40,7 @@ export type HistoryRow = {
   counts: boolean;
 };
 
-export const seriesOf = (m: Pick<Meet, "meetSeriesId" | "name">) => m.meetSeriesId ?? `name:${normalizeName(m.name)}`;
+export const seriesOf = (m: Pick<Meet, "meetSeriesId" | "name" | "shortName">) => meetSeriesKey(m);
 
 export async function getTeamHistory(schoolId: string, program: Pick<Program, "_id" | "settings">, athleteIds: string[]): Promise<HistoryRow[]> {
   if (athleteIds.length === 0) return [];

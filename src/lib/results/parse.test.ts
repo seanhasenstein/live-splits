@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { expect, test } from "vitest";
-import { guessRace, isCombinedRace, isOurTeam, matchAthlete, normalizeName } from "./match";
+import { guessRace, isCombinedRace, isOurTeam, matchAthlete, meetSeriesKey, normalizeName } from "./match";
 import { COLUMN_HEADER_RE, headerLabels, parseArrowResultsHtml, parseColumnResults, parseRaceResultJson, parseResultsText, restrictToDivision } from "./parse";
 
 // Real, unsanitized results stay out of git; these two tests run only where they exist.
@@ -224,4 +224,10 @@ test("a combined race: no category gender, a boys-and-girls name, or a lineup wi
   expect(isCombinedRace({ name: "JV", athleteIds: ["a", "c"] }, "M", of)).toBe(true);
   expect(isCombinedRace({ name: "Boys JV", athleteIds: ["a", "b"] }, "M", of)).toBe(false);
   expect(isCombinedRace({ name: "Girls Varsity", athleteIds: ["c"] }, "F", of)).toBe(false);
+});
+
+test("the same meet across years: the short name first, then the series id, then the name", () => {
+  expect(meetSeriesKey({ shortName: "KML", meetSeriesId: null, name: "Kettle Moraine Lutheran Invite" })).toBe(meetSeriesKey({ shortName: "kml", meetSeriesId: "x", name: "KML Charger Cross Country Classic" }));
+  expect(meetSeriesKey({ shortName: null, meetSeriesId: "s1", name: "A" })).toBe("s1");
+  expect(meetSeriesKey({ shortName: null, meetSeriesId: null, name: "Smiley Invite" })).toBe("name:smiley invite");
 });
