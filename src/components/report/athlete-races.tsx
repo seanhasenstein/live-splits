@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { AthleteRace } from "@/lib/reports/athlete";
 import { ordinal, segmentsAt } from "@/lib/reports/athlete";
 import { segmentLength } from "@/lib/pace";
@@ -15,6 +16,7 @@ export function AthleteRacesTable({
   finishMeters,
   label,
   career = false,
+  href,
 }: {
   races: AthleteRace[];
   splitLabels: { label: string; meters: number }[];
@@ -22,6 +24,8 @@ export function AthleteRacesTable({
   /** The first column's text for a race ("2025 Crusader Challenge", "KML"). */
   label: (r: AthleteRace) => string;
   career?: boolean;
+  /** Where a race's name links: its results page. */
+  href?: (r: AthleteRace) => string | null;
 }) {
   const t = (ms: number | null) => (ms === null ? "—" : formatElapsed(ms, "seconds"));
   const last = finishMeters !== null && splitLabels.length > 0 ? segmentLength(finishMeters - splitLabels[splitLabels.length - 1].meters) : null;
@@ -49,7 +53,13 @@ export function AthleteRacesTable({
           return (
             <tr key={r.raceId} className={tint}>
               <td className={`${td} pr-2`}>
-                {label(r)}
+                {href?.(r) ? (
+                  <Link href={href(r)!} className="underline decoration-[var(--r-line)] underline-offset-2 hover:decoration-[var(--r-green)] print:no-underline">
+                    {label(r)}
+                  </Link>
+                ) : (
+                  label(r)
+                )}
                 {r.grade !== null && r.grade <= 12 && <Grade>Gr {r.grade}</Grade>}
                 {r.courseBest && <Pill kind="course" className="ml-1.5" />}
               </td>

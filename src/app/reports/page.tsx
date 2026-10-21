@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CalendarRange, ClipboardList, MapPin, TableProperties, UserRound } from "lucide-react";
+import { CalendarRange, ClipboardList, ListOrdered, MapPin, TableProperties, UserRound } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { SectionTabs } from "@/components/section-tabs";
 import { SessionMenu } from "@/components/session-menu";
@@ -62,6 +62,10 @@ export default async function ReportsPage() {
                 <LinkButton href={`/meets/${m._id}/reports/splits`} size="sm" variant="secondary">
                   <TableProperties className="size-4" />
                   Meet splits
+                </LinkButton>
+                <LinkButton href={`/meets/${m._id}/reports/results`} size="sm" variant="secondary">
+                  <ListOrdered className="size-4" />
+                  Results
                 </LinkButton>
                 <LinkButton href={`/meets/${m._id}/reports/race-day`} size="sm" variant="secondary">
                   <ClipboardList className="size-4" />

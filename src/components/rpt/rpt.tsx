@@ -61,8 +61,9 @@ export function RptPage({
   right,
   children,
 }: {
-  title: string;
-  meetLine: ReactNode;
+  /** Null on a page that continues the one before (no hero). */
+  title: string | null;
+  meetLine?: ReactNode;
   heroVariant?: "nobar" | "green";
   legend: ReactNode;
   right: ReactNode;
@@ -71,17 +72,19 @@ export function RptPage({
   return (
     <div className="paper">
       <div className="page">
-        <div className={`hero ${heroVariant ?? ""}`}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={LOGO} alt="" />
-          <div>
-            <div className="eyebrow">
-              Sheboygan Lutheran Crusaders · <b>Cross Country</b>
+        {title !== null && (
+          <div className={`hero ${heroVariant ?? ""}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={LOGO} alt="" />
+            <div>
+              <div className="eyebrow">
+                Sheboygan Lutheran Crusaders · <b>Cross Country</b>
+              </div>
+              <h1>{title}</h1>
+              {meetLine}
             </div>
-            <h1>{title}</h1>
-            {meetLine}
           </div>
-        </div>
+        )}
         {children}
         <div className="footer">
           {/* eslint-disable-next-line @next/next/no-img-element */}

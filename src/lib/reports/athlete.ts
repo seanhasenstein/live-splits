@@ -77,14 +77,17 @@ export function summarizeAthlete(input: {
 
 /**
  * A race's time for each stretch of `checkpoints` (today's course: Mile 1, Mile 2), then the last
- * stretch to the finish. Splits are matched by distance; a stretch whose either end is missing, or
+ * stretch to the finish, in whole seconds from the whole-second clock times. Splits are matched by distance; a stretch whose either end is missing, or
  * ends at a mis-tapped split (no later than the one before it), is null rather than a wrong number.
  */
 export function segmentsAt(r: Pick<HistoryRow, "splits" | "finishMs" | "status">, checkpoints: { meters: number }[]): (number | null)[] {
-  const at = checkpoints.map((c) => r.splits.find((s) => Math.abs(s.meters - c.meters) <= 50)?.ms ?? null);
+  // Clock times truncated to the second first, then subtracted, so the stretches add up to the finish
+  // as printed (16:06 − 10:24 = 5:42, where 16:06.8 − 10:24.9 would truncate to 5:41).
+  const whole = (ms: number | null | undefined) => (ms === null || ms === undefined ? null : Math.floor(ms / 1000) * 1000);
+  const at = checkpoints.map((c) => whole(r.splits.find((s) => Math.abs(s.meters - c.meters) <= 50)?.ms));
   // A time no later than the one before it is a mis-tap: drop it, so neither stretch beside it uses it.
   let last = 0;
-  const ends = [0, ...at, r.status === "finished" ? r.finishMs : null].map((ms) => {
+  const ends = [0, ...at, r.status === "finished" ? whole(r.finishMs) : null].map((ms) => {
     if (ms === null || ms <= last) return ms === 0 ? 0 : null;
     last = ms;
     return ms;

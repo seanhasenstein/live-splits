@@ -92,7 +92,14 @@ export default async function AthletePage({ params }: PageProps<"/athletes/[athl
                 {s.seasonBest ? <span className="ml-2 text-[13px] font-semibold tracking-normal text-[var(--r-gold-text)] normal-case">season best {t(s.seasonBest.finishMs)}</span> : null}
               </MajorHeading>
               <TableWrap>
-                <AthleteRacesTable races={races} splitLabels={splitLabels} finishMeters={5000} label={(r) => r.meetName} career />
+                <AthleteRacesTable
+                  races={races}
+                  splitLabels={splitLabels}
+                  finishMeters={5000}
+                  label={(r) => r.meetName}
+                  career
+                  href={(r) => (r.wholeField ? `/meets/${r.meetId}/reports/results?race=${r.raceId}` : `/meets/${r.meetId}/reports/splits`)}
+                />
               </TableWrap>
               {timed.length >= 3 && (
                 <div className="mt-3">

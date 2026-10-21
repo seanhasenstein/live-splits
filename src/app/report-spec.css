@@ -371,3 +371,99 @@
     break-after: auto;
   }
 }
+
+/* Highlights stat bar (spec §4b), also on the race results pages */
+.rpt .statbar {
+  display: flex;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  margin-top: 8px;
+  padding: 6px 0 5px;
+}
+.rpt .statbar .c {
+  flex: 1;
+  text-align: center;
+  border-left: 1px solid var(--rule-soft);
+}
+.rpt .statbar .c:first-child {
+  border-left: none;
+}
+.rpt .statbar .n {
+  font-size: 24pt;
+  font-weight: 800;
+  color: var(--green);
+  line-height: 1.05;
+}
+.rpt .statbar .l {
+  font-size: 6.8pt;
+  letter-spacing: 0.22em;
+  color: var(--soft);
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* Race results (after the team's results PDFs) */
+.rpt .hero .meet {
+  font-size: 13pt;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 2px;
+}
+.rpt .sec .sm {
+  font-size: 7pt;
+  letter-spacing: 0.2em;
+  color: var(--soft);
+  font-weight: 700;
+  margin-left: 10px;
+}
+.rpt .sec .sm b {
+  font-size: 10.5pt;
+  letter-spacing: 0.02em;
+  color: var(--green);
+  margin-right: 3px;
+}
+.rpt table.rs {
+  margin-top: 6px;
+}
+.rpt table.rs td {
+  padding: 2px 5px 2.5px;
+}
+.rpt table.rs td.c,
+.rpt table.rs th.c {
+  text-align: center;
+}
+.rpt table.rs .vl {
+  border-left: 1px solid var(--rule-light);
+}
+.rpt table.rs td.pl {
+  color: var(--soft);
+  width: 30px;
+}
+.rpt table.rs td.tm {
+  color: var(--soft);
+  text-align: left;
+}
+.rpt table.rs td.t {
+  font-weight: 700;
+}
+.rpt table.rs td.d {
+  color: var(--ghost);
+  font-weight: 400;
+}
+.rpt table.rs tr.us td {
+  background: var(--cream);
+  color: var(--green);
+  font-weight: 700;
+}
+.rpt table.rs tr.us td.d {
+  color: var(--green);
+}
+.rpt .incomplete {
+  margin-top: 6px;
+  font-size: 7.5pt;
+  color: var(--soft);
+}
+.rpt .incomplete b {
+  color: var(--ink);
+}

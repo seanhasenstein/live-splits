@@ -34,6 +34,7 @@ const row = (athleteId: string, meetId: string, date: string, ms: number, extra:
   precision: "tenths",
   place: 5,
   grade: 11,
+  wholeField: false,
   fieldSize: null,
   splits: [
     { label: "Mile 1", meters: MILE, ms: 310_000 },
@@ -82,7 +83,7 @@ test("meet splits: SB matching to the second, PR outranks SB, letter at or under
     ["a", "sb", true],
     ["b", "pr", true],
   ]);
-  expect(bv.rows[0].segments).toEqual([310_000, 330_000, 360_900]);
+  expect(bv.rows[0].segments).toEqual([310_000, 330_000, 360_000]); // 16:40.9 − 10:40 → 6:00, from the whole-second clock
   // Team points and place come from the usual scoring (tested with it); here: three scoring teams, ours third.
   expect(bv.stats).toEqual({ points: 51, place: 3, teams: 3, runners: 20, letter: { place: 13, ms: 1_200_000 }, note: null });
   expect(bjv.rows.map((r) => [r.athleteId, r.badge, r.letter])).toEqual([

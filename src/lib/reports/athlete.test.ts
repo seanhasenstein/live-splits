@@ -22,6 +22,7 @@ const row = (athleteId: string, raceId: string, meetName: string, date: string, 
   precision: "tenths",
   place: 10,
   grade: null,
+  wholeField: false,
   fieldSize: 80,
   splits: [
     { label: "Mile 1", meters: MILE, ms: 330_000 },
@@ -85,4 +86,18 @@ test("segments line up with today's checkpoints; a missing or impossible split l
     ),
   ).toEqual([400_000, null, null]);
   expect(segmentsAt({ splits: [{ label: "Mile 1", meters: MILE, ms: 400_000 }], finishMs: null, status: "dnf" }, cps)).toEqual([400_000, null, null]);
+  // Whole-second clock times, then subtracted: 5:10.6, 10:24.9, 16:06.8 → 5:10, 5:14, 5:42 (adding up to 16:06).
+  expect(
+    segmentsAt(
+      {
+        splits: [
+          { label: "Mile 1", meters: MILE, ms: 310_600 },
+          { label: "Mile 2", meters: 2 * MILE, ms: 624_900 },
+        ],
+        finishMs: 966_800,
+        status: "finished",
+      },
+      cps,
+    ),
+  ).toEqual([310_000, 314_000, 342_000]);
 });

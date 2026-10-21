@@ -22,6 +22,7 @@ const row = (athleteId: string, meetId: string, meetName: string, date: string, 
   precision: "tenths",
   place: 1,
   grade: null,
+  wholeField: false,
   fieldSize: null,
   splits: [
     { label: "Mile 1", meters: MILE, ms: Math.round(ms * 0.31) },

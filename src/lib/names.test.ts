@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { shortNames } from "./names";
+import { describe, expect, it, test } from "vitest";
+import { displayCase, shortNames } from "./names";
 
 describe("shortNames", () => {
   it("first name when unique, then last initial, then last name, only as long as needed", () => {
@@ -28,4 +28,13 @@ describe("shortNames", () => {
     expect(names.get("a")).toBe("Emma K.");
     expect(names.get("c")).toBe("Joe S.");
   });
+});
+
+test("names printed in capitals read as written", () => {
+  expect(displayCase("Magnus AVERY")).toBe("Magnus Avery");
+  expect(displayCase("Cable DE TROYE")).toBe("Cable De Troye");
+  expect(displayCase("Jj SWENEY")).toBe("Jj Sweney");
+  expect(displayCase("Ah'Mere JONES")).toBe("Ah'Mere Jones");
+  expect(displayCase("Kenna McKENNA")).toBe("Kenna McKENNA");
+  expect(displayCase("Eddy Giebler")).toBe("Eddy Giebler");
 });

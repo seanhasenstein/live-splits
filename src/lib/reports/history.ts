@@ -30,6 +30,8 @@ export type HistoryRow = {
   finishMs: number | null;
   precision: Precision;
   place: number | null;
+  /** The race's whole field was imported (every team), so it has a full results page. */
+  wholeField: boolean;
   /** Their grade that season, when known. */
   grade: number | null;
   /** Runners in the race's whole field: counted when the field was imported, else as the split sheet printed it; null if neither. */
@@ -67,7 +69,12 @@ export async function getTeamHistory(schoolId: string, program: Pick<Program, "_
     ])
     .toArray();
   const fieldSize = new Map<string, number>();
-  for (const f of fields) if (f.others > 0) fieldSize.set(f._id, f.n);
+  const whole = new Set<string>();
+  for (const f of fields)
+    if (f.others > 0) {
+      fieldSize.set(f._id, f.n);
+      whole.add(f._id);
+    }
   for (const r of races) if (!fieldSize.has(r._id) && r.sheetSummary?.runners) fieldSize.set(r._id, r.sheetSummary.runners);
   const minGrade = program.settings.recordsStartGrade;
 
@@ -108,6 +115,7 @@ export async function getTeamHistory(schoolId: string, program: Pick<Program, "_
       precision: finish?.precision ?? "seconds",
       place: r.place,
       grade: r.gradeSnapshot,
+      wholeField: whole.has(race._id),
       fieldSize: fieldSize.get(race._id) ?? null,
       splits,
       counts,

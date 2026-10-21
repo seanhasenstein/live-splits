@@ -32,6 +32,7 @@ const row = (athleteId: string, meetId: string, ms: number, extra: Partial<Histo
   precision: "tenths",
   place: 1,
   grade: null,
+  wholeField: false,
   fieldSize: null,
   splits: [],
   counts: true,

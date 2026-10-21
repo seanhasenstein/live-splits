@@ -34,3 +34,12 @@ export function shortNames(people: { id: string; name: string }[]): Map<string, 
     ]),
   );
 }
+
+/**
+ * A name as a person writes it, when results printed part of it in capitals ("Magnus AVERY",
+ * "Cable DE TROYE" → "Magnus Avery", "Cable De Troye"). Mixed-case words stay as they are
+ * ("McKenna"); one-letter words (initials) too.
+ */
+export function displayCase(name: string): string {
+  return name.replace(/[\p{L}'’]+/gu, (w) => (w.length > 1 && w === w.toUpperCase() && w !== w.toLowerCase() ? w[0] + w.slice(1).toLowerCase() : w));
+}
