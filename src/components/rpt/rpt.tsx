@@ -70,7 +70,7 @@ export function RptPage({
   children: ReactNode;
 }) {
   return (
-    <div className="paper">
+    <div className={`paper ${title === null ? "cont" : ""}`}>
       <div className="page">
         {title !== null && (
           <div className={`hero ${heroVariant ?? ""}`}>

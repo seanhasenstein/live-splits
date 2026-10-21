@@ -341,6 +341,27 @@
   .rpt.web .scroll {
     overflow-x: auto;
   }
+  /* Page breaks are for paper: on screen a continuation page runs straight on from the one before,
+     with one footer at the end and no repeated table head. */
+  .rpt.web .paper:has(+ .paper.cont) {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+  .rpt.web .paper:has(+ .paper.cont) .footer {
+    display: none;
+  }
+  .rpt.web .paper.cont {
+    padding-top: 0;
+    border-top: 0;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+  .rpt.web .paper.cont .page > table:first-child > thead {
+    display: none;
+  }
 }
 @media screen and (max-width: 640px) {
   .rpt.web .paper {
@@ -379,6 +400,11 @@
   border-bottom: 1px solid var(--rule);
   margin-top: 8px;
   padding: 6px 0 5px;
+}
+/* Straight under the hero, the hero's rule is the bar's top. */
+.rpt .hero + .statbar {
+  border-top: none;
+  margin-top: 0;
 }
 .rpt .statbar .c {
   flex: 1;
