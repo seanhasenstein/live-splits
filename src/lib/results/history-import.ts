@@ -7,7 +7,7 @@ import { distanceValue } from "@/lib/distance";
 import { gradeForSeason } from "@/lib/grade";
 import { resolvePlace } from "@/lib/places";
 import { editDistance, matchAthlete, normalizeName } from "./match";
-import type { HistoryMeet, HistoryRow } from "./splits-history";
+import { type HistoryMeet, type HistoryRow, sheetSummaryFor } from "./splits-history";
 
 /**
  * Past seasons from the team's split sheets: meets, races, results and the
@@ -349,6 +349,8 @@ async function writeMeet(db: Db, session: ClientSession, school: School, program
       lineup: group.rows.map((r) => ({ athleteId: athleteIdByName.get(r.name)!, levelId })),
       sections: [],
       teamScoring: [],
+      // The sheet's team numbers and letter standard: only our runners are imported, not the field.
+      sheetSummary: sheetSummaryFor(m.summaries, group.name),
       exclusions: { excludeFromPrSb: false, excludeFromCourseLists: false, excludeFromMeetLists: false, exclusionReason: null },
       ...audit,
     });

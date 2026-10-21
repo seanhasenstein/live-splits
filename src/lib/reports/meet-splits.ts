@@ -1,5 +1,6 @@
 import { fieldScores } from "@/lib/race-places";
 import { ordinal, segmentsAt } from "./athlete";
+import type { SheetSummary } from "@/lib/results/splits-history";
 import type { HistoryRow } from "./history";
 
 /**
@@ -27,6 +28,8 @@ export type SplitsRace = {
   varsity: boolean;
   order: number;
   checkpoints: { meters: number }[];
+  /** The split sheet's numbers, for a race whose field wasn't imported (history). */
+  sheet?: SheetSummary | null;
 };
 /** The race's full field as imported (every team). */
 export type FieldRow = { team: string | null; place: number | null; status: string; timeMs: number | null; ours: boolean };
@@ -69,13 +72,12 @@ export function buildMeetSplits(input: {
     return b;
   };
 
-  // Each gender's letter standard, from its varsity race's whole field.
-  const letterFor: Partial<Record<"M" | "F", { place: number; ms: number; runners: number }>> = {};
+  // Each gender's letter standard, from its varsity race.
+  const letterFor: Partial<Record<"M" | "F", { place: number; ms: number; runners: number | null }>> = {};
   for (const race of input.races) {
     if (!race.varsity || race.gender === null) continue;
-    const finishers = (input.fields[race.id] ?? []).filter((e) => e.status === "finished" && e.place !== null && e.timeMs !== null).sort((a, b) => a.place! - b.place!);
-    const place = letterCutoffPlace(finishers.length);
-    if (place >= 1) letterFor[race.gender] = { place, ms: finishers[place - 1].timeMs!, runners: finishers.length };
+    const standard = letterStandard(input.fields[race.id] ?? [], race.sheet ?? null);
+    if (standard) letterFor[race.gender] = standard;
   }
 
   const races = [...input.races].sort((a, b) => Number(b.varsity) - Number(a.varsity) || a.order - b.order);
@@ -114,8 +116,32 @@ export function buildMeetSplits(input: {
   return out;
 }
 
-/** Team points, place and number of scoring teams; field size and letter standard for varsity. Null without a team score. */
-function statsFor(race: SplitsRace, field: FieldRow[], letter: { place: number; ms: number; runners: number } | undefined): SplitsStats | null {
+/** Whether a field is a whole field (other teams' runners imported), not just ours. */
+const wholeField = (field: FieldRow[]) => field.some((e) => !e.ours);
+
+/**
+ * A varsity race's letter standard: the time of the finisher at floor(0.66 × finishers) in the whole
+ * field, else what the split sheet printed. Null when neither is known.
+ */
+export function letterStandard(field: FieldRow[], sheet: SheetSummary | null): { place: number; ms: number; runners: number | null } | null {
+  if (wholeField(field)) {
+    const finishers = field.filter((e) => e.status === "finished" && e.place !== null && e.timeMs !== null).sort((a, b) => a.place! - b.place!);
+    const place = letterCutoffPlace(finishers.length);
+    if (place >= 1) return { place, ms: finishers[place - 1].timeMs!, runners: finishers.length };
+  }
+  return sheet?.letter ? { place: sheet.letter.place, ms: sheet.letter.ms, runners: sheet.runners } : null;
+}
+
+/**
+ * Team points, place and number of scoring teams; field size and letter standard for varsity. From
+ * the whole field when it was imported, else from the split sheet's numbers. Null without a team score.
+ */
+function statsFor(race: SplitsRace, field: FieldRow[], letter: { place: number; ms: number; runners: number | null } | undefined): SplitsStats | null {
+  if (!wholeField(field)) {
+    const s = race.sheet;
+    if (!s || s.points === null || s.place === null || s.teams === null) return null;
+    return { points: s.points, place: s.place, teams: s.teams, runners: race.varsity ? s.runners : null, letter: race.varsity && letter ? { place: letter.place, ms: letter.ms } : null, note: null };
+  }
   const { scores } = fieldScores(field.map((e) => ({ team: e.team, place: e.place, status: e.status, ours: e.ours })));
   const scoring = scores.filter((s) => s.points !== null);
   const i = scoring.findIndex((s) => s.team === "us");

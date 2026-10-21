@@ -322,3 +322,31 @@ export function meetSplitsAsHistory(text: string): string {
   return out.join("\n");
 }
 
+
+export type SheetSummary = { points: number | null; place: number | null; teams: number | null; runners: number | null; letter: { place: number; ms: number } | null };
+
+/**
+ * A race's numbers from its summary line, either sheet format:
+ * "Boys Varsity 92 Pts. 4th Place. 9 Teams. 70 Total Runners. Letter Pts. 47th - 21:00"
+ * "Boys Varsity - 76 Pts. 2nd Place. 12 Teams. 79 Runners. Letter standard 52nd · 19:47."
+ * Null when the line names another race or carries no numbers.
+ */
+export function sheetSummaryFor(summaries: string[], raceName: string): SheetSummary | null {
+  const name = raceName.trim().toLowerCase();
+  const line = summaries.find((l) => l.trim().toLowerCase().startsWith(name) && !/^\s*-?\s*jv/i.test(l.trim().slice(name.length)));
+  if (!line) return null;
+  const rest = line.trim().slice(name.length);
+  const num = (re: RegExp) => {
+    const m = rest.match(re);
+    return m ? Number(m[1]) : null;
+  };
+  const letter = rest.match(/letter\s*(?:pts\.?|standard)\s*(\d+)(?:st|nd|rd|th)\s*[-–—·]\s*(\d+:\d{2})/i);
+  const out: SheetSummary = {
+    points: num(/(\d+)\s*pts\b/i),
+    place: num(/(\d+)(?:st|nd|rd|th)\s*place/i),
+    teams: num(/(\d+)\s*teams/i),
+    runners: num(/(\d+)\s*(?:total\s*)?runners/i),
+    letter: letter ? { place: Number(letter[1]), ms: parseElapsed(letter[2])! } : null,
+  };
+  return Object.values(out).some((v) => v !== null) ? out : null;
+}

@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { MajorHeading, ReportShell, Sheet, TableWrap, td, teamBrand, th } from "@/components/report/report";
+import { RptPage, RptShell } from "@/components/rpt/rpt";
 import { getSession, isSchoolWide } from "@/lib/auth/session";
+import { getDb } from "@/lib/db/client";
+import { collection } from "@/lib/db/collections";
 import { loadSeasonContext, mainDistance } from "@/lib/reports/context";
+import { type FieldRow, letterStandard } from "@/lib/reports/meet-splits";
 import { buildSeasonTimes } from "@/lib/reports/season-times";
-import { formatElapsed, formatLocalDateLong } from "@/lib/time";
+import { formatElapsed, formatMonthDayYear } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Season times" };
 
@@ -14,7 +17,7 @@ const GENDERS = [
   { key: "F", label: "Girls" },
 ];
 
-/** Season Times: every athlete by every meet, boys then girls, one Letter page each. */
+/** Season Times (design/report-spec.md §4d): every athlete by every meet, boys then girls, one Letter page each. */
 export default async function SeasonTimesPage({ searchParams }: PageProps<"/reports/season-times">) {
   const session = await getSession();
   if (!session) redirect("/join");
@@ -24,6 +27,23 @@ export default async function SeasonTimesPage({ searchParams }: PageProps<"/repo
   const ctx = await loadSeasonContext(session.schoolId, onDate);
   if (!ctx) notFound();
 
+  // Each meet's varsity letter standard by gender: from the whole field, else the split sheet's.
+  const db = await getDb();
+  const races = await collection(db, "races").find({ meetId: { $in: ctx.meets.map((m) => m._id) }, deletedAt: null }).toArray();
+  const entries = await collection(db, "raceEntries")
+    .find({ raceId: { $in: races.filter((r) => r.levelIds.includes("varsity")).map((r) => r._id) }, deletedAt: null }, { projection: { raceId: 1, teamName: 1, place: 1, status: 1, timeMs: 1, athleteId: 1 } })
+    .toArray();
+  const fields: Record<string, FieldRow[]> = {};
+  for (const e of entries) (fields[e.raceId] ??= []).push({ team: e.teamName, place: e.place, status: e.status, timeMs: e.timeMs, ours: !!e.athleteId });
+  const categoryGender = new Map(ctx.program.settings.raceCategories.map((c) => [c.id, c.gender]));
+  const letterMs: Record<string, Partial<Record<string, number>>> = {};
+  for (const r of races) {
+    const g = categoryGender.get(r.raceCategoryId) ?? (/\bgirls?\b/i.test(r.name) ? "F" : /\bboys?\b/i.test(r.name) ? "M" : null);
+    if (!r.levelIds.includes("varsity") || (g !== "M" && g !== "F")) continue;
+    const standard = letterStandard(fields[r._id] ?? [], r.sheetSummary);
+    if (standard) (letterMs[r.meetId] ??= {})[g] = standard.ms;
+  }
+
   const season = ctx.history.filter((r) => r.seasonId === ctx.season._id);
   const { columns, byGender } = buildSeasonTimes({
     meets: ctx.meets.map((m) => ({ id: m._id, name: m.name, shortName: m.shortName, date: m.date })),
@@ -31,74 +51,64 @@ export default async function SeasonTimesPage({ searchParams }: PageProps<"/repo
     rows: season,
     distanceId: mainDistance(season),
     today: ctx.today,
+    letterMs,
   });
   const latest = columns.find((c) => c.latest);
   const latestMeet = latest && ctx.meets.find((m) => m._id === latest.meetId);
-  const team = teamBrand(ctx.school);
-  const t = (ms: number) => formatElapsed(ms, "seconds");
-  const updated = formatLocalDateLong(ctx.today).replace(/^[A-Za-z]+, /, "");
+  const t = (ms: number) => formatElapsed(Math.floor(ms / 1000) * 1000, "seconds");
 
   return (
-    <ReportShell back={{ href: "/reports", label: "Reports" }} title="Season times" subtitle={ctx.season.label}>
+    <RptShell back={{ href: "/reports", label: "Reports" }} title="Season times" subtitle={ctx.season.label}>
       {GENDERS.filter((g) => byGender[g.key]?.length).map((g) => (
-        <Sheet
+        <RptPage
           key={g.key}
-          team={team}
-          header={{
-            title: "Season Times",
-            subline: (
-              <>
-                <span className="font-semibold text-[var(--r-ink)]">{ctx.season.label} Season</span>
-                {latestMeet ? ` · through the ${latestMeet.name} · ${formatLocalDateLong(latestMeet.date).replace(/^[A-Za-z]+, /, "")}` : " · no results yet"}
-              </>
-            ),
-          }}
+          title="Season Times"
+          meetLine={
+            <div className="hero-meet">
+              <span className="mn">{ctx.season.label} Season</span>
+              &nbsp;·&nbsp;{latestMeet ? `through the ${latestMeet.name} · ${formatMonthDayYear(latestMeet.date)}` : "no results yet"}
+            </div>
+          }
           legend={
             <>
-              <span className="font-bold text-[var(--r-green)]">Bold green</span> season best · <sup>JV</sup> ran the JV race · blank = did not run · gray columns are still to come · times truncated to whole seconds
+              <b style={{ textDecoration: "underline" }}>Underline</b> letter point earned · <b style={{ color: "var(--green)" }}>Bold green</b> season best · blank = did not run
             </>
           }
-          tag={`Updated ${updated}`}
+          right={`Updated ${formatMonthDayYear(ctx.today)}`}
         >
-          <MajorHeading>{g.label}</MajorHeading>
-          <TableWrap>
-            <table className="report-grouped w-full border-collapse">
+          <div className="sec" style={{ borderBottom: "none" }}>
+            {g.label}
+          </div>
+          <div className="scroll">
+            <table className="sgrid">
               <thead>
                 <tr>
-                  <th className={th}>Athlete</th>
+                  <th className="l">Athlete</th>
                   {columns.map((c) => (
-                    <th key={c.meetId} className={`${th} text-center ${c.future ? "text-[var(--r-ink-3)]!" : c.latest ? "text-[var(--r-ink)]!" : ""}`}>
+                    <th key={c.meetId} className={c.future ? "ghost" : ""}>
                       {c.label}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {byGender[g.key].map((r) => (
-                  <tr key={r.athlete.id}>
-                    <td className={`${td} pr-3 font-semibold`}>
-                      <Link href={`/athletes/${r.athlete.id}`} className="hover:underline">
-                        {r.athlete.name}
-                      </Link>
+                {byGender[g.key].map((r, i, all) => (
+                  <tr key={r.athlete.id} className={(i + 1) % 3 === 0 && i < all.length - 1 ? "g3" : ""}>
+                    <td className="name">
+                      <Link href={`/athletes/${r.athlete.id}`}>{r.athlete.name}</Link>
                     </td>
-                    {r.cells.map((cell, i) => (
-                      <td key={columns[i].meetId} className={`${td} text-center ${columns[i].latest ? "font-semibold" : ""}`}>
-                        {cell && (
-                          <span className={cell.best ? "font-bold text-[var(--r-green)]" : ""}>
-                            {t(cell.ms)}
-                            {cell.jv && <sup className="ml-px text-[6.5px] font-semibold text-[var(--r-ink-3)]">JV</sup>}
-                          </span>
-                        )}
+                    {r.cells.map((cell, k) => (
+                      <td key={columns[k].meetId} className={[cell?.letter ? "let" : "", cell?.best ? "best" : ""].filter(Boolean).join(" ")}>
+                        {cell && <span>{t(cell.ms)}</span>}
                       </td>
                     ))}
                   </tr>
                 ))}
               </tbody>
             </table>
-          </TableWrap>
-        </Sheet>
+          </div>
+        </RptPage>
       ))}
-    </ReportShell>
+    </RptShell>
   );
 }
-

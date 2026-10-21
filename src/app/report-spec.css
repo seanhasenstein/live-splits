@@ -258,11 +258,11 @@
   background: var(--green);
 }
 
-/* Season Times grid */
-.rpt table.grid {
+/* Season Times grid (the spec's table.grid; renamed, since "grid" is a Tailwind class) */
+.rpt table.sgrid {
   margin-top: 6px;
 }
-.rpt table.grid th {
+.rpt table.sgrid th {
   font-size: 6.3pt;
   letter-spacing: 0.1em;
   padding: 5px 3px;
@@ -271,17 +271,17 @@
   border-bottom: 1px solid var(--rule);
   border-top: 1px solid var(--rule);
 }
-.rpt table.grid th.ghost {
+.rpt table.sgrid th.ghost {
   color: var(--ghost);
 }
-.rpt table.grid td {
+.rpt table.sgrid td {
   padding: 5px 3px 6px;
   font-size: 9.2pt;
 }
-.rpt table.grid td.name {
+.rpt table.sgrid td.name {
   white-space: nowrap;
 }
-.rpt table.grid tr.g3 td {
+.rpt table.sgrid tr.g3 td {
   border-bottom: 1px solid var(--rule);
 }
 .rpt td.let span {

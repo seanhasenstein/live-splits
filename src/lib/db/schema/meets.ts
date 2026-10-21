@@ -164,6 +164,20 @@ export const Race = tenantDoc({
    * board as they post. Ignored once results are imported.
    */
   liveFeed: z.object({ url: z.url(), contestName: z.string().nullable() }).nullable().default(null),
+  /**
+   * The team numbers a split sheet printed for this race ("76 Pts. 2nd Place. 12 Teams. 79 Runners.
+   * Letter standard 52nd · 19:47"), kept for races whose whole field was never imported. Null: none.
+   */
+  sheetSummary: z
+    .object({
+      points: z.int().nullable(),
+      place: z.int().positive().nullable(),
+      teams: z.int().positive().nullable(),
+      runners: z.int().positive().nullable(),
+      letter: z.object({ place: z.int().positive(), ms: z.int().positive() }).nullable(),
+    })
+    .nullable()
+    .default(null),
   /** Counting places at checkpoints (tracked teams, award lines). Null: never set up. */
   places: RacePlaces.nullable().default(null),
   checkpoints: z.array(Checkpoint),

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import { METERS_PER_MILE } from "@/lib/pace";
-import { parseLongDate, parseSplitsHistory } from "./splits-history";
+import { parseLongDate, parseSplitsHistory, sheetSummaryFor } from "./splits-history";
 
 const text = readFileSync(`${process.cwd()}/src/lib/results/fixtures/splits-history.txt`, "utf8");
 
@@ -152,4 +152,14 @@ test("newest MEET SPLITS sheets: a PR / SB badge after the finish and a letter-s
     ["Blake Barlow", 16 * 60_000 + 40_000, 9, true, false],
     ["Casey Cole", 18 * 60_000 + 33_000, 34, false, false],
   ]);
+});
+
+test("a race's numbers from its summary line, in either sheet format", () => {
+  const old = ["Boys Varsity 92 Pts. 4th Place. 9 Teams. 70 Total Runners. Letter Pts. 47th - 21:00", "Boys JV 65 Pts. 2nd Place. 8 Teams. 93 Total Runners."];
+  expect(sheetSummaryFor(old, "Boys Varsity")).toEqual({ points: 92, place: 4, teams: 9, runners: 70, letter: { place: 47, ms: 21 * 60_000 } });
+  expect(sheetSummaryFor(old, "Boys JV")).toEqual({ points: 65, place: 2, teams: 8, runners: 93, letter: null });
+  const now = ["Girls Varsity - 123 Pts. 5th Place. 9 Teams. 73 Runners. Letter standard 48th · 23:46."];
+  expect(sheetSummaryFor(now, "Girls Varsity")).toEqual({ points: 123, place: 5, teams: 9, runners: 73, letter: { place: 48, ms: 23 * 60_000 + 46_000 } });
+  expect(sheetSummaryFor(now, "Girls JV")).toBeNull();
+  expect(sheetSummaryFor(now, "Boys Varsity")).toBeNull();
 });

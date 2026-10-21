@@ -107,3 +107,28 @@ test("a tie in points says so, with where the 6th-runner tiebreak put us", () =>
   });
   expect(out.M.sections[0].stats).toMatchObject({ points: 29, place: 2, teams: 2, note: "Tied at 29 · 2nd on the 6th-runner tiebreak" });
 });
+
+test("without the whole field (a history import), team numbers and the letter standard come from the split sheet", () => {
+  const out = buildMeetSplits({
+    meet: { id: "m", date: "2026-10-17", seasonId: "s2026" },
+    races: [
+      {
+        id: "m-bv",
+        name: "Boys Varsity",
+        gender: "M",
+        varsity: true,
+        order: 1,
+        checkpoints: [],
+        sheet: { points: 76, place: 2, teams: 12, runners: 79, letter: { place: 52, ms: 19 * 60_000 + 47_000 } },
+      },
+    ],
+    // Only our own runner on file.
+    fields: { "m-bv": [{ team: "Us", place: 34, status: "finished", timeMs: 1_113_000, ours: true }] },
+    rows: [row("a", "m", "2026-10-17", 1_113_000, { place: 34 })],
+    roster: [{ id: "a", gender: "M" }],
+    athleteGender: { a: "M" },
+  });
+  const [bv] = out.M.sections;
+  expect(bv.stats).toEqual({ points: 76, place: 2, teams: 12, runners: 79, letter: { place: 52, ms: 1_187_000 }, note: null });
+  expect(bv.rows[0].letter).toBe(true); // 18:33 under 19:47
+});

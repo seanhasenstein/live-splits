@@ -46,7 +46,7 @@ export default async function MeetSplitsPage({ params }: PageProps<"/meets/[meet
   for (const e of entries) (fields[e.raceId] ??= []).push({ team: e.teamName, place: e.place, status: e.status, timeMs: e.timeMs, ours: !!e.athleteId });
   const byGender = buildMeetSplits({
     meet: { id: meet._id, date: meet.date, seasonId: meet.seasonId },
-    races: races.map((r) => ({ id: r._id, name: r.name, gender: genderOf(r), varsity: r.levelIds.includes("varsity"), order: r.order, checkpoints: r.checkpoints.filter((c) => c.kind === "split").map((c) => ({ meters: c.distance.meters })) })),
+    races: races.map((r) => ({ id: r._id, name: r.name, gender: genderOf(r), varsity: r.levelIds.includes("varsity"), order: r.order, sheet: r.sheetSummary, checkpoints: r.checkpoints.filter((c) => c.kind === "split").map((c) => ({ meters: c.distance.meters })) })),
     fields,
     rows: history,
     roster: roster.map((a) => ({ id: a._id, gender: a.gender })),

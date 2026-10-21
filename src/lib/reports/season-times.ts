@@ -9,10 +9,26 @@ export type SeasonMeet = { id: string; name: string; shortName?: string | null; 
 export type SeasonAthlete = { id: string; name: string; gender: string; grade: number | null };
 
 export type SeasonColumn = { meetId: string; label: string; date: string; future: boolean; latest: boolean };
-export type SeasonCell = { ms: number; jv: boolean; best: boolean } | null;
+export type SeasonCell = {
+  ms: number;
+  jv: boolean;
+  /** Equal to their season best to the second (so a runner can carry it across meets). */
+  best: boolean;
+  /** At or under that meet's varsity letter standard for their gender. */
+  letter: boolean;
+} | null;
 export type SeasonRow = { athlete: SeasonAthlete; cells: SeasonCell[]; bestMs: number | null; races: number };
 
-export function buildSeasonTimes(input: { meets: SeasonMeet[]; athletes: SeasonAthlete[]; rows: HistoryRow[]; distanceId: string | null; today: string }): { columns: SeasonColumn[]; byGender: Record<string, SeasonRow[]> } {
+export function buildSeasonTimes(input: {
+  meets: SeasonMeet[];
+  athletes: SeasonAthlete[];
+  rows: HistoryRow[];
+  distanceId: string | null;
+  today: string;
+  /** Each meet's varsity letter standard by gender, in ms, where known. */
+  letterMs?: Record<string, Partial<Record<string, number>>>;
+}): { columns: SeasonColumn[]; byGender: Record<string, SeasonRow[]> } {
+  const sec = (ms: number) => Math.floor(ms / 1000);
   const meets = [...input.meets].sort((a, b) => a.date.localeCompare(b.date));
   // A meet with results is past whatever its date; one without, on or after today, is still to come.
   const withResults = new Set(input.rows.map((r) => r.meetId));
@@ -27,7 +43,14 @@ export function buildSeasonTimes(input: { meets: SeasonMeet[]; athletes: SeasonA
     const cells = columns.map((c): SeasonCell => {
       // Two races at one meet (rare): the faster one.
       const here = mine.filter((r) => r.meetId === c.meetId).sort((a, b) => a.finishMs! - b.finishMs!)[0];
-      return here ? { ms: here.finishMs!, jv: here.levelId === "jv", best: best !== null && here.raceId === best.raceId } : null;
+      if (!here) return null;
+      const standard = input.letterMs?.[c.meetId]?.[athlete.gender];
+      return {
+        ms: here.finishMs!,
+        jv: here.levelId === "jv",
+        best: best !== null && here.counts && sec(here.finishMs!) === sec(best.finishMs!),
+        letter: standard !== undefined && sec(here.finishMs!) <= sec(standard),
+      };
     });
     (byGender[athlete.gender] ??= []).push({ athlete, cells, bestMs: best?.finishMs ?? null, races: mine.length });
   }

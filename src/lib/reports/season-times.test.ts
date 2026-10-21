@@ -58,7 +58,25 @@ test("season grid: meets in date order, best marked, future meets, fastest first
   ]);
   const boys = byGender.M;
   expect(boys.map((r) => r.athlete.id)).toEqual(["b", "a", "c"]);
-  expect(boys[0].cells).toEqual([{ ms: 1_050_000, jv: true, best: true }, null, null]); // the 4K doesn't show in a 5K grid
+  expect(boys[0].cells).toEqual([{ ms: 1_050_000, jv: true, best: true, letter: false }, null, null]); // the 4K doesn't show in a 5K grid
   expect(boys[1].cells.map((c) => c?.best ?? null)).toEqual([false, true, null]);
   expect(boys[2]).toMatchObject({ bestMs: null, races: 0 });
+});
+
+test("season grid: every time equal to the season best to the second is bold; letter at or under that meet's standard", () => {
+  const { byGender } = buildSeasonTimes({
+    meets: [
+      { id: "m1", name: "KML", date: "2026-08-28" },
+      { id: "m2", name: "Smiley", date: "2026-09-19" },
+    ],
+    athletes: [{ id: "a", name: "Avery Abbott", gender: "M", grade: 11 }],
+    rows: [row("a", "m1", 1_080_400), row("a", "m2", 1_080_900)], // 18:00.4 and 18:00.9: both 18:00
+    distanceId: "5k",
+    today: "2026-10-20",
+    letterMs: { m1: { M: 1_080_000 }, m2: { M: 1_079_000 } },
+  });
+  expect(byGender.M[0].cells.map((c) => [c?.best, c?.letter])).toEqual([
+    [true, true],
+    [true, false],
+  ]);
 });
