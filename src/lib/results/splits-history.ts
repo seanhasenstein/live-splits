@@ -204,6 +204,8 @@ const TIME_OR_STATUS = /^(\d+:\d{2}(\.\d+)?|dnf|dns)$/i;
 const squash = (cell: string) => cell.replace(/\s+/g, "").toUpperCase();
 
 const SUMMARY_LABELS: Record<string, string> = { PTS: "Pts", PLACE: "Place", TEAMS: "Teams", RUNNERS: "Runners", LETTERSTANDARD: "Letter standard" };
+/** A summary label, even with a note printed after it on the same line. */
+const labelOf = (key: string) => Object.keys(SUMMARY_LABELS).find((k) => key === k || (k === "LETTERSTANDARD" && key.startsWith(k)));
 
 /**
  * A "MEET SPLITS" sheet (2026 on), rewritten as the older split sheet:
@@ -296,8 +298,10 @@ export function meetSplitsAsHistory(text: string): string {
       if (cells.length === 1 && (key === "VARSITY" || key === "JV")) {
         flushSummary();
         summaryLevel = key === "JV" ? "JV" : "Varsity";
-      } else if (cells.length === 1 && SUMMARY_LABELS[key] && pending !== null) {
-        summary.push(key === "LETTERSTANDARD" ? `${SUMMARY_LABELS[key]} ${pending}` : `${pending} ${SUMMARY_LABELS[key]}`);
+      } else if (cells.length === 1 && labelOf(key) && pending !== null) {
+        // The label can carry a note after it ("LETTER STANDARD   COUNTY CHAMPIONS").
+        const label = labelOf(key)!;
+        summary.push(label === "LETTERSTANDARD" ? `${SUMMARY_LABELS[label]} ${pending}` : `${pending} ${SUMMARY_LABELS[label]}`);
         pending = null;
       } else if (cells.length === 1) {
         pending = line;

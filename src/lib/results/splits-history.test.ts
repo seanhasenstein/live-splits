@@ -163,3 +163,22 @@ test("a race's numbers from its summary line, in either sheet format", () => {
   expect(sheetSummaryFor(now, "Girls JV")).toBeNull();
   expect(sheetSummaryFor(now, "Boys Varsity")).toBeNull();
 });
+
+test("a summary label with a note after it still reads its number (\"LETTER STANDARD   COUNTY CHAMPIONS\")", () => {
+  const meets = parseSplitsHistory(
+    [
+      "MEET SPLITS",
+      "Sample County Meet • September 29, 2026 • 60°",
+      "BOYS VARSITY",
+      "47",
+      "P T S",
+      "1st",
+      "P L A C E",
+      "40th · 20:57",
+      "L E T T E R S T A N D A R D COUNTY CHAMPIONS",
+      "AT H L E T E \tM I L E 1 \tM I L E 2 \tM I L E 3 . 1 \tF I N I S H \tP L A C E \tL E T T E R",
+      "Avery Abbott \t5:00 \t5:36 \t6:05 \t16:41 \t1st \tLETTER",
+    ].join("\n"),
+  );
+  expect(sheetSummaryFor(meets[0].summaries, "Boys Varsity")).toEqual({ points: 47, place: 1, teams: null, runners: null, letter: { place: 40, ms: 20 * 60_000 + 57_000 } });
+});
