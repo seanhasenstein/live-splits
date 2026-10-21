@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Badge, HeroMeet, RptPage, RptShell } from "@/components/rpt/rpt";
-import { SeasonChart } from "@/components/rpt/season-chart";
+import { type ChartRace, SeasonChart } from "@/components/rpt/season-chart";
 import { getSession, isSchoolWide } from "@/lib/auth/session";
 import { getProgram, getSchool, getSeasonFor } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
@@ -87,6 +87,21 @@ export default async function AthletePage({ params }: PageProps<"/athletes/[athl
   );
   const updated = `Updated ${formatMonthDayYear(today)}`;
   const chartSeasons = profile.seasons.slice(-3);
+  /** A race's results page, or the meet's splits when there's no whole field. */
+  const raceLink = (r: Pick<AthleteRace, "wholeField" | "meetId" | "raceId">) => (r.wholeField ? `/meets/${r.meetId}/reports/results?race=${r.raceId}` : `/meets/${r.meetId}/reports/splits`);
+  const rowById = new Map(atDistance.map((r) => [r.raceId, r]));
+  // The chart's card for each meet: every season's race there, newest first.
+  const chartRaces: ChartRace[][] = profile.slots.map((_, i) =>
+    profile.seasons
+      .slice()
+      .reverse()
+      .flatMap((s) => {
+        const c = s.cells[i];
+        const r = c && rowById.get(c.raceId);
+        if (!c || !r) return [];
+        return [{ year: s.year, ms: c.ms, status: c.status, place: c.place, jv: c.jv, careerBest: c.careerBest, seasonBest: c.seasonBest, letter: c.letter, segments: segmentsAt(r, SPLITS), href: raceLink(r) }];
+      }),
+  );
 
   // Every race on file by season, newest season first, as many whole seasons per page as fit.
   const bySeason = [...new Set(atDistance.map((r) => r.seasonId))]
@@ -107,7 +122,6 @@ export default async function AthletePage({ params }: PageProps<"/athletes/[athl
     pages[pages.length - 1].push(s);
     room -= need;
   }
-  const raceLink = (r: AthleteRace) => (r.wholeField ? `/meets/${r.meetId}/reports/results?race=${r.raceId}` : `/meets/${r.meetId}/reports/splits`);
 
   return (
     <RptShell back={{ href: "/reports", label: "Reports" }} title={athlete.displayName} subtitle="Athlete profile">
@@ -163,7 +177,7 @@ export default async function AthletePage({ params }: PageProps<"/athletes/[athl
                 ))}
               <span>Faster is higher · shaded meets are still to come</span>
             </div>
-            <SeasonChart slots={profile.slots.map((s) => s.label)} seasons={chartSeasons.map((s) => ({ year: s.year, points: s.cells.map((c) => c?.ms ?? null) }))} upcoming={profile.upcoming} />
+            <SeasonChart slots={profile.slots.map((s) => s.label)} seasons={chartSeasons.map((s) => ({ year: s.year, points: s.cells.map((c) => c?.ms ?? null) }))} upcoming={profile.upcoming} races={chartRaces} />
           </>
         )}
 

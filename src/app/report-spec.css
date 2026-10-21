@@ -576,6 +576,100 @@
   border-top: 1.6px dotted var(--green);
   opacity: 0.5;
 }
+/* The chart's meet card (screen only): floats under the hovered column; on touch it sits below the chart. */
+.rpt .chart-wrap {
+  position: relative;
+}
+.rpt .chart-card {
+  position: absolute;
+  top: calc(100% + 2px);
+  transform: translateX(-50%);
+  z-index: 5;
+  width: 220px;
+  background: var(--paper);
+  border: 1px solid var(--rule-soft);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgb(20 23 21 / 0.16);
+  padding: 8px 10px;
+  font-size: 9pt;
+  pointer-events: none;
+}
+.rpt .chart-card.pinned {
+  position: static;
+  transform: none;
+  width: auto;
+  margin-top: 6px;
+  box-shadow: none;
+  pointer-events: auto;
+}
+.rpt .chart-card .hd {
+  font-weight: 800;
+  color: var(--green);
+  font-size: 7.5pt;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.rpt .chart-card .rw {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+  padding: 2px 0;
+  font-variant-numeric: tabular-nums;
+}
+.rpt .chart-card .yr {
+  color: var(--soft);
+  width: 32px;
+}
+.rpt .chart-card .tm {
+  font-weight: 700;
+  color: var(--ink);
+}
+.rpt .chart-card .tm.sb {
+  color: var(--green);
+}
+.rpt .chart-card .tm.cb {
+  color: var(--gold);
+}
+.rpt .chart-card .tm.let {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.rpt .chart-card .pl {
+  color: var(--soft);
+  font-size: 8pt;
+}
+.rpt .chart-card .tag {
+  font-size: 6.5pt;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #fff;
+  border-radius: 3px;
+  padding: 1px 4px;
+  background: var(--green);
+}
+.rpt .chart-card .tag.cb {
+  background: var(--gold);
+}
+.rpt .chart-card .segs {
+  flex-basis: 100%;
+  padding-left: 40px;
+  color: var(--soft);
+  font-size: 8pt;
+}
+.rpt .chart-card .empty {
+  color: var(--soft);
+}
+.rpt .chart-card .go {
+  display: block;
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--rule-light);
+  color: var(--green);
+  font-size: 8pt;
+  font-weight: 700;
+}
 .rpt table.pg th,
 .rpt table.pg td {
   text-align: center;
