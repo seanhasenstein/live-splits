@@ -143,3 +143,18 @@ export const SeasonRoster = tenantDoc({
   defaultLevelId: z.string().min(1),
 });
 export type SeasonRoster = z.infer<typeof SeasonRoster>;
+
+// ---------------------------------------------------------------- teamLogos
+
+/**
+ * A team's logo for the results pages: ours and every school we race. Matched to results by
+ * logoKey(team name). Stored small (a 256px PNG, base64) so it needs no file storage.
+ */
+export const TeamLogo = tenantDoc({
+  /** logoKey of the team's name: "cedargrovebelgium". */
+  key: z.string().min(1).max(80),
+  /** The team as a coach named it, for the logos page. */
+  name: z.string().min(1).max(120),
+  png: z.string().min(1),
+});
+export type TeamLogo = z.infer<typeof TeamLogo>;

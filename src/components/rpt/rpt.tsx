@@ -57,6 +57,7 @@ export function RptPage({
   title,
   meetLine,
   heroVariant,
+  heroRight,
   legend,
   right,
   children,
@@ -65,6 +66,8 @@ export function RptPage({
   title: string | null;
   meetLine?: ReactNode;
   heroVariant?: "nobar" | "green";
+  /** At the hero's right edge (the host school's logo on results). */
+  heroRight?: ReactNode;
   legend: ReactNode;
   right: ReactNode;
   children: ReactNode;
@@ -83,6 +86,7 @@ export function RptPage({
               <h1>{title}</h1>
               {meetLine}
             </div>
+            {heroRight}
           </div>
         )}
         {children}

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { FieldFilter } from "@/components/rpt/field-filter";
 import { RptPage, RptShell } from "@/components/rpt/rpt";
+import { TeamMark } from "@/components/rpt/team-mark";
 import { can, getSession } from "@/lib/auth/session";
 import { getMeet, getProgram, getSchool, getSeasonFor, listRaces } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
@@ -13,6 +14,8 @@ import { ordinal, segmentsAt } from "@/lib/reports/athlete";
 import { getTeamHistory } from "@/lib/reports/history";
 import { officialSegments, type ResultEntry, scoreRace, splitLabels, topFive } from "@/lib/reports/race-results";
 import { teamKey } from "@/lib/race-places";
+import { logoKey, logoUrl } from "@/lib/logos";
+import { getLogoVersions } from "@/lib/logos-server";
 import { displayCase } from "@/lib/names";
 import { formatElapsed, formatMonthDayYear } from "@/lib/time";
 
@@ -91,13 +94,26 @@ export default async function RaceResultsPage({ params, searchParams }: PageProp
 
   const entries = entriesAll.filter((e) => e.raceId === race._id);
   const ours = entries.filter((e) => e.athleteId);
-  const [athletes, season, imp] = await Promise.all([
+  const [athletes, season, imp, logos] = await Promise.all([
     collection(db, "athletes")
       .find({ _id: { $in: ours.map((e) => e.athleteId!) } })
       .toArray(),
     getSeasonFor(program._id, meet.date),
     collection(db, "imports").findOne({ _id: entries[0]?.importId }),
+    getLogoVersions(meet.schoolId),
   ]);
+  // The host, when the venue is a school whose logo we have (and isn't us: ours is already at the left).
+  const hostKey = venue ? logoKey(venue.name) : null;
+  const hostLogo = hostKey && hostKey !== logoKey(school.name) && hostKey !== logoKey(school.shortName) && logos.has(hostKey) ? logoUrl(meet.schoolId, hostKey, logos.get(hostKey)!) : null;
+  const heroRight = hostLogo ? (
+    <div className={`host ${view === "overall" ? "web-mark" : ""}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={hostLogo} alt="" />
+      Host
+    </div>
+  ) : null;
+  const mark = (name: string | null, isOurs: boolean, size?: number, className?: string) =>
+    name || isOurs ? <TeamMark name={name ?? ""} ours={isOurs} schoolId={meet.schoolId} logos={logos} size={size} className={className} /> : null;
   const history = await getTeamHistory(
     meet.schoolId,
     program,
@@ -174,6 +190,7 @@ export default async function RaceResultsPage({ params, searchParams }: PageProp
     return (
       <div key={key} id={`team-${key}`} className="team-block">
         <div className="sec">
+          {mark(all[0].f.team, ours, 22, view === "overall" ? "web-mark" : "")}
           {title ?? all[0].f.team}
           {/* The Overall view has the place in Team Scores just above, as the PDFs do. */}
           {view === "teams" &&
@@ -374,27 +391,30 @@ export default async function RaceResultsPage({ params, searchParams }: PageProp
         </div>
       </nav>
       {view === "teams" ? (
-        teamPages.map((keys, n) => (
-          <RptPage key={n} title={n === 0 ? race.name : null} meetLine={n === 0 ? meetLine : undefined} legend={footer.legend} right={footer.right}>
-            {n === 0 && statbar}
-            {n === 0 && (
-              <nav className="team-jump no-print" aria-label="Jump to a team">
-                {blockKeys.map((k) => {
-                  const o = order.find((x) => keyOf(x.f) === k)!;
-                  return (
-                    <a key={k} href={`#team-${k}`} className={o.f.ours ? "us" : ""}>
-                      {o.f.ours ? school.shortName : o.f.team}
-                    </a>
-                  );
-                })}
-              </nav>
-            )}
-            {keys.map((k) => teamBlock(k, order.find((x) => keyOf(x.f) === k)?.f.ours ? school.shortName : undefined))}
-          </RptPage>
-        ))
+        <div className="teams-view">
+          {teamPages.map((keys, n) => (
+            <RptPage key={n} title={n === 0 ? race.name : null} meetLine={n === 0 ? meetLine : undefined} heroRight={heroRight} legend={footer.legend} right={footer.right}>
+              {n === 0 && statbar}
+              {n === 0 && (
+                <nav className="team-jump no-print" aria-label="Jump to a team">
+                  {blockKeys.map((k) => {
+                    const o = order.find((x) => keyOf(x.f) === k)!;
+                    return (
+                      <a key={k} href={`#team-${k}`} className={o.f.ours ? "us" : ""}>
+                        {mark(o.f.team, o.f.ours, 14)}
+                        {o.f.ours ? school.shortName : o.f.team}
+                      </a>
+                    );
+                  })}
+                </nav>
+              )}
+              {keys.map((k) => teamBlock(k, order.find((x) => keyOf(x.f) === k)?.f.ours ? school.shortName : undefined))}
+            </RptPage>
+          ))}
+        </div>
       ) : (
-        <>
-          <RptPage title={race.name} meetLine={meetLine} legend={footer.legend} right={footer.right}>
+        <div className="overall-view">
+          <RptPage title={race.name} meetLine={meetLine} heroRight={heroRight} legend={footer.legend} right={footer.right}>
             {statbar}
             <div className="sec">Team Scores</div>
             <table className="rs">
@@ -416,7 +436,10 @@ export default async function RaceResultsPage({ params, searchParams }: PageProp
                 {teams.map((tm) => (
                   <tr key={tm.key} className={tm.ours ? "us" : ""}>
                     <td className="pl">{tm.place}</td>
-                    <td className="name">{tm.name}</td>
+                    <td className="name">
+                      {mark(tm.name, tm.ours, 16, "web-mark")}
+                      {tm.name}
+                    </td>
                     {[0, 1, 2, 3, 4].map((k) => (
                       <td key={k} className={`c t ${k === 0 ? "vl" : ""}`}>
                         {tm.places[k] ?? ""}
@@ -450,7 +473,7 @@ export default async function RaceResultsPage({ params, searchParams }: PageProp
               {individual(rows)}
             </RptPage>
           ))}
-        </>
+        </div>
       )}
     </RptShell>
   );

@@ -17,6 +17,7 @@ import {
   SeasonRoster,
   Session,
   Tap,
+  TeamLogo,
   User,
   Venue,
   Workout,
@@ -50,6 +51,7 @@ export const COLLECTIONS = {
   workouts: { schema: Workout, version: 1 },
   workoutTemplates: { schema: WorkoutTemplate, version: 1 },
   workoutEvents: { schema: WorkoutEvent, version: 1 },
+  teamLogos: { schema: TeamLogo, version: 1 },
 } as const;
 
 export type CollectionName = keyof typeof COLLECTIONS;

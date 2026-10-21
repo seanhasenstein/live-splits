@@ -46,6 +46,7 @@ export const INDEXES: Partial<Record<CollectionName, IndexDescription[]>> = {
     { key: { workoutId: 1, serverTimeMs: 1 } },
     { key: { clientEventId: 1 }, unique: true },
   ],
+  teamLogos: [{ key: { schoolId: 1, key: 1 }, unique: true }],
   sessions: [
     { key: { tokenHash: 1 }, unique: true },
     // Who's recording where: polled every few seconds per race.

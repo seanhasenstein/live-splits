@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CalendarRange, ClipboardList, ListOrdered, UserRound } from "lucide-react";
+import { CalendarRange, ClipboardList, ListOrdered, Shield, UserRound } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { SearchButton } from "@/components/search";
 import { SectionTabs } from "@/components/section-tabs";
@@ -41,6 +41,7 @@ export default async function ReportsPage() {
           <CardHeader title="Season reports" />
           <ListRow href="/reports/season-times" icon={<CalendarRange />} title="Season times" description="Every runner by every meet, boys and girls, with letter points" />
           <ListRow href="/athletes" icon={<UserRound />} title="Athlete profiles" description="Each runner's seasons side by side, meet by meet" />
+          {isSchoolCoach(session) && <ListRow href="/reports/logos" icon={<Shield />} title="Team logos" description="Logos beside team names on results" />}
         </Card>
         {upcoming.length > 0 && (
           <Card className="mb-4">

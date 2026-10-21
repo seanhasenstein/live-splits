@@ -820,3 +820,71 @@
     display: none;
   }
 }
+
+/* Team marks: logos (or initials) beside team names. The Overall results follow the team's PDFs,
+   which have none, so there they're on screen in the web view only; the Teams view has them always. */
+.rpt .tmark {
+  display: inline-block;
+  vertical-align: middle;
+  object-fit: contain;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+.rpt .tinit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+.rpt .sec .tmark {
+  margin-right: 8px;
+  position: relative;
+  top: -2px;
+}
+.rpt .hero .host {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-size: 6.5pt;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--soft);
+  font-weight: 700;
+}
+.rpt .hero .host img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+.rpt:not(.web) .overall-view .web-mark {
+  display: none;
+}
+@media print {
+  .rpt .overall-view .web-mark {
+    display: none;
+  }
+}
+.rpt .team-jump a {
+  display: inline-flex;
+  align-items: center;
+}
+.rpt .team-jump .tmark {
+  margin-right: 5px;
+}
+/* Logos are made for white: on screen they sit on a small white tile, so a navy logo still shows in dark mode. */
+@media screen {
+  .rpt.web img.tmark,
+  .rpt.web .hero .host img {
+    background: #fff;
+    border-radius: 4px;
+    padding: 1px;
+  }
+  .rpt.web .hero .host img {
+    padding: 4px;
+  }
+}

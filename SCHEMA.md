@@ -149,6 +149,11 @@ hash-only*, because codes shown once at creation had to be tracked outside the
 app. Changing `SESSION_SECRET` makes existing codes unreadable and unmatchable:
 regenerate them.
 
+`publicResults` (*added Oct 21, 2026*, default false; older meets without it read
+as off): the race results pages open to anyone with the link, showing only what
+the timing company posted (team scores and the whole field), not our recorded
+splits.
+
 ### races
 An event within a meet.
 - `raceCategoryId`, `levelIds[]` (e.g. `["varsity", "jv"]` when run together),
@@ -200,6 +205,14 @@ The full field as published by the timing company: `name`, `teamName`, `grade`,
 ours and `importId` for the file it came from. Re-importing soft-deletes the
 race's previous entries and inserts new ones; results are not touched (their
 `raceEntryId` is re-linked).
+
+### teamLogos
+*Added Oct 21, 2026.* A team's logo for the results pages: `key` (`logoKey` of
+the team's name, so "St. Mary's Springs" and st-mary-springs.png agree), `name`
+as a coach entered it, and `png`, a trimmed 256px PNG stored as base64 (small
+enough to need no file storage). Served at `/api/logos/{schoolId}/{key}`, which
+is public. Loaded in bulk with `pnpm db:logos <folder>` or one at a time on
+Season → Team logos.
 
 ### imports
 Raw pasted/uploaded source stored as-is (`raw`), with `source`, `fileName`,
@@ -291,6 +304,7 @@ filter (built with the query layer, not in step 1):
 | users | unique `{schoolId, email}` |
 | sessions | unique `{tokenHash}` |
 | pins | `{userId}` |
+| teamLogos | unique `{schoolId, key}` |
 
 ## Seed
 
