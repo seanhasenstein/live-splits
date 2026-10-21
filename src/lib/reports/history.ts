@@ -32,7 +32,7 @@ export type HistoryRow = {
   place: number | null;
   /** Their grade that season, when known. */
   grade: number | null;
-  /** Runners in the race's full field, when the field was imported. */
+  /** Runners in the race's whole field: counted when the field was imported, else as the split sheet printed it; null if neither. */
   fieldSize: number | null;
   /** Cumulative ms by checkpoint, in course order, labelled; the finish isn't included. */
   splits: { label: string; meters: number; ms: number }[];
@@ -57,10 +57,18 @@ export async function getTeamHistory(schoolId: string, program: Pick<Program, "_
     .find({ _id: { $in: [...new Set(races.map((r) => r.meetId))] }, programId: program._id, deletedAt: null })
     .toArray();
   const meetById = new Map(meets.map((m) => [m._id, m]));
+  // Runners in each race's whole field. Only a field with other teams' runners is the whole field: a race
+  // imported from our split sheets has just our own runners, so its size comes from what the sheet printed.
   const fields = await collection(db, "raceEntries")
-    .aggregate<{ _id: string; n: number }>([{ $match: { raceId: { $in: races.map((r) => r._id) }, deletedAt: null } }, { $group: { _id: "$raceId", n: { $sum: 1 } } }])
+    .aggregate<{ _id: string; n: number; others: number }>([
+      { $match: { raceId: { $in: races.map((r) => r._id) }, deletedAt: null } },
+      // Finishers, as the sheets count runners ("2nd of 79"); a DNF isn't one of them.
+      { $group: { _id: "$raceId", n: { $sum: { $cond: [{ $eq: ["$status", "finished"] }, 1, 0] } }, others: { $sum: { $cond: [{ $eq: ["$athleteId", null] }, 1, 0] } } } },
+    ])
     .toArray();
-  const fieldSize = new Map(fields.map((f) => [f._id, f.n]));
+  const fieldSize = new Map<string, number>();
+  for (const f of fields) if (f.others > 0) fieldSize.set(f._id, f.n);
+  for (const r of races) if (!fieldSize.has(r._id) && r.sheetSummary?.runners) fieldSize.set(r._id, r.sheetSummary.runners);
   const minGrade = program.settings.recordsStartGrade;
 
   const rows: HistoryRow[] = [];
