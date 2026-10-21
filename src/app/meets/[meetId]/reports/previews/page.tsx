@@ -77,7 +77,7 @@ export default async function PreviewsPage({ params, searchParams }: PageProps<"
               }
               tag={`Updated ${updated}`}
             >
-              <div className="mb-3 flex flex-wrap items-baseline gap-x-3 border-b border-[var(--r-rule)] pb-2">
+              <div className="mb-3 flex flex-wrap items-baseline gap-x-3">
                 <span className="text-[30px] leading-none font-extrabold tracking-tight max-sm:text-[24px]">{a?.displayName ?? "?"}</span>
                 <span className="text-[13px] text-[var(--r-ink-2)]">
                   {grade !== null && grade <= 12 ? `Grade ${grade} · ` : ""}

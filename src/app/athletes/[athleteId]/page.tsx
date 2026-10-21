@@ -61,7 +61,7 @@ export default async function AthletePage({ params }: PageProps<"/athletes/[athl
         }
         tag={`Updated ${formatDateWithYear(new Date().toISOString().slice(0, 10))}`}
       >
-        <div className="mb-3 flex flex-wrap items-baseline gap-x-3 border-b border-[var(--r-rule)] pb-2">
+        <div className="mb-3 flex flex-wrap items-baseline gap-x-3">
           <span className="text-[30px] leading-none font-extrabold tracking-tight max-sm:text-[24px]">{athlete.displayName}</span>
           <span className="text-[13px] text-[var(--r-ink-2)]">
             {athlete.graduationYear !== null ? `Class of ${athlete.graduationYear}` : ""}
