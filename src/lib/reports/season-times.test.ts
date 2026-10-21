@@ -7,7 +7,10 @@ test("short meet names: generic words drop, three or more words become initials"
   expect(shortMeetName("Big East Conference Championship")).toBe("Big East");
   expect(shortMeetName("WIAA Division 3 Sectional")).toBe("Sectional");
   expect(shortMeetName("Nightfall Classic")).toBe("Nightfall");
-  expect(shortMeetName("55th Annual Russ Fameree Cross Country Classic")).toBe("Russ Fameree");
+  expect(shortMeetName("55th Annual Russ Fameree Cross Country Classic")).toBe("Russ");
+  expect(shortMeetName("KML Charger Cross Country Classic")).toBe("KML");
+  expect(shortMeetName("Crusader Challenge")).toBe("Crusader");
+  expect(shortMeetName("Sheboygan County Meet")).toBe("Sheboygan");
   expect(shortMeetName("Invitational")).toBe("Invitational");
 });
 

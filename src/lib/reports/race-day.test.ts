@@ -52,7 +52,7 @@ test("race day: same meet last year, this course this season, last race; bests; 
   });
   expect(refs).toEqual([
     { meetId: "sect25", label: "'25 Sectional", note: "this course" },
-    { meetId: "cty26", label: "'26 Sheboygan County", note: "this course" },
+    { meetId: "cty26", label: "'26 Sheboygan", note: "this course" },
     { meetId: "be26", label: "'26 Big East", note: "last race" },
   ]);
   expect(out.map((r) => [r.athleteId, r.careerBest, r.seasonBest])).toEqual([

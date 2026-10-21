@@ -63,12 +63,15 @@ const GENERIC = /\b(invite|invitational|meet|classic|championships?|conference|c
 
 /**
  * A column-width name for a meet: "Kettle Moraine Lutheran Invite" → "KML", "Big East Conference
- * Championship" → "Big East", "WIAA Division 3 Sectional" → "Sectional". Three or more words left
- * become initials; one or two stay as words.
+ * Championship" → "Big East", "WIAA Division 3 Sectional" → "Sectional", "KML Charger Classic" →
+ * "KML", "Crusader Challenge" → "Crusader". Three or more words left become initials; two stay as
+ * words when they're short, else the first word. A meet's own short name always wins.
  */
 export function shortMeetName(name: string): string {
   const words = name.replace(GENERIC, " ").replace(/[^\p{L}\p{N}' -]/gu, " ").split(/\s+/).filter(Boolean);
   if (words.length === 0) return name.trim().slice(0, 12);
   if (words.length >= 3) return words.map((w) => w[0].toUpperCase()).join("");
+  // An acronym leads ("KML Charger"), or two words are too wide for a grid column ("Crusader Challenge"): the first word.
+  if (words.length === 2 && (/^[A-Z]{2,}$/.test(words[0]) || words.join(" ").length > 10)) return words[0];
   return words.join(" ");
 }
