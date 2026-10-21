@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { type ResultEntry, scoreRace, topFive } from "./race-results";
+import { officialSegments, type ResultEntry, scoreRace, splitLabels, topFive } from "./race-results";
 
 const e = (place: number, team: string | null, ours = false, status = "finished"): ResultEntry => ({ name: `R${place}`, team, place: status === "finished" ? place : null, status, timeMs: 1_000_000 + place * 1000, ours });
 
@@ -50,4 +50,12 @@ test("a tie in points goes to the team whose 6th runner placed better", () => {
 test("top five: average and 1–5 spread", () => {
   expect(topFive([966_000, 1_009_000, 1_061_000, 1_076_000, 1_084_000, 1_093_000])).toEqual({ average: 1_039_200, spread: 118_000 });
   expect(topFive([1, 2, 3, 4])).toBeNull();
+});
+
+test("official splits: each stretch on its own from whole-second clock times, missing or out-of-order splits blank", () => {
+  const labels = splitLabels([{ splits: [] }, { splits: [{ label: "2 Mile", cumulativeMs: 650_000 }, { label: "1 Mile", cumulativeMs: 320_400 }] }]);
+  expect(labels).toEqual(["1 Mile", "2 Mile"]);
+  expect(officialSegments([{ label: "1 Mile", cumulativeMs: 320_900 }, { label: "2 Mile", cumulativeMs: 650_200 }], labels, 1_011_800)).toEqual([320_000, 330_000, 361_000]);
+  expect(officialSegments([{ label: "2 Mile", cumulativeMs: 650_200 }], labels, 1_011_800)).toEqual([null, null, 361_000]);
+  expect(officialSegments([], labels, null)).toEqual([null, null, null]);
 });

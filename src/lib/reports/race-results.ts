@@ -81,3 +81,20 @@ export function topFive(times: number[]): { average: number; spread: number } | 
   if (five.length < 5) return null;
   return { average: Math.round(five.reduce((a, b) => a + b, 0) / 5), spread: five[4] - five[0] };
 }
+
+/**
+ * Each stretch on its own from a runner's published mat splits (cumulative), against the race's split
+ * labels in order, then the last stretch to the finish. Clock times truncated to the second first, so
+ * the stretches add up to the finish as printed. Null where a split is missing or out of order.
+ */
+export function officialSegments(splits: { label: string; cumulativeMs: number }[], labels: string[], finishMs: number | null): (number | null)[] {
+  const whole = (ms: number | null | undefined) => (ms == null ? null : Math.floor(ms / 1000) * 1000);
+  const ends = [0, ...labels.map((l) => whole(splits.find((s) => s.label === l)?.cumulativeMs)), whole(finishMs)];
+  return ends.slice(1).map((ms, i) => (ms === null || ends[i] === null || ms <= ends[i]! ? null : ms - ends[i]!));
+}
+
+/** The split labels a race's results publish, in race order (from the runner with the most). */
+export function splitLabels(entries: { splits: { label: string; cumulativeMs: number }[] }[]): string[] {
+  const most = entries.reduce<{ label: string; cumulativeMs: number }[]>((m, e) => (e.splits.length > m.length ? e.splits : m), []);
+  return [...most].sort((a, b) => a.cumulativeMs - b.cumulativeMs).map((s) => s.label);
+}

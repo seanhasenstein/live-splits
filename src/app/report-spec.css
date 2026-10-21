@@ -755,3 +755,68 @@
 .rpt .nextbar strong {
   color: var(--ink);
 }
+
+/* Results on screen: the field filter and the Teams view's jump links. */
+.rpt .field-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 2px;
+  font-family: var(--font-sans), sans-serif;
+  font-size: 13px;
+}
+.rpt .field-filter input,
+.rpt .field-filter select {
+  height: 32px;
+  border: 1px solid var(--rule-soft);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  padding: 0 10px;
+  font: inherit;
+}
+.rpt .field-filter input {
+  flex: 1 1 180px;
+  max-width: 280px;
+}
+.rpt .field-filter .ct {
+  color: var(--soft);
+}
+.rpt .field-filter button {
+  margin-left: 8px;
+  color: var(--green);
+  font-weight: 600;
+}
+.rpt .team-jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  font-family: var(--font-sans), sans-serif;
+  font-size: 12px;
+}
+.rpt .team-jump a {
+  border: 1px solid var(--rule-soft);
+  border-radius: 999px;
+  padding: 3px 10px;
+  color: var(--soft);
+}
+.rpt .team-jump a:hover {
+  color: var(--ink);
+  border-color: var(--rule);
+}
+.rpt .team-jump a.us {
+  color: var(--green);
+  border-color: var(--green);
+  font-weight: 600;
+}
+.rpt .team-block {
+  scroll-margin-top: 72px;
+}
+@media print {
+  .rpt .field-filter,
+  .rpt .team-jump {
+    display: none;
+  }
+}
