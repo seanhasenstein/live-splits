@@ -59,7 +59,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
   // change rarely); a live feed's on every poll while the race runs (throttled upstream).
   const live = liveFeedActive(race);
   const official = live ? await getLiveOfficial(meet, race) : since > 0 ? undefined : await getOfficialTimes(race);
-  // The whole field, for team scores: only when the race counts places and this viewer may see them.
+  // Counted places (taps at checkpoints) only when the race counts them and this viewer may see them.
   const showPlaces = !!race.places?.on && (race.places.public || can(session, "tap", meet));
   // Place taps (and the edits and undos aimed at them) go only to viewers who may see places: otherwise
   // a parent could rebuild private places, and see who was counting, from the raw log.
@@ -86,7 +86,8 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
       taps = rawTaps.filter((t) => t.type !== "tick");
     }
   }
-  const field: FieldEntry[] | undefined = !showPlaces || official === undefined ? undefined : live ? await getLiveField(meet, race) : await getOfficialField(race);
+  // The whole field (every team, as the timing company posts it, so public anyway) for the Everyone view and its team scores.
+  const field: FieldEntry[] | undefined = official === undefined ? undefined : live ? await getLiveField(meet, race) : await getOfficialField(race);
 
   return Response.json(
     // The current places setup rides along, so open screens follow it being turned on or off mid-race.

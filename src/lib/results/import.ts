@@ -198,15 +198,16 @@ async function writeImport(db: Awaited<ReturnType<typeof getDb>>, session: Clien
 }
 
 /** One runner of the whole field, any team: enough to score teams. */
-export type FieldEntry = { team: string | null; place: number | null; status: string; ours: boolean };
+/** One runner of the whole field (every team), as the timing company posted it: for team scores and the Everyone view. */
+export type FieldEntry = { team: string | null; place: number | null; status: string; ours: boolean; name?: string; timeMs?: number | null; grade?: number | null };
 
 /** The imported field for a race (every team), for team scores. Empty when nothing was imported. */
 export async function getOfficialField(race: Race): Promise<FieldEntry[]> {
   if (!race.officialImportId) return [];
   const entries = await collection(await getDb(), "raceEntries")
-    .find({ raceId: race._id, deletedAt: null }, { projection: { teamName: 1, place: 1, status: 1, athleteId: 1 } })
+    .find({ raceId: race._id, deletedAt: null }, { projection: { teamName: 1, place: 1, status: 1, athleteId: 1, name: 1, timeMs: 1, grade: 1 } })
     .toArray();
-  return entries.map((e) => ({ team: e.teamName, place: e.place, status: e.status, ours: !!e.athleteId }));
+  return entries.map((e) => ({ team: e.teamName, place: e.place, status: e.status, ours: !!e.athleteId, name: e.name, timeMs: e.timeMs, grade: e.grade }));
 }
 
 export type OfficialTimes = Record<string, { finishMs: number | null; status: string; place: number | null; byCheckpoint: Record<string, number>; precision: Precision }>;

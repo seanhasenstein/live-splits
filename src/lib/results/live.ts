@@ -67,7 +67,7 @@ async function fetchLive(meet: Meet, race: Race): Promise<Snapshot> {
   const field: FieldEntry[] = [];
   for (const e of contest.entries) {
     const m = matchAthlete(e, athletes);
-    field.push({ team: e.team, place: e.place, status: e.status, ours: !!m.athlete });
+    field.push({ team: e.team, place: e.place, status: e.status, ours: !!m.athlete, name: e.name, timeMs: e.finishMs, grade: e.grade });
     if (!m.athlete || out[m.athlete._id]) continue;
     const byCheckpoint: Record<string, number> = {};
     for (const [label, ms] of Object.entries(e.splits)) {

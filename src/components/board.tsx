@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Fragment, type ReactNode, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, History as HistoryIcon, Info, MoveHorizontal, Pencil, Share, UserRound } from "lucide-react";
+import { FieldView } from "@/components/field-view";
 import { PlacesCard } from "@/components/places-card";
 import { TeamCard, type TeamRow } from "@/components/team-card";
 import { CheckpointCounts, DeltaText, RaceStatusBar, RecordPill, RunningClock, StatusPill } from "@/components/race-status";
@@ -336,6 +337,11 @@ function RaceBoard({
   // Remembered on this phone once picked; until then it follows the race (the latest checkpoint
   // with times while it runs) and shows All once it's over.
   const [focusPref, setFocusPref] = useLocalValue(`ls_board_focus_${race.id}`);
+  // Our team, or the whole field as the timing company posts it (once there is one). A race with none
+  // of our runners in it opens on the field.
+  const [viewPref, setViewPref] = useLocalValue(`ls_board_view_${race.id}`);
+  const hasField = field.length > 0 || officialLive;
+  const view = hasField && (viewPref === "everyone" || (viewPref === null && race.athleteIds.length === 0)) ? "everyone" : "ours";
   // The latest checkpoint about half the field has reached: jumping at the leader would empty the table.
   const latestWithTimes = counts.reduce((last, c, i) => (c.n > 0 && c.n * 2 >= shownIds.length ? i : last), -1);
   const pickedIndex = focusPref && focusPref !== "all" ? race.checkpoints.findIndex((c) => c.id === focusPref) : -1;
@@ -678,6 +684,21 @@ function RaceBoard({
         </div>
       )}
 
+      {hasField && (
+        <Segmented
+          value={view}
+          onChange={(v) => setViewPref(v)}
+          options={[
+            { value: "ours", label: "Our team" },
+            { value: "everyone", label: "Everyone" },
+          ]}
+          className="mb-3 w-full sm:w-72"
+        />
+      )}
+      {view === "everyone" ? (
+        <FieldView field={field} ourTeam={race.ourTeam} live={officialLive && !isFinished} mixed={combined} />
+      ) : (
+      <>
       {race.checkpoints.length > 1 && (
         <Segmented
           size="sm"
@@ -884,6 +905,8 @@ function RaceBoard({
             focus={focusIndex === null ? null : race.checkpoints[focusIndex].id}
           />
         </div>
+      )}
+      </>
       )}
 
       {/* Times captured without a name yet: a job for coaches and managers, noise for the public. */}
