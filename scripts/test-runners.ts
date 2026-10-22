@@ -32,7 +32,13 @@ function flag(args: string[], name: string): string | null {
 async function main() {
   const [cmd, ...args] = process.argv.slice(2);
   const yes = args.includes("--yes");
-  const db = await getDb();
+  // Say where it is, and give up rather than sit silent: a wrong URI or a blocked network otherwise looks like a hang.
+  const host = (process.env.MONGODB_URI ?? "").replace(/^mongodb(\+srv)?:\/\/([^@/]*@)?/, "").split(/[/?]/)[0];
+  console.log(`Connecting to ${host || "(MONGODB_URI not set)"} …`);
+  const db = await Promise.race([
+    getDb().then(async (d) => (await d.command({ ping: 1 }), d)),
+    new Promise<never>((_, no) => setTimeout(() => no(new Error(`Couldn't reach the database at ${host} in 15 s. Check MONGODB_URI, and that this network's IP is allowed in Atlas (Network Access).`)), 15_000)),
+  ]);
   const school = await collection(db, "schools").findOne({ deletedAt: null });
   if (!school) throw new Error("No school in this database");
   console.log(`Database: ${db.databaseName} · ${school.name}${yes ? "" : " · dry run (add --yes to write)"}`);
@@ -60,7 +66,10 @@ async function main() {
   const gender = args.includes("--girls") ? "F" : args.includes("--boys") ? "M" : null;
   if (!gender) throw new Error("Say --boys or --girls (the feed doesn't say)");
 
-  const res = await fetch(DOCS + raceId);
+  console.log(`Reading race ${raceId} from AthleticLIVE …`);
+  const res = await fetch(DOCS + raceId, { signal: AbortSignal.timeout(15_000) }).catch(() => {
+    throw new Error("AthleticLIVE didn't answer in 15 s. Check your internet connection and try again.");
+  });
   if (!res.ok) throw new Error(`AthleticLIVE answered ${res.status} for race ${raceId}: is the race posted yet?`);
   const contest = parseAthleticLiveJson(await res.json(), link, { live: true });
   const runners = contest.entries.filter((e) => e.name && e.team);
@@ -116,4 +125,5 @@ main()
     console.error(err instanceof Error ? err.message : err);
     process.exitCode = 1;
   })
-  .finally(async () => (await getClient()).close());
+  // Never wait on a connection that didn't open.
+  .finally(() => Promise.race([getClient().then((c) => c.close()), new Promise((r) => setTimeout(r, 2000))]).finally(() => process.exit()));
