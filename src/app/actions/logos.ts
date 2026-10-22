@@ -8,7 +8,8 @@ import { saveLogo } from "@/lib/logos-server";
 
 export type LogoState = { error?: string; saved?: string };
 
-const MAX_BYTES = 4 * 1024 * 1024;
+// Under the server actions' 4 MB body limit (next.config), with room for the form around the file.
+const MAX_BYTES = 3.5 * 1024 * 1024;
 
 /** Adds or replaces a team's logo from an uploaded image. School coaches only. */
 export async function uploadLogo(_prev: LogoState, form: FormData): Promise<LogoState> {
@@ -18,7 +19,7 @@ export async function uploadLogo(_prev: LogoState, form: FormData): Promise<Logo
   const file = form.get("file");
   if (!name) return { error: "Enter the team's name." };
   if (!(file instanceof File) || file.size === 0) return { error: "Choose an image." };
-  if (file.size > MAX_BYTES) return { error: "That image is over 4 MB. Try a smaller one." };
+  if (file.size > MAX_BYTES) return { error: "That image is over 3.5 MB. Try a smaller one." };
   if (!file.type.startsWith("image/")) return { error: "That file isn't an image (PNG, JPG, WebP or SVG)." };
   try {
     await saveLogo(session!.schoolId, name, Buffer.from(await file.arrayBuffer()), sessionActor(session!));

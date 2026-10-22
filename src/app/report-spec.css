@@ -888,3 +888,19 @@
     padding: 4px;
   }
 }
+/* Phones, web view: wide tables keep a readable width and scroll sideways instead of squeezing. */
+@media screen and (max-width: 640px) {
+  .rpt.web .scroll {
+    margin: 0 -14px;
+    padding: 0 14px;
+  }
+  .rpt.web .scroll > table {
+    min-width: 560px;
+  }
+  .rpt.web .scroll > table.pg {
+    min-width: calc(var(--cols, 10) * 54px + 70px);
+  }
+  .rpt.web .scroll > table.vs {
+    min-width: 680px;
+  }
+}

@@ -187,36 +187,38 @@ export default async function AthletePage({ params }: PageProps<"/athletes/[athl
         {profile.seasons.length === 0 ? (
           <p style={{ color: "var(--soft)" }}>No races on file yet.</p>
         ) : (
-          <table className="pg">
-            <thead>
-              <tr>
-                <th className="l" />
-                {profile.slots.map((s) => (
-                  <th key={s.series}>{s.label}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {profile.seasons.map((s) => (
-                <tr key={s.seasonId} className={s.seasonId === current?._id ? "now" : ""}>
-                  <td className="l">
-                    {s.year}
-                    {s.grade !== null && <span className="gr">GR {s.grade}</span>}
-                  </td>
-                  {s.cells.map((c, i) => (
-                    <td key={i} className={c ? [c.careerBest ? "cb" : c.seasonBest ? "sb" : "", c.letter ? "let" : ""].join(" ").trim() : ""}>
-                      {c && (
-                        <>
-                          <span className="tm">{c.ms !== null ? t(c.ms) : c.status.toUpperCase()}</span>
-                          <span className="pl">{placeOf(c)}</span>
-                        </>
-                      )}
-                    </td>
+          <div className="scroll" style={{ "--cols": profile.slots.length } as React.CSSProperties}>
+            <table className="pg">
+              <thead>
+                <tr>
+                  <th className="l" />
+                  {profile.slots.map((s) => (
+                    <th key={s.series}>{s.label}</th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {profile.seasons.map((s) => (
+                  <tr key={s.seasonId} className={s.seasonId === current?._id ? "now" : ""}>
+                    <td className="l">
+                      {s.year}
+                      {s.grade !== null && <span className="gr">GR {s.grade}</span>}
+                    </td>
+                    {s.cells.map((c, i) => (
+                      <td key={i} className={c ? [c.careerBest ? "cb" : c.seasonBest ? "sb" : "", c.letter ? "let" : ""].join(" ").trim() : ""}>
+                        {c && (
+                          <>
+                            <span className="tm">{c.ms !== null ? t(c.ms) : c.status.toUpperCase()}</span>
+                            <span className="pl">{placeOf(c)}</span>
+                          </>
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {profile.vsLast.length > 0 && (
@@ -227,51 +229,53 @@ export default async function AthletePage({ params }: PageProps<"/athletes/[athl
                 seconds, {year} minus {lastYear} · negative = faster
               </span>
             </div>
-            <table className="vs">
-              <thead>
-                <tr>
-                  <th className="l">Meet</th>
-                  <th>{lastYear} splits</th>
-                  <th>{year} splits</th>
-                  <th>Mile 1</th>
-                  <th>Mile 2</th>
-                  <th>Final 1.1</th>
-                  <th>Finish</th>
-                  <th>{lastYear}</th>
-                  <th>{year}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {profile.vsLast.map((v) => (
-                  <tr key={v.label}>
-                    <td className="name">{v.label}</td>
-                    <td style={{ color: "var(--soft)" }}>{v.last.segments.map(t).join(" · ")}</td>
-                    <td>{v.now.segments.map(t).join(" · ")}</td>
-                    {v.delta.map((d, i) => (
-                      <td key={i} className={tone(d)}>
-                        {sgn(d)}
-                      </td>
-                    ))}
-                    <td className="plc">{placeOf(v.last)}</td>
-                    <td className="plc">{placeOf(v.now)}</td>
+            <div className="scroll">
+              <table className="vs">
+                <thead>
+                  <tr>
+                    <th className="l">Meet</th>
+                    <th>{lastYear} splits</th>
+                    <th>{year} splits</th>
+                    <th>Mile 1</th>
+                    <th>Mile 2</th>
+                    <th>Final 1.1</th>
+                    <th>Finish</th>
+                    <th>{lastYear}</th>
+                    <th>{year}</th>
                   </tr>
-                ))}
-                {profile.vsLast.length > 1 && (
-                  <tr className="avg">
-                    <td className="name">Average</td>
-                    <td />
-                    <td />
-                    {profile.average.map((d, i) => (
-                      <td key={i} className={tone(d)}>
-                        {sgn(d)}
-                      </td>
-                    ))}
-                    <td />
-                    <td />
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {profile.vsLast.map((v) => (
+                    <tr key={v.label}>
+                      <td className="name">{v.label}</td>
+                      <td style={{ color: "var(--soft)" }}>{v.last.segments.map(t).join(" · ")}</td>
+                      <td>{v.now.segments.map(t).join(" · ")}</td>
+                      {v.delta.map((d, i) => (
+                        <td key={i} className={tone(d)}>
+                          {sgn(d)}
+                        </td>
+                      ))}
+                      <td className="plc">{placeOf(v.last)}</td>
+                      <td className="plc">{placeOf(v.now)}</td>
+                    </tr>
+                  ))}
+                  {profile.vsLast.length > 1 && (
+                    <tr className="avg">
+                      <td className="name">Average</td>
+                      <td />
+                      <td />
+                      {profile.average.map((d, i) => (
+                        <td key={i} className={tone(d)}>
+                          {sgn(d)}
+                        </td>
+                      ))}
+                      <td />
+                      <td />
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
 
@@ -307,50 +311,52 @@ export default async function AthletePage({ params }: PageProps<"/athletes/[athl
                   </span>
                 )}
               </div>
-              <table className="sp" style={{ tableLayout: "fixed" }}>
-                <colgroup>
-                  {[35, 11, 8, 8, 9, 12, 8, 9].map((w, i) => (
-                    <col key={i} style={{ width: `${w}%` }} />
-                  ))}
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th className="l">Meet</th>
-                    <th>Time</th>
-                    <th>Mile 1</th>
-                    <th>Mile 2</th>
-                    <th>Final 1.1</th>
-                    <th>Place</th>
-                    <th>Team</th>
-                    <th>Vs prev</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {races.map((r) => (
-                    <tr key={r.raceId}>
-                      <td className="name">
-                        <Link href={raceLink(r)}>{r.meetName}</Link>
-                        {r.levelId === "jv" && <span className="gr"> JV</span>}
-                      </td>
-                      <td className="fin">
-                        {r.status === "finished" ? t(r.finishMs) : r.status.toUpperCase()}
-                        <Badge kind={r.pr ? "pr" : r.sb ? "sb" : null} />
-                      </td>
-                      {segmentsAt(r, SPLITS).map((ms, i) => (
-                        <td key={i}>{ms === null ? "" : t(ms)}</td>
-                      ))}
-                      <td className="plc">
-                        {r.place ? ordinal(r.place) : ""}
-                        {r.place && r.fieldSize ? ` of ${r.fieldSize}` : ""}
-                      </td>
-                      <td className="plc">{r.teamPlace ? `${r.teamPlace.place} of ${r.teamPlace.of}` : ""}</td>
-                      <td style={{ color: r.vsPrev === null || r.vsPrev === 0 ? undefined : r.vsPrev < 0 ? "var(--green)" : "var(--gold)", fontWeight: 700 }}>
-                        {r.vsPrev === null ? "" : r.vsPrev === 0 ? "±0:00" : `${r.vsPrev < 0 ? "−" : "+"}${t(Math.abs(r.vsPrev))}`}
-                      </td>
+              <div className="scroll">
+                <table className="sp" style={{ tableLayout: "fixed" }}>
+                  <colgroup>
+                    {[35, 11, 8, 8, 9, 12, 8, 9].map((w, i) => (
+                      <col key={i} style={{ width: `${w}%` }} />
+                    ))}
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th className="l">Meet</th>
+                      <th>Time</th>
+                      <th>Mile 1</th>
+                      <th>Mile 2</th>
+                      <th>Final 1.1</th>
+                      <th>Place</th>
+                      <th>Team</th>
+                      <th>Vs prev</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {races.map((r) => (
+                      <tr key={r.raceId}>
+                        <td className="name">
+                          <Link href={raceLink(r)}>{r.meetName}</Link>
+                          {r.levelId === "jv" && <span className="gr"> JV</span>}
+                        </td>
+                        <td className="fin">
+                          {r.status === "finished" ? t(r.finishMs) : r.status.toUpperCase()}
+                          <Badge kind={r.pr ? "pr" : r.sb ? "sb" : null} />
+                        </td>
+                        {segmentsAt(r, SPLITS).map((ms, i) => (
+                          <td key={i}>{ms === null ? "" : t(ms)}</td>
+                        ))}
+                        <td className="plc">
+                          {r.place ? ordinal(r.place) : ""}
+                          {r.place && r.fieldSize ? ` of ${r.fieldSize}` : ""}
+                        </td>
+                        <td className="plc">{r.teamPlace ? `${r.teamPlace.place} of ${r.teamPlace.of}` : ""}</td>
+                        <td style={{ color: r.vsPrev === null || r.vsPrev === 0 ? undefined : r.vsPrev < 0 ? "var(--green)" : "var(--gold)", fontWeight: 700 }}>
+                          {r.vsPrev === null ? "" : r.vsPrev === 0 ? "±0:00" : `${r.vsPrev < 0 ? "−" : "+"}${t(Math.abs(r.vsPrev))}`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ))}
         </RptPage>

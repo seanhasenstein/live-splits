@@ -126,14 +126,15 @@ export default async function RaceResultsPage({ params, searchParams }: PageProp
   };
 
   const field: ResultEntry[] = entries.map((e) => ({
-    name: e.athleteId ? (name.get(e.athleteId)?.displayName ?? e.name) : displayCase(e.name),
+    // The public page shows our runners as the timing company printed them, not as our roster has them.
+    name: e.athleteId && !publicView ? (name.get(e.athleteId)?.displayName ?? e.name) : displayCase(e.name),
     team: e.teamName,
     place: e.place,
     status: e.status,
     timeMs: e.timeMs,
     ours: !!e.athleteId,
   }));
-  const { teams, incomplete, points } = scoreRace(field);
+  const { teams, incomplete, points, ourKey } = scoreRace(field);
   const us = teams.find((x) => x.ours);
   const order = field.map((f, i) => ({ f, i, e: entries[i] })).sort((a, b) => (a.f.place ?? Infinity) - (b.f.place ?? Infinity) || (a.f.timeMs ?? Infinity) - (b.f.timeMs ?? Infinity));
   const finishers = order.filter((o) => o.f.status === "finished" && o.f.place !== null).length;
@@ -145,8 +146,7 @@ export default async function RaceResultsPage({ params, searchParams }: PageProp
   // The results' own mat splits, when they publish any, for every team; otherwise our taps for us alone.
   const official = splitLabels(entries);
   const officialHeads = [...official, `Mile ${(finishMeters / 1609.344).toFixed(1)}`];
-  const ourKey = teams.find((x) => x.ours)?.key;
-  const keyOf = (f: ResultEntry) => (f.ours ? (ourKey ?? "__ours__") : f.team ? teamKey(f.team) : null);
+  const keyOf = (f: ResultEntry) => (f.ours ? ourKey : f.team ? teamKey(f.team) : null);
   const pts = (i: number) => {
     const p = points[i];
     return p === null ? "—" : p.displacer ? `(${p.points})` : String(p.points);
@@ -171,7 +171,8 @@ export default async function RaceResultsPage({ params, searchParams }: PageProp
     const all = order.filter((o) => keyOf(o.f) === key);
     if (all.length === 0) return null;
     const tm = teams.find((x) => x.key === key);
-    const ours = all[0].f.ours;
+    // Ours by team, so a runner of ours not linked to the roster is in our block too.
+    const ours = key === ourKey;
     const five = topFive(rows.map((o) => o.f.timeMs).filter((x): x is number => x !== null));
     const segsOf = (o: (typeof order)[number]): (number | null)[] | null => {
       if (official.length) return officialSegments(o.e.splits, official, o.f.timeMs);
@@ -184,7 +185,7 @@ export default async function RaceResultsPage({ params, searchParams }: PageProp
     const heads = official.length ? officialHeads : ours ? segHeads : [];
     const showSplits = heads.length > 0 && segs.some((x) => x?.some((v) => v !== null));
     const gradeOf = (o: (typeof order)[number]) => {
-      const g = o.e.athleteId ? grade(o.e.athleteId) : o.e.grade;
+      const g = o.e.athleteId && !publicView ? grade(o.e.athleteId) : o.e.grade;
       return g !== null && g <= 12 ? g : null;
     };
     return (
@@ -217,66 +218,68 @@ export default async function RaceResultsPage({ params, searchParams }: PageProp
             </>
           )}
         </div>
-        <table className="rs" style={{ tableLayout: "fixed" }}>
-          {/* Fixed widths, so the columns line up from one team to the next. */}
-          <colgroup>
-            {[7, 9, 100 - 33 - (showSplits ? heads.length * 10 : 0), ...(showSplits ? heads.map(() => 10) : []), 10, 7].map((w, k) => (
-              <col key={k} style={{ width: `${w}%` }} />
-            ))}
-          </colgroup>
-          <thead>
-            <tr>
-              <th className="l">Team</th>
-              <th className="l">Place</th>
-              <th className="l">Athlete · Grade</th>
-              {showSplits &&
-                heads.map((h, k) => (
-                  <th key={h} className={k === 0 ? "vl" : ""}>
-                    {h}
-                  </th>
-                ))}
-              <th className="vl">Time</th>
-              <th>Pts</th>
-            </tr>
-          </thead>
-          <tbody>
-            {all.map((o, n) => {
-              const { f, i } = o;
-              const g = gradeOf(o);
-              return (
-                <tr key={i} className={view === "teams" && ours ? "us" : ""}>
-                  <td className="l t" style={{ color: "var(--green)" }}>
-                    {points[i]?.teamRank ?? ""}
-                  </td>
-                  <td className="l plc">{f.place ? ordinal(f.place) : ""}</td>
-                  <td className="name">
-                    {f.name}
-                    {g !== null && (
-                      <span
-                        style={{
-                          color: "var(--soft)",
-                          fontWeight: 400,
-                          fontSize: "8pt",
-                          marginLeft: 4,
-                        }}
-                      >
-                        {g}
-                      </span>
-                    )}
-                  </td>
-                  {showSplits &&
-                    (segs[n] ?? heads.map(() => null)).map((ms, k) => (
-                      <td key={k} className={k === 0 ? "vl" : ""}>
-                        {t(ms)}
-                      </td>
-                    ))}
-                  <td className="t vl">{f.status === "finished" ? t(f.timeMs) : f.status.toUpperCase()}</td>
-                  <td className={points[i]?.displacer || points[i] === null ? "d" : ""}>{f.status === "finished" ? pts(i) : ""}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="scroll">
+          <table className="rs" style={{ tableLayout: "fixed" }}>
+            {/* Fixed widths, so the columns line up from one team to the next. */}
+            <colgroup>
+              {[7, 9, 100 - 33 - (showSplits ? heads.length * 10 : 0), ...(showSplits ? heads.map(() => 10) : []), 10, 7].map((w, k) => (
+                <col key={k} style={{ width: `${w}%` }} />
+              ))}
+            </colgroup>
+            <thead>
+              <tr>
+                <th className="l">Team</th>
+                <th className="l">Place</th>
+                <th className="l">Athlete · Grade</th>
+                {showSplits &&
+                  heads.map((h, k) => (
+                    <th key={h} className={k === 0 ? "vl" : ""}>
+                      {h}
+                    </th>
+                  ))}
+                <th className="vl">Time</th>
+                <th>Pts</th>
+              </tr>
+            </thead>
+            <tbody>
+              {all.map((o, n) => {
+                const { f, i } = o;
+                const g = gradeOf(o);
+                return (
+                  <tr key={i} className={view === "teams" && ours ? "us" : ""}>
+                    <td className="l t" style={{ color: "var(--green)" }}>
+                      {points[i]?.teamRank ?? ""}
+                    </td>
+                    <td className="l plc">{f.place ? ordinal(f.place) : ""}</td>
+                    <td className="name">
+                      {f.name}
+                      {g !== null && (
+                        <span
+                          style={{
+                            color: "var(--soft)",
+                            fontWeight: 400,
+                            fontSize: "8pt",
+                            marginLeft: 4,
+                          }}
+                        >
+                          {g}
+                        </span>
+                      )}
+                    </td>
+                    {showSplits &&
+                      (segs[n] ?? heads.map(() => null)).map((ms, k) => (
+                        <td key={k} className={k === 0 ? "vl" : ""}>
+                          {t(ms)}
+                        </td>
+                      ))}
+                    <td className="t vl">{f.status === "finished" ? t(f.timeMs) : f.status.toUpperCase()}</td>
+                    <td className={points[i]?.displacer || points[i] === null ? "d" : ""}>{f.status === "finished" ? pts(i) : ""}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   };
@@ -391,7 +394,8 @@ export default async function RaceResultsPage({ params, searchParams }: PageProp
         </div>
       </nav>
       {view === "teams" ? (
-        <div className="teams-view">
+        // Keyed by race, so switching races starts fresh (the field filter hides rows in the DOM).
+        <div key={race._id} className="teams-view">
           {teamPages.map((keys, n) => (
             <RptPage key={n} title={n === 0 ? race.name : null} meetLine={n === 0 ? meetLine : undefined} heroRight={heroRight} legend={footer.legend} right={footer.right}>
               {n === 0 && statbar}
@@ -400,20 +404,20 @@ export default async function RaceResultsPage({ params, searchParams }: PageProp
                   {blockKeys.map((k) => {
                     const o = order.find((x) => keyOf(x.f) === k)!;
                     return (
-                      <a key={k} href={`#team-${k}`} className={o.f.ours ? "us" : ""}>
-                        {mark(o.f.team, o.f.ours, 14)}
-                        {o.f.ours ? school.shortName : o.f.team}
+                      <a key={k} href={`#team-${k}`} className={k === ourKey ? "us" : ""}>
+                        {mark(o.f.team, k === ourKey, 14)}
+                        {k === ourKey ? school.shortName : o.f.team}
                       </a>
                     );
                   })}
                 </nav>
               )}
-              {keys.map((k) => teamBlock(k, order.find((x) => keyOf(x.f) === k)?.f.ours ? school.shortName : undefined))}
+              {keys.map((k) => teamBlock(k, k === ourKey ? school.shortName : undefined))}
             </RptPage>
           ))}
         </div>
       ) : (
-        <div className="overall-view">
+        <div key={race._id} className="overall-view">
           <RptPage title={race.name} meetLine={meetLine} heroRight={heroRight} legend={footer.legend} right={footer.right}>
             {statbar}
             <div className="sec">Team Scores</div>

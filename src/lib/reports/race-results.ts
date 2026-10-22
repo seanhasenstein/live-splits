@@ -27,7 +27,8 @@ export type TeamResult = {
 /** A runner's points: their scoring place, `displacer` for a team's 6th or 7th; null when they took none. */
 export type RunnerPoints = { points: number; displacer: boolean; teamRank: number } | null;
 
-export function scoreRace(entries: ResultEntry[]): { teams: TeamResult[]; incomplete: string[]; points: RunnerPoints[] } {
+/** `ourKey`: the key our runners score under, whether or not we scored (fewer than five finishers). */
+export function scoreRace(entries: ResultEntry[]): { teams: TeamResult[]; incomplete: string[]; points: RunnerPoints[]; ourKey: string } {
   // Our runners count as one team whatever spelling a sheet used for us.
   const ourKeys = new Map<string, number>();
   for (const e of entries) if (e.ours && e.team) ourKeys.set(teamKey(e.team), (ourKeys.get(teamKey(e.team)) ?? 0) + 1);
@@ -72,7 +73,7 @@ export function scoreRace(entries: ResultEntry[]): { teams: TeamResult[]; incomp
     .filter((t) => t.points === null)
     .map((t) => t.name)
     .sort((a, b) => a.localeCompare(b));
-  return { teams: scoring, incomplete, points };
+  return { teams: scoring, incomplete, points, ourKey };
 }
 
 /** Our top five's average and the gap from our 1st to our 5th, by finish time. Null under five finishers. */

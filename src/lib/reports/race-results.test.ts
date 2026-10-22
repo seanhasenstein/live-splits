@@ -59,3 +59,11 @@ test("official splits: each stretch on its own from whole-second clock times, mi
   expect(officialSegments([{ label: "2 Mile", cumulativeMs: 650_200 }], labels, 1_011_800)).toEqual([null, null, 361_000]);
   expect(officialSegments([], labels, null)).toEqual([null, null, null]);
 });
+
+test("our key: the same whether or not we score, and an unlinked runner under our team name joins us", () => {
+  const field = [e(1, "Kohler"), e(2, "Kohler"), e(3, "Kohler"), e(4, "Kohler"), e(5, "Kohler"), e(6, "Sheboygan Lutheran", true), e(7, "Sheboygan Lutheran", true), e(8, "Sheboygan Lutheran")];
+  const { teams, ourKey, incomplete } = scoreRace(field);
+  expect(teams.some((t) => t.ours)).toBe(false);
+  expect(incomplete).toEqual(["Sheboygan Lutheran"]);
+  expect(ourKey).toBe("sheboygan lutheran");
+});

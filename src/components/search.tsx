@@ -84,7 +84,13 @@ function Palette({ onClose }: { onClose: () => void }) {
           setHits(d.hits);
           setLoading(false);
         })
-        .catch(() => {});
+        .catch(() => {
+          // A newer query aborted this one; anything else (offline) shouldn't leave "Searching…" up.
+          if (!ctl.signal.aborted) {
+            setHits([]);
+            setLoading(false);
+          }
+        });
     }, 140);
     return () => {
       clearTimeout(timer);
