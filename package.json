@@ -19,7 +19,8 @@
     "db:sheet-summaries": "tsx --env-file=.env.local scripts/sheet-summaries.ts",
     "db:copy": "tsx --env-file=.env.local scripts/copy-db.ts",
     "db:short-names": "tsx --env-file=.env.local scripts/short-names.ts",
-    "db:logos": "tsx --env-file=.env.local scripts/logos.ts"
+    "db:logos": "tsx --env-file=.env.local scripts/logos.ts",
+    "db:test-runners": "tsx --env-file=.env.local scripts/test-runners.ts"
   },
   "dependencies": {
     "lucide-react": "^1.50.0",
