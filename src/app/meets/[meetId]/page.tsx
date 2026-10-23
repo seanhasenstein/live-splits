@@ -138,6 +138,7 @@ export default async function MeetPage({ params }: PageProps<"/meets/[meetId]">)
                   ].join(" · ")}
                   editHref={setup ? `/meets/${meet._id}/races/${race._id}` : null}
                   csvHref={can(session, "export", meet) ? `/api/meets/${meet._id}/export?race=${race._id}` : null}
+                  importHref={can(session, "export", meet) ? `/meets/${meet._id}/import` : null}
                   compareHref={race.officialImportId && can(session, "export", meet) ? `/meets/${meet._id}/compare?race=${race._id}` : null}
                   gunTimeMs={race.gunTimeMs}
                   liveFeed={race.liveFeed ?? null}

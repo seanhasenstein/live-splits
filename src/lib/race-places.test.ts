@@ -221,3 +221,13 @@ describe("fieldScores", () => {
     expect(names.get("kimberly")).toBe("Kimberly HS");
   });
 });
+
+it("field scores mid-race: runners still on the course (no place yet) count for nobody; a team scores once five are in", () => {
+  const f = (team: string, place: number | null, ours = false) => ({ team, place, status: "finished", ours });
+  const field = [f("Kohler", 1), f("Mishicot", 2), f("Kohler", 3), f("Kohler", 4), f("Kohler", 5), f("Kohler", 6), f("Mishicot", null), f("Mishicot", null), f("Mishicot", null), f("Mishicot", null)];
+  const { scores } = fieldScores(field);
+  expect(scores.map((s) => [s.team, s.points, s.runners])).toEqual([
+    ["kohler", 1 + 2 + 3 + 4 + 5, 5],
+    ["mishicot", null, 1],
+  ]);
+});

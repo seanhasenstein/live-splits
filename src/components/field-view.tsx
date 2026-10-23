@@ -20,8 +20,18 @@ export function FieldView({ field, ourTeam, live, mixed }: { field: FieldEntry[]
   // Tenths for everyone when the timing company gives any (a 16:42.0 shouldn't read as 16:42 beside 16:42.4).
   const tenths = field.some((e) => e.timeMs != null && e.timeMs % 1000 !== 0);
   const time = (ms: number | null | undefined) => (ms == null ? "" : formatElapsed(ms, tenths ? "tenths" : "seconds"));
-  const finished = useMemo(() => field.filter((e) => e.status === "finished" && e.place !== null).sort((a, b) => a.place! - b.place!), [field]);
-  const out = useMemo(() => field.filter((e) => e.status !== "finished" || e.place === null), [field]);
+  // Live, a runner with no place yet is still on the course. In final results a finisher can have a time and
+  // no place (unattached, exhibition): listed after the placed ones.
+  const finished = useMemo(
+    () =>
+      field
+        .filter((e) => e.status === "finished" && (e.place !== null || (!live && e.timeMs != null)))
+        .sort((a, b) => (a.place ?? Infinity) - (b.place ?? Infinity) || (a.timeMs ?? Infinity) - (b.timeMs ?? Infinity)),
+    [field, live],
+  );
+  // A live feed lists runners still on the course (before the gun, everyone) with no place yet: not finishers, not out.
+  const running = live ? field.filter((e) => e.status === "finished" && e.place === null).length : 0;
+  const out = useMemo(() => field.filter((e) => e.status !== "finished"), [field]);
   const { scores, names } = useMemo(() => fieldScores(field), [field]);
   const teamName = (key: string) => (key === "us" ? ourTeam.name : (names.get(key) ?? key));
   const scoring = scores.filter((s) => s.points !== null);
@@ -50,10 +60,12 @@ export function FieldView({ field, ourTeam, live, mixed }: { field: FieldEntry[]
   const isFresh = (e: FieldEntry) => fresh.has(keyOf(e));
 
   const shown = team ? finished.filter((e) => e.team === team) : finished;
-  if (field.length === 0)
+  if (finished.length === 0)
     return (
       <Card>
-        <p className="px-4 py-8 text-center text-sm text-ink-2">{live ? "Waiting for the first finishers from the timing company…" : "No results from the timing company yet."}</p>
+        <p className="px-4 py-8 text-center text-sm text-ink-2">
+          {live ? `Waiting for the first finishers from the timing company${running ? ` (${running} runners entered)` : ""}. They show here as they cross.` : "No results from the timing company yet."}
+        </p>
       </Card>
     );
 
@@ -114,7 +126,7 @@ export function FieldView({ field, ourTeam, live, mixed }: { field: FieldEntry[]
       <Card className="overflow-hidden">
         <CardHeader
           title={`${finished.length} finished`}
-          description={mixed ? "Boys and girls together here, so no team scores." : undefined}
+          description={[running > 0 ? `${running} still running` : null, mixed ? "Boys and girls together here, so no team scores." : null].filter(Boolean).join(" · ") || undefined}
           action={
             teams.length > 1 ? (
               <select value={team} onChange={(e) => setTeam(e.target.value)} aria-label="Show one team" className="h-8 max-w-48 rounded-md border border-line bg-surface px-2 text-[13px] text-ink">
@@ -132,7 +144,7 @@ export function FieldView({ field, ourTeam, live, mixed }: { field: FieldEntry[]
           <tbody className="divide-y divide-line">
             {shown.map((e) => (
               <tr key={keyOf(e)} className={`transition-colors duration-1000 ${isFresh(e) ? "bg-gold-soft" : e.ours ? "bg-brand-soft/60" : ""}`}>
-                <td className="w-12 py-2 pr-2 pl-3 text-right text-ink-2 sm:pl-4">{ordinal(e.place!)}</td>
+                <td className="w-12 py-2 pr-2 pl-3 text-right text-ink-2 sm:pl-4">{e.place !== null ? ordinal(e.place) : "—"}</td>
                 <td className="py-2 pr-2">
                   <span className={`font-medium ${e.ours ? "text-brand-text" : "text-ink"}`}>{displayCase(e.name ?? "")}</span>
                   {e.grade != null && e.grade <= 12 && <span className="ml-1.5 text-xs text-ink-3">{e.grade}</span>}

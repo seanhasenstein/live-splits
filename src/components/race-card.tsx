@@ -1,12 +1,12 @@
 "use client";
 
-import { ChevronRight, CircleCheck, Download, Flag, GitCompare, ListOrdered, MoreHorizontal, Pencil, Radio, Timer } from "lucide-react";
+import { ChevronRight, CircleCheck, Download, Flag, GitCompare, ListOrdered, MoreHorizontal, Pencil, Radio, RefreshCw, Timer } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { PlacesSetupSheet } from "@/components/places-setup";
 import { StartRaceControl } from "@/components/start-race";
 import type { RacePlaces } from "@/lib/db/schema";
-import { clearGunTimeAction, findLiveFeedsAction, gunFromOfficialPreviewAction, type LiveFeedOption, setGunFromOfficialAction, setGunTimeAction, setLiveFeedAction, setRaceFinishedAction } from "@/app/actions/races";
+import { checkOfficialUpdatesAction, clearGunTimeAction, findLiveFeedsAction, gunFromOfficialPreviewAction, type LiveFeedOption, setGunFromOfficialAction, setGunTimeAction, setLiveFeedAction, setRaceFinishedAction, type UpdatesResult } from "@/app/actions/races";
 import { Alert, Badge, Button, Field, Input, Sheet, Time, RaceStateBadge } from "@/components/ui";
 import { RunningClock } from "@/components/race-status";
 import { useClock } from "@/lib/client/clock";
@@ -24,6 +24,8 @@ type Props = {
   /** Links offered in the "…" options sheet; null when this session can't use them. */
   editHref: string | null;
   csvHref: string | null;
+  /** The meet's import page, for those who may import: offered after a linked race finishes. */
+  importHref?: string | null;
   compareHref: string | null;
   gunTimeMs: number | null;
   finishedAt: string | null;
@@ -47,7 +49,7 @@ type Props = {
  * Start race…), in progress (big elapsed time; changes live behind "Adjust"),
  * finished (frozen). Nothing destructive is a single tap.
  */
-export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref, compareHref, gunTimeMs: initialGun, finishedAt: initialFinished, firedBy, timeZone, canGun, hasOfficial, liveFeed, places, staff, actions }: Props) {
+export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref, importHref = null, compareHref, gunTimeMs: initialGun, finishedAt: initialFinished, firedBy, timeZone, canGun, hasOfficial, liveFeed, places, staff, actions }: Props) {
   const router = useRouter();
   const clock = useClock();
   const [gunTimeMs, setGunTimeMs] = useState(initialGun);
@@ -58,6 +60,7 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
   const [options, setOptions] = useState(false);
   const [placesOpen, setPlacesOpen] = useState(false);
   const [feedOpen, setFeedOpen] = useState(false);
+  const [updatesOpen, setUpdatesOpen] = useState(false);
 
   // Server data changed underneath us (someone else set the gun): adopt it.
   if (initialGun !== seen.initialGun || initialFinished !== seen.initialFinished) {
@@ -157,6 +160,16 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
 
       {actions && <div className="mt-3">{actions[running ? "in_progress" : finished ? "finished" : "not_started"]}</div>}
 
+      {/* After the race, the live times are the timer's preliminary ones: the import from the same link makes them official. */}
+      {finished && liveFeed && !hasOfficial && importHref && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-line bg-surface-2 px-3 py-2 text-[13px] text-ink-2">
+          <span>Live times are preliminary until the official results are imported.</span>
+          <a href={`${importHref}?url=${encodeURIComponent(liveFeed.url)}`} className="font-semibold text-brand-text hover:underline">
+            Import official results
+          </a>
+        </div>
+      )}
+
       {options && (
         <Sheet title={name} subtitle="Race options" onClose={() => setOptions(false)}>
           <div className="grid gap-1.5">
@@ -193,6 +206,17 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
                 }}
               />
             )}
+            {hasOfficial && importHref && (
+              <OptionRow
+                icon={<RefreshCw className="size-4" />}
+                label="Check for updates…"
+                hint="Has the timing company changed these results since they were imported?"
+                onClick={() => {
+                  setOptions(false);
+                  setUpdatesOpen(true);
+                }}
+              />
+            )}
             {editHref && <OptionRow icon={<Pencil className="size-4" />} label="Edit race" hint="Name, checkpoints, lineup and running order." href={editHref} />}
             {csvHref && <OptionRow icon={<Download className="size-4" />} label="Download CSV" hint="Split-workbook layout, one row per athlete." href={csvHref} download />}
             {compareHref && <OptionRow icon={<GitCompare className="size-4" />} label="App vs official" hint="How close the taps were to the mats." href={compareHref} />}
@@ -221,6 +245,8 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
           </div>
         </Sheet>
       )}
+
+      {updatesOpen && importHref && <UpdatesSheet raceId={raceId} name={name} importHref={importHref} onClose={() => setUpdatesOpen(false)} />}
 
       {placesOpen && (
         <PlacesSetupSheet
@@ -580,4 +606,56 @@ export function ClockWarning({ sync, error }: { sync: { offsetMs: number; rttMs:
       </Badge>
     );
   return null;
+}
+
+/** Re-reads the race's results link and lists what the timing company changed since the import. */
+function UpdatesSheet({ raceId, name, importHref, onClose }: { raceId: string; name: string; importHref: string; onClose: () => void }) {
+  const [result, setResult] = useState<UpdatesResult | null>(null);
+  const [pending, start] = useTransition();
+  const check = () =>
+    start(async () => {
+      setResult(await checkOfficialUpdatesAction(raceId));
+    });
+  const changes = result?.changes ?? [];
+  return (
+    <Sheet title={name} subtitle="Check for updates" onClose={onClose}>
+      <div className="space-y-3 text-[13px] text-ink-2">
+        <p>Timers fix results after a race (a missed chip, a wrong school, a DQ). This reads the same link again and compares it with what was imported.</p>
+        {!result && (
+          <Button onClick={check} disabled={pending}>
+            <RefreshCw className={`size-4 ${pending ? "animate-spin" : ""}`} />
+            {pending ? "Checking…" : "Check now"}
+          </Button>
+        )}
+        {result?.error && <Alert tone="danger">{result.error}</Alert>}
+        {result?.checked && changes.length === 0 && <Alert tone="neutral">No changes: the timing company&rsquo;s results match what was imported.</Alert>}
+        {changes.length > 0 && (
+          <>
+            <p className="font-medium text-ink">
+              {changes.length} change{changes.length === 1 ? "" : "s"} since the import:
+            </p>
+            <ul className="max-h-72 divide-y divide-line overflow-y-auto rounded-md border border-line">
+              {changes.map((c, i) => (
+                <li key={i} className="px-3 py-2">
+                  <span className="font-medium text-ink">{c.name}</span>
+                  {c.team && <span className="text-ink-3"> · {c.team}</span>}
+                  <span className="block">
+                    {c.kind === "changed" ? c.what.join(" · ") : c.kind === "added" ? `added${c.place ? `, place ${c.place}` : ""}${c.status !== "finished" ? `, ${c.status.toUpperCase()}` : ""}` : "no longer in the results"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <a href={`${importHref}?url=${encodeURIComponent(result!.checked!.urls.join("\n"))}`} className="inline-flex h-9 items-center rounded-md bg-brand px-3 text-sm font-semibold text-brand-ink hover:opacity-90">
+              Re-import from this link
+            </a>
+          </>
+        )}
+        {result && (
+          <Button variant="subtle" size="sm" onClick={check} disabled={pending}>
+            {pending ? "Checking…" : "Check again"}
+          </Button>
+        )}
+      </div>
+    </Sheet>
+  );
 }

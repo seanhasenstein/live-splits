@@ -8,8 +8,10 @@ import { isCombinedRace } from "@/lib/results/match";
 
 export const metadata: Metadata = { title: "Import results" };
 
-export default async function ImportPage({ params }: PageProps<"/meets/[meetId]/import">) {
+export default async function ImportPage({ params, searchParams }: PageProps<"/meets/[meetId]/import">) {
   const { meetId } = await params;
+  // ?url=: a race's live results link, from its card after the race (else the meet's results link).
+  const { url } = await searchParams;
   const session = await getSession();
   if (!session) redirect("/join");
   const meet = await getMeet(meetId);
@@ -33,7 +35,7 @@ export default async function ImportPage({ params }: PageProps<"/meets/[meetId]/
           races={races.map((r) => ({ id: r._id, name: r.name, athleteIds: r.lineup.map((l) => l.athleteId), hasOfficial: !!r.officialImportId, gender: raceGender(r) }))}
           athletes={roster.map((a) => ({ _id: a._id, displayName: a.displayName, officialName: a.officialName, aliases: a.aliases }))}
           teamAliases={school?.settings.teamAliases ?? []}
-          resultsUrl={meet.resultsUrl ?? null}
+          resultsUrl={typeof url === "string" && /^https:\/\//.test(url) ? url : (meet.resultsUrl ?? null)}
         />
       </Page>
     </>

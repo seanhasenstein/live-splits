@@ -39,13 +39,19 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
   const [signedOut, setSignedOut] = useState(false);
   const [rejected, setRejected] = useState(0);
   const [official, setOfficial] = useState<OfficialTimes>({});
-  /** Every team's finishers (live feed or import), when the race counts places: for team scores. */
+  /** Every team's runners (live feed or import): the Everyone view and team scores. */
   const [field, setField] = useState<FieldEntry[]>([]);
   /** The race's places setup as of the last poll (undefined until then: use the page's). */
   const [places, setPlaces] = useState<RacePlaces | null | undefined>(undefined);
   /** The official times are coming from the timing company's live feed, not an import. */
   const [officialLive, setOfficialLive] = useState(false);
   const liveRef = useRef(false);
+  /** How old the live feed's data was at the last poll (ms): it has gone quiet when this grows. */
+  const [liveAgeMs, setLiveAgeMs] = useState<number | null>(null);
+  /** The feed's link has never answered (dead link, race not posted yet, timer down). */
+  const [liveFailing, setLiveFailing] = useState(false);
+  /** The link and read time of the live snapshot on screen: a different link starts over; an older read is ignored. */
+  const liveShown = useRef<{ url: string | null; okAt: number | null }>({ url: null, okAt: null });
   const [recording, setRecording] = useState<Recording[]>([]);
   /** When each tap first arrived here (epoch ms); the board flashes times younger than a few seconds. */
   const [seenAt, setSeenAt] = useState<Map<string, number>>(() => new Map());
@@ -77,7 +83,7 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
     try {
       const res = await fetch(`/api/races/${raceId}/taps?since=${since.current}${atRef.current ? `&at=${encodeURIComponent(atRef.current)}&job=${jobRef.current ?? "times"}` : ""}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const body = (await res.json()) as { taps: ServerTap[]; gunTimeMs: number | null; serverTimeMs: number; official?: OfficialTimes; field?: FieldEntry[]; places?: RacePlaces | null; officialLive?: boolean; finished?: boolean; recording?: Recording[] };
+      const body = (await res.json()) as { taps: ServerTap[]; gunTimeMs: number | null; serverTimeMs: number; official?: OfficialTimes; field?: FieldEntry[]; places?: RacePlaces | null; officialLive?: boolean; liveAgeMs?: number | null; liveUrl?: string | null; liveOkAt?: number | null; liveFailing?: boolean; finished?: boolean; recording?: Recording[] };
       if (body.recording) setRecording(body.recording);
       if ("places" in body) setPlaces(body.places ?? null);
       since.current = body.serverTimeMs;
@@ -86,18 +92,35 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
       setGunTimeMs(body.gunTimeMs);
       setFinished(!!body.finished);
       stateRef.current = { gunTimeMs: body.gunTimeMs, finished: !!body.finished, lastUpdatedAt: Date.now() };
-      if (body.official) {
+      // Live: another server copy can answer with an older read than the one on screen (keep ours), and a
+      // re-linked race's old results must go (the new link may not answer yet).
+      let stale = false;
+      if (body.officialLive) {
+        const shown = liveShown.current;
+        if (shown.url !== null && body.liveUrl !== shown.url) {
+          setOfficial({});
+          setField([]);
+          shown.okAt = null;
+        }
+        shown.url = body.liveUrl ?? null;
+        // (An answer with no read at all, from a copy that never reached the feed, doesn't replace a real one either.)
+        stale = shown.okAt != null && (body.liveOkAt == null || body.liveOkAt < shown.okAt);
+        if (body.official && !stale && body.liveOkAt != null) shown.okAt = body.liveOkAt;
+      } else liveShown.current = { url: null, okAt: null };
+      if (body.official && !stale) {
         setOfficial(body.official);
-        setOfficialLive(!!body.officialLive);
-        // Places turned off (or results removed) since: drop the old field rather than keep scoring it.
+        // Results removed since: drop the old field rather than keep showing it.
         setField(body.field ?? []);
       } else if (liveRef.current && !body.officialLive) {
-        // The live feed just ended (imported, or finished): fetch the real official times next.
+        // The live feed just ended (the results were imported): fetch the official times next.
         // That refetch re-sends every tap; none of them is news.
         since.current = 0;
         quietRefetch.current = true;
-        setOfficialLive(false);
       }
+      // Live with no official times sent: the server hasn't heard from the feed yet. Keep what's shown.
+      setOfficialLive(!!body.officialLive);
+      if (!stale) setLiveAgeMs(body.officialLive ? (body.liveAgeMs ?? null) : null);
+      setLiveFailing(!!body.officialLive && !!body.liveFailing);
       liveRef.current = !!body.officialLive;
       if (body.taps.length > 0) {
         setServerTaps((prev) => {
@@ -328,6 +351,8 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
     field,
     places,
     officialLive,
+    liveAgeMs,
+    liveFailing,
     recording,
     seenAt,
     finished,

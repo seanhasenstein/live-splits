@@ -120,7 +120,7 @@ function OfficialPill({ kind, className }: { kind: "imported" | "division" | "li
   return (
     <span className={`ml-auto flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold tracking-[0.06em] uppercase ${className}`}>
       {kind === "live" ? <LiveDot className="bg-current" /> : <Award className="size-3.5" />}
-      {kind === "live" ? "Official · live" : kind === "division" ? "Official times · division places" : "Official results"}
+      {kind === "live" ? "Live · timer" : kind === "division" ? "Official times · division places" : "Official results"}
     </span>
   );
 }

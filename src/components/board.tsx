@@ -163,7 +163,7 @@ function RaceBoard({
   careerLinks: boolean;
 }) {
   const clock = useClock();
-  const { taps, gunTimeMs, official, field, places: livePlaces, officialLive, finished, longRunning, staleMinutes, send, online, loaded, recording, seenAt } = useRaceTaps(raceIn.id, raceIn.gunTimeMs);
+  const { taps, gunTimeMs, official, field, places: livePlaces, officialLive, liveAgeMs, liveFailing, finished, longRunning, staleMinutes, send, online, loaded, recording, seenAt } = useRaceTaps(raceIn.id, raceIn.gunTimeMs);
   // Places as of the last poll (on and visible to this viewer, as the page had it): turning places off
   // mid-race clears them here within seconds, and turning them on shows them.
   const race = useMemo(() => (livePlaces === undefined ? raceIn : { ...raceIn, places: livePlaces?.on ? livePlaces : null }), [raceIn, livePlaces]);
@@ -179,12 +179,13 @@ function RaceBoard({
     [race, state, taps, gunTimeMs],
   );
   const officialPlaces = useMemo(() => {
+    // The timer's places and every team's score, from the field (live or imported), places counted or not.
     // A division race's official places are the app's ranking within our division: not comparable with
     // counted overall places, and the field may hold several divisions. No team scores from it either.
-    if (!race.places || field.length === 0 || race.placesDerived) return null;
+    if (field.length === 0 || race.placesDerived) return null;
     const place = new Map(Object.entries(official).flatMap(([id, o]) => (o.place !== null && o.status === "finished" ? [[id, o.place] as const] : [])));
     return { ...fieldScores(field), place };
-  }, [race.places, race.placesDerived, field, official]);
+  }, [race.placesDerived, field, official]);
   /** A runner's place at checkpoint i, and the change since the last checkpoint counted the same way (+ = passed people). */
   const placeAt = (athleteId: string, i: number): { place: number; overall: boolean; gained: number | null } | null => {
     const c = race.checkpoints[i];
@@ -278,11 +279,14 @@ function RaceBoard({
     const cps = race.checkpoints.map((c) => state.get(c.id));
     const rows = race.athleteIds.map((athleteId): Row => {
       const marks = cps.map((cp) => cp?.byAthlete.get(athleteId));
-      const off = official[athleteId];
+      // A live feed lists runners still on the course with no time, place or status word: that's no
+      // result yet, so it mustn't override what the app knows (a DNS marked before the gun).
+      const listed = official[athleteId];
+      const off = listed && !(listed.status === "finished" && listed.finishMs === null && listed.place === null && Object.keys(listed.byCheckpoint).length === 0) ? listed : undefined;
       const cells = race.checkpoints.map((c, i): Cell => {
         const m = marks[i];
         const o = off?.byCheckpoint[c.id] ?? (c.kind === "finish" ? (off?.finishMs ?? null) : null);
-        if (o !== null && o !== undefined) return { mark: m, official: o, precision: off.precision, elapsedMs: o, absoluteMs: null, missed: false, beforeGun: false };
+        if (o !== null && o !== undefined) return { mark: m, official: o, precision: off!.precision, elapsedMs: o, absoluteMs: null, missed: false, beforeGun: false };
         const abs = m && !m.missed && m.timeMs !== null ? m.timeMs : null;
         // A tap from before the gun (race restarted) isn't a time: shown as "before gun", counted as nothing.
         const beforeGun = abs !== null && !!gunTimeMs && abs < gunTimeMs;
@@ -297,7 +301,8 @@ function RaceBoard({
       const finishCell = cells.find((_, i) => race.checkpoints[i].kind === "finish");
       const finishMs = finishCell ? (finishCell.official ?? finishCell.elapsedMs) : null;
       const finished = !!finishCell && !finishCell.missed && !finishCell.beforeGun && (off ? off.status === "finished" : !statuses.get(athleteId));
-      const record = race.recordsExcluded || !finished ? null : recordBadge(finishMs, race.bests[athleteId], !!finishCell?.official);
+      // A live-feed time is the timer's, but preliminary: PR / SB stay outlined until the results are imported.
+      const record = race.recordsExcluded || !finished ? null : recordBadge(finishMs, race.bests[athleteId], !!finishCell?.official && !officialLive);
       return { athleteId, marks, cells, reached, officialStatus: off?.status ?? null, officialPlace: off?.place ?? null, status: off ? undefined : statuses.get(athleteId), record };
     });
     // Compare like with like: official times are from the gun, app times are elapsed when
@@ -316,7 +321,7 @@ function RaceBoard({
       if (a.reached >= 0) return key(a) - key(b);
       return (lineupIndex.get(a.athleteId) ?? 0) - (lineupIndex.get(b.athleteId) ?? 0);
     });
-  }, [race, state, official, gunTimeMs, statuses]);
+  }, [race, state, official, officialLive, gunTimeMs, statuses]);
   const rows = useMemo(() => (shownIds.length === race.athleteIds.length ? allRows : allRows.filter((r) => shownIds.includes(r.athleteId))), [allRows, shownIds, race.athleteIds.length]);
 
   const pendingTotal = race.checkpoints.reduce((n, c) => n + (state.get(c.id)?.pending.length ?? 0), 0);
@@ -404,30 +409,28 @@ function RaceBoard({
       const k = scored.findIndex((x) => x.team === "us");
       return k >= 0 ? k + 1 : null;
     };
-    if (race.places) {
-      if (c.kind === "finish" && officialPlaces && !combined && inRace.some((r) => officialPlaces.place.has(r.athleteId))) {
-        // Official results: real places and real team scores.
-        // The scoring places (incomplete teams and 8th+ runners taken out), so the five add up to the points.
-        const us = officialPlaces.scores.find((x) => x.team === "us");
-        places = us?.places.length ? [...us.places] : inRace.flatMap((r) => (officialPlaces.place.has(r.athleteId) ? [officialPlaces.place.get(r.athleteId)!] : []));
-        points = us?.points ?? null;
-        teamPlace = rank(officialPlaces.scores);
-      } else {
-        const cp = placesByCp.get(c.id);
-        if (cp) {
-          places = inRace.flatMap((r) => (cp.place.has(r.athleteId) ? [cp.place.get(r.athleteId)!] : []));
-          overall = cp.countingAll || race.places.teams.length === 0;
-          // Points need someone to score against (the whole-meet estimate, or the tracked teams), and a
-          // single-gender field: a boys-and-girls race's counted taps mix both, so no team points there.
-          const table = combined ? null : (cp.estimate ?? (race.places.teams.length > 0 ? cp.scores : null));
-          if (table) {
-            const us = table.find((x) => x.team === "us");
-            points = us?.points ?? null;
-            teamPlace = rank(table.filter((x) => x.team !== "*"));
-            approx = !!cp.estimate;
-            // The scoring places that make up those points.
-            if (us?.places.length) places = [...us.places];
-          }
+    if (c.kind === "finish" && officialPlaces && !combined && inRace.some((r) => officialPlaces.place.has(r.athleteId))) {
+      // The timer's results (live or imported): real places and real team scores, places counted or not.
+      // The scoring places (incomplete teams and 8th+ runners taken out), so the five add up to the points.
+      const us = officialPlaces.scores.find((x) => x.team === "us");
+      places = us?.places.length ? [...us.places] : inRace.flatMap((r) => (officialPlaces.place.has(r.athleteId) ? [officialPlaces.place.get(r.athleteId)!] : []));
+      points = us?.points ?? null;
+      teamPlace = rank(officialPlaces.scores);
+    } else if (race.places) {
+      const cp = placesByCp.get(c.id);
+      if (cp) {
+        places = inRace.flatMap((r) => (cp.place.has(r.athleteId) ? [cp.place.get(r.athleteId)!] : []));
+        overall = cp.countingAll || race.places.teams.length === 0;
+        // Points need someone to score against (the whole-meet estimate, or the tracked teams), and a
+        // single-gender field: a boys-and-girls race's counted taps mix both, so no team points there.
+        const table = combined ? null : (cp.estimate ?? (race.places.teams.length > 0 ? cp.scores : null));
+        if (table) {
+          const us = table.find((x) => x.team === "us");
+          points = us?.points ?? null;
+          teamPlace = rank(table.filter((x) => x.team !== "*"));
+          approx = !!cp.estimate;
+          // The scoring places that make up those points.
+          if (us?.places.length) places = [...us.places];
         }
       }
     }
@@ -598,8 +601,11 @@ function RaceBoard({
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-1">
           <RaceStatusBar finished={isFinished} gunTimeMs={gunTimeMs} now={clock.now} official={officialLive ? "live" : hasOfficial ? (race.placesDerived ? "division" : "imported") : "none"} />
-          {hasOfficial && !isFinished && !gunTimeMs && <Badge tone="brand">Official results</Badge>}
+          {hasOfficial && !isFinished && !gunTimeMs && <Badge tone="brand">{officialLive ? "Live · timer" : "Official results"}</Badge>}
           {staleMinutes > 0 && <Badge tone="gold">updated {staleMinutes} min ago</Badge>}
+          {/* The timing company's feed has stopped answering: what's shown is its last word. */}
+          {officialLive && liveAgeMs !== null && liveAgeMs > 2 * 60_000 && <Badge tone="gold">timer results {Math.round(liveAgeMs / 60_000)} min old</Badge>}
+          {officialLive && liveFailing && liveAgeMs === null && <Badge tone="danger">can&rsquo;t read the timer&rsquo;s results yet</Badge>}
           {!online && (
             <Badge tone="danger" dot>
               Offline
@@ -696,7 +702,7 @@ function RaceBoard({
         />
       )}
       {view === "everyone" ? (
-        <FieldView field={field} ourTeam={race.ourTeam} live={officialLive && !isFinished} mixed={combined} />
+        <FieldView field={field} ourTeam={race.ourTeam} live={officialLive} mixed={combined} />
       ) : (
       <>
       {race.checkpoints.length > 1 && (
@@ -927,7 +933,7 @@ function RaceBoard({
       )}
 
       <p className="mt-3 text-xs text-ink-3">
-        {!editing && "Tap a runner for their splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a light ~ time marked projected is when they should get there at their last split's pace (before their first split, from their races earlier this season)${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Official times from the timing company's live feed replace app taps as they post. " : race.placesDerived ? "Official times replace app taps where imported; the timing company scored the divisions as one field, so places here are ranked by the app within our division. " : "Official times replace app taps where imported. ")}{" "}
+        {!editing && "Tap a runner for their splits, pace and comparison. "}* edited &nbsp; ~ estimate{!isFinished && ` · a light ~ time marked projected is when they should get there at their last split's pace (before their first split, from their races earlier this season)${staff ? "; overdue means they're more than a minute past it" : ""}`} &nbsp;{hasOfficial && (officialLive ? "Live times from the timing company replace app taps as they post; they're preliminary until the official results are imported. " : race.placesDerived ? "Official times replace app taps where imported; the timing company scored the divisions as one field, so places here are ranked by the app within our division. " : "Official times replace app taps where imported. ")}{" "}
         {focusIndex === null
           ? race.places
             ? "The split, the time from the gun beneath it, then the place. Pick a checkpoint above the table for each split's pace change."

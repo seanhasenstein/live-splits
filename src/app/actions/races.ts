@@ -13,9 +13,11 @@ import { teamKey } from "@/lib/race-places";
 import { RacePayload } from "@/lib/race-form";
 import { distanceValue } from "@/lib/distance";
 import { getOfficialTimes, gunFromOfficial } from "@/lib/results/import";
-import { fromUrl, isLiveFeedUrl, SourceError } from "@/lib/results/sources";
+import { normalizeName } from "@/lib/results/match";
+import { fromFeedUrl, fromUrl, isLiveFeedUrl, SourceError } from "@/lib/results/sources";
+import { diffField, type FieldChange } from "@/lib/results/updates";
 import { recordTaps, TapError } from "@/lib/taps";
-import { zonedTimeToEpochMs } from "@/lib/time";
+import { formatElapsed, zonedTimeToEpochMs } from "@/lib/time";
 
 export type FormState = { error?: string };
 
@@ -384,4 +386,49 @@ export async function teamSuggestionsAction(raceId: string): Promise<TeamSuggest
     if (k && !out.has(k) && !ownKeys.has(k)) out.set(k, { name: e._id, short: null, color: null, aliases: [], tracked: false });
   }
   return [...out.values()];
+}
+
+/** `checked.urls`: every link the race was imported from (a combined race has two), to re-import from all of them. */
+export type UpdatesResult = { error?: string; checked?: { urls: string[]; contests: string[] }; changes?: FieldChange[] };
+
+/**
+ * After an import: read the same link again and list what the timing company has changed since
+ * (times, places, DQs, runners added or taken out). Applying them is a re-import from that link.
+ */
+export async function checkOfficialUpdatesAction(raceId: string): Promise<UpdatesResult> {
+  const session = await getSession();
+  const race = await getRace(raceId);
+  const meet = race && (await getMeet(race.meetId));
+  if (!race || !meet || !can(session, "export", meet)) return { error: "Not allowed" };
+  if (!race.officialImportId) return { error: "This race has no imported results yet." };
+  const db = await getDb();
+  const [imp, stored] = await Promise.all([
+    collection(db, "imports").findOne({ _id: race.officialImportId, schoolId: meet.schoolId }),
+    collection(db, "raceEntries")
+      .find({ raceId: race._id, deletedAt: null }, { projection: { name: 1, teamName: 1, place: 1, status: 1, timeMs: 1 } })
+      .toArray(),
+  ]);
+  let contests: { name: string; source?: { url?: string }; entries: { name: string }[] }[] = [];
+  try {
+    contests = JSON.parse(imp?.raw ?? "[]");
+  } catch {
+    contests = [];
+  }
+  // The contests that fed this race (a combined race takes two): the ones that share runners with it.
+  const ours = new Set(stored.map((e) => normalizeName(e.name)));
+  const used = (Array.isArray(contests) ? contests : []).filter((c) => c?.source?.url && c.entries?.some((e) => ours.has(normalizeName(e.name))));
+  if (used.length === 0) return { error: "These results came from a PDF or pasted text, so there's no link to check. Re-import the new file if the timer posted one." };
+  try {
+    const fresh = await Promise.all(used.map((c) => fromFeedUrl(c.source!.url!, c.name)));
+    const rows = fresh.flatMap((c) => c.entries.map((e) => ({ name: e.name, team: e.team, place: e.place, status: e.status, timeMs: e.finishMs })));
+    const changes = diffField(
+      stored.map((e) => ({ name: e.name, team: e.teamName, place: e.place, status: e.status, timeMs: e.timeMs })),
+      rows,
+      (ms) => formatElapsed(ms, "tenths"),
+      { places: !race.placesDerived },
+    );
+    return { checked: { urls: [...new Set(used.map((c) => c.source!.url!))], contests: used.map((c) => c.name) }, changes };
+  } catch (err) {
+    return { error: err instanceof SourceError ? err.message : "Couldn't read the timing company's page just now. Try again in a minute." };
+  }
 }

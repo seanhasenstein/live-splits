@@ -3,7 +3,7 @@ import { getMeet, getRace } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
 import { type FieldEntry, getOfficialField, getOfficialTimes } from "@/lib/results/import";
-import { getLiveField, getLiveOfficial, liveFeedActive } from "@/lib/results/live";
+import { getLiveSnapshot, liveFeedActive } from "@/lib/results/live";
 
 /** A record screen counts as "here" this long after its last poll. */
 const PRESENCE_MS = 2 * 60_000;
@@ -58,7 +58,12 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
   // Official times ride along: imported ones on the first fetch only (they're small and
   // change rarely); a live feed's on every poll while the race runs (throttled upstream).
   const live = liveFeedActive(race);
-  const official = live ? await getLiveOfficial(meet, race) : since > 0 ? undefined : await getOfficialTimes(race);
+  // Nothing known yet from the feed on this server: send no official times at all, so screens keep theirs.
+  // A feed that has never answered here (a dead link, a race not posted yet) sends empty ones and says so.
+  const feed = live ? await getLiveSnapshot(meet, race) : null;
+  const snap = feed?.snap ?? null;
+  const liveFailed = !!feed?.failed && !snap;
+  const official = live ? (snap?.data ?? (liveFailed ? {} : undefined)) : since > 0 ? undefined : await getOfficialTimes(race);
   // Counted places (taps at checkpoints) only when the race counts them and this viewer may see them.
   const showPlaces = !!race.places?.on && (race.places.public || can(session, "tap", meet));
   // Place taps (and the edits and undos aimed at them) go only to viewers who may see places: otherwise
@@ -87,11 +92,16 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
     }
   }
   // The whole field (every team, as the timing company posts it, so public anyway) for the Everyone view and its team scores.
-  const field: FieldEntry[] | undefined = official === undefined ? undefined : live ? await getLiveField(meet, race) : await getOfficialField(race);
+  const field: FieldEntry[] | undefined = official === undefined ? undefined : live ? (snap?.field ?? []) : await getOfficialField(race);
 
   return Response.json(
     // The current places setup rides along, so open screens follow it being turned on or off mid-race.
-    { taps, gunTimeMs: race.gunTimeMs, serverTimeMs, official, field, places: staff ? (race.places ?? null) : showPlaces ? race.places : null, officialLive: live, finished: !!race.finishedAt, recording },
+    { taps, gunTimeMs: race.gunTimeMs, serverTimeMs, official, field, places: staff ? (race.places ?? null) : showPlaces ? race.places : null, officialLive: live,
+      // Which link the live times came from (a re-linked race starts over), when they were read, and whether reading it fails.
+      liveUrl: live ? race.liveFeed!.url : null,
+      liveOkAt: snap?.okAt ?? null,
+      liveAgeMs: snap ? Date.now() - snap.okAt : null,
+      liveFailing: live && !!feed?.failed, finished: !!race.finishedAt, recording },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
