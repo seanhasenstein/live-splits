@@ -57,6 +57,7 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
   const [adjusting, setAdjusting] = useState(false);
   const [options, setOptions] = useState(false);
   const [placesOpen, setPlacesOpen] = useState(false);
+  const [feedOpen, setFeedOpen] = useState(false);
 
   // Server data changed underneath us (someone else set the gun): adopt it.
   if (initialGun !== seen.initialGun || initialFinished !== seen.initialFinished) {
@@ -163,10 +164,21 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
               <OptionRow
                 icon={<Timer className="size-4" />}
                 label={gunTimeMs !== null ? "Adjust the race clock…" : "Set the gun time by hand…"}
-                hint={gunTimeMs !== null ? "Mark finished, change or remove the gun, link live results." : "Type the clock time the gun went off."}
+                hint={gunTimeMs !== null ? "Mark finished, change or remove the gun." : "Type the clock time the gun went off."}
                 onClick={() => {
                   setOptions(false);
                   setAdjusting(true);
+                }}
+              />
+            )}
+            {canGun && !hasOfficial && !finished && (
+              <OptionRow
+                icon={<Radio className="size-4" />}
+                label={liveFeed ? `Live results · ${liveFeed.contestName ?? "linked"}` : "Live results link…"}
+                hint={liveFeed ? "Official finishes from the timing company while the race runs." : "Paste the timing company's page for this race (Trackside / AthleticLIVE, RACE RESULT)."}
+                onClick={() => {
+                  setOptions(false);
+                  setFeedOpen(true);
                 }}
               />
             )}
@@ -184,6 +196,28 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
             {editHref && <OptionRow icon={<Pencil className="size-4" />} label="Edit race" hint="Name, checkpoints, lineup and running order." href={editHref} />}
             {csvHref && <OptionRow icon={<Download className="size-4" />} label="Download CSV" hint="Split-workbook layout, one row per athlete." href={csvHref} download />}
             {compareHref && <OptionRow icon={<GitCompare className="size-4" />} label="App vs official" hint="How close the taps were to the mats." href={compareHref} />}
+          </div>
+        </Sheet>
+      )}
+
+      {feedOpen && (
+        <Sheet title={name} subtitle="Live results" onClose={() => setFeedOpen(false)}>
+          <div className="space-y-3 text-[13px] text-ink-2">
+            <p>
+              Paste this race&rsquo;s page from the timing company. For Trackside Timing, open the race on their results site (or AthleticLIVE) and copy that page&rsquo;s link: it ends in
+              /events/xc/ and a number.
+            </p>
+            <p>
+              Once the gun is fired here, Live results reads it (at most every 15 s while someone has it open): official finishes for our runners, and the Everyone view with every runner and team score. Import the results after the race as usual.
+            </p>
+            <LiveFeedControl
+              raceId={raceId}
+              liveFeed={liveFeed}
+              onSaved={() => {
+                setFeedOpen(false);
+                router.refresh();
+              }}
+            />
           </div>
         </Sheet>
       )}
@@ -207,7 +241,6 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
           gunTimeMs={gunTimeMs}
           finished={finished}
           hasOfficial={hasOfficial}
-          liveFeed={liveFeed}
           timeZone={timeZone}
           onClose={() => setAdjusting(false)}
           onChanged={(next) => {
@@ -227,7 +260,6 @@ function AdjustSheet({
   gunTimeMs,
   finished,
   hasOfficial,
-  liveFeed,
   timeZone,
   onClose,
   onChanged,
@@ -236,7 +268,6 @@ function AdjustSheet({
   gunTimeMs: number | null;
   finished: boolean;
   hasOfficial: boolean;
-  liveFeed: { url: string; contestName: string | null } | null;
   timeZone: string;
   onClose: () => void;
   onChanged: (next: { gunTimeMs?: number | null; finishedAt?: string | null }) => void;
@@ -366,14 +397,6 @@ function AdjustSheet({
                 </Button>
               )
             }
-          />
-        )}
-
-        {!hasOfficial && !finished && (
-          <Option
-            title="Live official results"
-            description="Paste the timing company's link for this race (for Trackside Timing, open the race on their results site and copy that page's link). While the race runs, the board polls it (at most every 15 s) and shows official finishes as they post. Import the results after the race as usual."
-            action={<LiveFeedControl raceId={raceId} liveFeed={liveFeed} onSaved={() => onChanged({})} />}
           />
         )}
 
