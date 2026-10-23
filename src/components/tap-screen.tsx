@@ -521,7 +521,7 @@ function RaceTapper({
     (acc, id) => {
       const st = statuses.get(id)?.status;
       // A time at the end outranks an app status (a DNF with a finish is a bookkeeping slip, not a DNF).
-      if (st && !hasTimeAtLast(id) && !(official[id] && official[id].status === "finished")) acc[st] += 1;
+      if (st && !hasTimeAtLast(id) && !(official[id] && official[id].status === "finished" && official[id].finishMs !== null)) acc[st] += 1;
       return acc;
     },
     { dns: 0, dnr: 0, dnf: 0 },

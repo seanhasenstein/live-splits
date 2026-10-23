@@ -16,7 +16,8 @@ const FRESH_MS = 8000;
  * for every team, provisional while the race runs (a team scores once five of its runners are in), and
  * every finisher in place order, ours marked and the newest lit up as they post.
  */
-export function FieldView({ field, ourTeam, live, mixed }: { field: FieldEntry[]; ourTeam: OurTeam; live: boolean; mixed: boolean }) {
+/** `live`: the timer's preliminary results (a feed, not an import). `racing`: the race is still on, so a runner with no place is still out there. */
+export function FieldView({ field, ourTeam, live, racing, mixed }: { field: FieldEntry[]; ourTeam: OurTeam; live: boolean; racing: boolean; mixed: boolean }) {
   // Tenths for everyone when the timing company gives any (a 16:42.0 shouldn't read as 16:42 beside 16:42.4).
   const tenths = field.some((e) => e.timeMs != null && e.timeMs % 1000 !== 0);
   const time = (ms: number | null | undefined) => (ms == null ? "" : formatElapsed(ms, tenths ? "tenths" : "seconds"));
@@ -25,12 +26,12 @@ export function FieldView({ field, ourTeam, live, mixed }: { field: FieldEntry[]
   const finished = useMemo(
     () =>
       field
-        .filter((e) => e.status === "finished" && (e.place !== null || (!live && e.timeMs != null)))
+        .filter((e) => e.status === "finished" && (e.place !== null || (!racing && e.timeMs != null)))
         .sort((a, b) => (a.place ?? Infinity) - (b.place ?? Infinity) || (a.timeMs ?? Infinity) - (b.timeMs ?? Infinity)),
-    [field, live],
+    [field, racing],
   );
   // A live feed lists runners still on the course (before the gun, everyone) with no place yet: not finishers, not out.
-  const running = live ? field.filter((e) => e.status === "finished" && e.place === null).length : 0;
+  const running = racing ? field.filter((e) => e.status === "finished" && e.place === null).length : 0;
   const out = useMemo(() => field.filter((e) => e.status !== "finished"), [field]);
   const { scores, names } = useMemo(() => fieldScores(field), [field]);
   const teamName = (key: string) => (key === "us" ? ourTeam.name : (names.get(key) ?? key));
@@ -74,8 +75,14 @@ export function FieldView({ field, ourTeam, live, mixed }: { field: FieldEntry[]
       {!mixed && (
         <Card className="overflow-hidden">
           <CardHeader
-            title={live ? "Team scores · provisional" : "Team scores"}
-            description={live ? "Every team, from the runners in so far. A team scores once five of its runners finish; 6th and 7th push others back." : "Every team, five to score; 6th and 7th push others back."}
+            title={racing ? "Team scores · provisional" : live ? "Team scores · preliminary" : "Team scores"}
+            description={
+              racing
+                ? "Every team, from the runners in so far. A team scores once five of its runners finish; 6th and 7th push others back."
+                : live
+                  ? "Every team, from the timer's preliminary results (official once imported). Five to score; 6th and 7th push others back."
+                  : "Every team, five to score; 6th and 7th push others back."
+            }
           />
           <div className="overflow-x-auto border-t border-line">
             <table className="w-full text-sm tabular-nums">
@@ -117,7 +124,7 @@ export function FieldView({ field, ourTeam, live, mixed }: { field: FieldEntry[]
           </div>
           {notYet.length > 0 && (
             <p className="border-t border-line px-4 py-2.5 text-[13px] text-ink-2">
-              <span className="font-medium text-ink">{live ? "Not five in yet" : "No team score"}:</span> {notYet.map((s) => `${teamName(s.team)} (${s.runners})`).join(", ")}
+              <span className="font-medium text-ink">{racing ? "Not five in yet" : "No team score"}:</span> {notYet.map((s) => `${teamName(s.team)} (${s.runners})`).join(", ")}
             </p>
           )}
         </Card>

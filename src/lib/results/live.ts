@@ -24,6 +24,9 @@ export type LiveSnapshot = { data: OfficialTimes; field: FieldEntry[]; okAt: num
 /** `failed`: the last read of the feed failed (a 404 before the race is posted, a dead link, upstream down). */
 const cache = new Map<string, { checkedAt: number; snap: LiveSnapshot | null; failed: boolean; inflight: Promise<void> | null }>();
 
+/** A linked feed's identity: the link and, for a RACE RESULT page with several contests, which one. */
+export const liveFeedId = (feed: { url: string; contestName: string | null }) => `${feed.url}#${feed.contestName ?? ""}`;
+
 /**
  * Read the feed for a linked race until its results are imported: before the gun (it just has no
  * finishers yet), while it runs, and after it's marked finished (so the results don't vanish before
@@ -42,7 +45,7 @@ export function liveFeedActive(race: Pick<Race, "liveFeed" | "finishedAt" | "off
  */
 export async function getLiveSnapshot(meet: Meet, race: Race): Promise<{ snap: LiveSnapshot | null; failed: boolean }> {
   if (!race.liveFeed) return { snap: null, failed: false };
-  const key = `${race._id}:${race.liveFeed.url}`;
+  const key = `${race._id}:${liveFeedId(race.liveFeed)}`;
   const now = Date.now();
   let entry = cache.get(key);
   if (entry?.snap && now - entry.checkedAt < UPSTREAM_MS) return { snap: entry.snap, failed: entry.failed };
@@ -80,6 +83,8 @@ async function fetchLive(meet: Meet, race: Race): Promise<Omit<LiveSnapshot, "ok
       const id = checkpointForLabel(race, label);
       if (id) byCheckpoint[id] = ms;
     }
+    // Listed but no result yet (on the course, or before the gun): nothing official to show for them.
+    if (e.status === "finished" && e.finishMs === null && Object.keys(byCheckpoint).length === 0) continue;
     out[m.athlete._id] = { finishMs: e.finishMs, status: e.status, place: e.place, byCheckpoint, precision: contest.precision };
   }
   return { data: out, field };

@@ -303,7 +303,10 @@ function RaceBoard({
       const finished = !!finishCell && !finishCell.missed && !finishCell.beforeGun && (off ? off.status === "finished" : !statuses.get(athleteId));
       // A live-feed time is the timer's, but preliminary: PR / SB stay outlined until the results are imported.
       const record = race.recordsExcluded || !finished ? null : recordBadge(finishMs, race.bests[athleteId], !!finishCell?.official && !officialLive);
-      return { athleteId, marks, cells, reached, officialStatus: off?.status ?? null, officialPlace: off?.place ?? null, status: off ? undefined : statuses.get(athleteId), record };
+      // Official results outrank an app DNS/DNF, but not a row with only splits and no finish (live: they
+      // crossed a mat, then the app's DNF may be right).
+      const overrides = !!off && !(off.status === "finished" && off.finishMs === null);
+      return { athleteId, marks, cells, reached, officialStatus: off?.status ?? null, officialPlace: off?.place ?? null, status: overrides ? undefined : statuses.get(athleteId), record };
     });
     // Compare like with like: official times are from the gun, app times are elapsed when
     // there's a gun (else wall-clock, which is still monotonic within one race).
@@ -702,7 +705,7 @@ function RaceBoard({
         />
       )}
       {view === "everyone" ? (
-        <FieldView field={field} ourTeam={race.ourTeam} live={officialLive} mixed={combined} />
+        <FieldView field={field} ourTeam={race.ourTeam} live={officialLive} racing={officialLive && !isFinished} mixed={combined} />
       ) : (
       <>
       {race.checkpoints.length > 1 && (

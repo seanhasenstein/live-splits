@@ -3,7 +3,7 @@ import { getMeet, getRace } from "@/lib/data";
 import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
 import { type FieldEntry, getOfficialField, getOfficialTimes } from "@/lib/results/import";
-import { getLiveSnapshot, liveFeedActive } from "@/lib/results/live";
+import { getLiveSnapshot, liveFeedActive, liveFeedId } from "@/lib/results/live";
 
 /** A record screen counts as "here" this long after its last poll. */
 const PRESENCE_MS = 2 * 60_000;
@@ -98,7 +98,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/races
     // The current places setup rides along, so open screens follow it being turned on or off mid-race.
     { taps, gunTimeMs: race.gunTimeMs, serverTimeMs, official, field, places: staff ? (race.places ?? null) : showPlaces ? race.places : null, officialLive: live,
       // Which link the live times came from (a re-linked race starts over), when they were read, and whether reading it fails.
-      liveUrl: live ? race.liveFeed!.url : null,
+      liveUrl: live ? liveFeedId(race.liveFeed!) : null,
       liveOkAt: snap?.okAt ?? null,
       liveAgeMs: snap ? Date.now() - snap.okAt : null,
       liveFailing: live && !!feed?.failed, finished: !!race.finishedAt, recording },
