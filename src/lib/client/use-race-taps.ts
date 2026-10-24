@@ -159,6 +159,9 @@ export function useRaceTaps(raceId: string, initialGunTimeMs: number | null, at?
     let stopped = false;
     const intervalFor = () => {
       const { gunTimeMs: gun, finished: done } = stateRef.current;
+      // A race with a live feed follows the timer, gun or not (nobody may be firing one here): quick
+      // until it's finished, then slower while it waits for the import.
+      if (liveRef.current) return done ? POLL.longRunning : POLL.inProgress;
       if (done) return POLL.finished;
       if (!gun) return POLL.notStarted;
       return Date.now() - gun > LONG_RUNNING_MS ? POLL.longRunning : POLL.inProgress;

@@ -13,7 +13,7 @@ import { fromFeedUrl } from "./sources";
  * matches count: a live feed is nobody's chance to confirm a spelling. The import after the race is
  * the record.
  */
-const UPSTREAM_MS = 15_000;
+const UPSTREAM_MS = 5_000;
 /** A server instance with nothing yet waits this long for its first read before answering. */
 const FIRST_WAIT_MS = 4_000;
 /** A finished race that was never imported stops reading its feed after this long. */

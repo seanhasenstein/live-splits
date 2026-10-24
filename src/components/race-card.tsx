@@ -232,7 +232,7 @@ export function RaceCard({ raceId, name, startLabel, details, editHref, csvHref,
               /events/xc/ and a number.
             </p>
             <p>
-              Once the gun is fired here, Live results reads it (at most every 15 s while someone has it open): official finishes for our runners, and the Everyone view with every runner and team score. Import the results after the race as usual.
+              Live results reads it every few seconds while someone has it open, from now until the results are imported (no need to fire the gun here): the timer&rsquo;s finishes for our runners, and the Everyone view with every runner and team score. Import the official results after the race.
             </p>
             <LiveFeedControl
               raceId={raceId}
