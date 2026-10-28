@@ -214,6 +214,15 @@ enough to need no file storage). Served at `/api/logos/{schoolId}/{key}`, which
 is public. Loaded in bulk with `pnpm db:logos <folder>` or one at a time on
 Season → Team logos.
 
+### allTimeEntries
+*Added Oct 28, 2026.* The program's all-time lists from before the app: today
+`list: "state"`, every performance our runners ran at the WIAA State meet, from
+the coach's records. Each row has `gender`, `distanceMeters` (girls ran 4K
+before the move to 5K), `year`, `name`, `grade`, `timeText` as printed,
+`timeMs`, `place`, `notes`, and `athleteId` when the name matches the roster.
+Loaded (replacing the list) with `pnpm db:all-time load state <csv>`. Years
+after the last record come from the app's State meets (short name "State").
+
 ### imports
 Raw pasted/uploaded source stored as-is (`raw`), with `source`, `fileName`,
 `contentType`, and the meet/race it belongs to.
@@ -305,6 +314,7 @@ filter (built with the query layer, not in step 1):
 | sessions | unique `{tokenHash}` |
 | pins | `{userId}` |
 | teamLogos | unique `{schoolId, key}` |
+| allTimeEntries | `{schoolId, list, gender, distanceMeters}` |
 
 ## Seed
 
