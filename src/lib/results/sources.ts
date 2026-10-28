@@ -1,5 +1,5 @@
 import "server-only";
-import { COLUMN_HEADER_RE, type ParsedContest, parseArrowResultsHtml, parseAthleticLiveJson, parseColumnResults, parseRaceResultJson, parseResultsText, stripTags } from "./parse";
+import { COLUMN_HEADER_RE, type ParsedContest, parsePtTimingText, PTT_HEADER_RE, parseArrowResultsHtml, parseAthleticLiveJson, parseColumnResults, parseRaceResultJson, parseResultsText, stripTags } from "./parse";
 
 /**
  * Turn what a coach hands us (a URL, pasted text, a PDF) into contests.
@@ -265,6 +265,11 @@ export async function fromPdf(data: Uint8Array, contestName: string): Promise<Pa
   // Team results ("1. Ozaukee - 78 Points" over each team's runners) would read as runners with their pace as the finish.
   if (/^\s*\d+\.\s.+\s-\s*\d+\s+Points\s*$/m.test(text))
     throw new SourceError("That's the team results PDF. Import the individual (overall) results instead; the app works out team scores from them.");
+  // PTTiming's printed results (team scores, then the individual table): read the table only.
+  if (PTT_HEADER_RE.test(text)) {
+    const contests = parsePtTimingText(text, contestName);
+    if (contests.length > 0) return contests;
+  }
   if (COLUMN_HEADER_RE.test(text)) {
     const contests = parseColumnResults(await fromPdfText(data, "\t"), contestName);
     if (contests.length > 0) return contests;

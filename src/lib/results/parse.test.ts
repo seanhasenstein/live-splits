@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import { guessRace, isCombinedRace, isOurTeam, matchAthlete, meetSeriesKey, normalizeName } from "./match";
-import { COLUMN_HEADER_RE, headerLabels, parseArrowResultsHtml, parseColumnResults, parseRaceResultJson, parseResultsText, restrictToDivision } from "./parse";
+import { COLUMN_HEADER_RE, headerLabels, parseArrowResultsHtml, parseColumnResults, parseRaceResultJson, parseResultsText, restrictToDivision, parsePtTimingText, PTT_HEADER_RE } from "./parse";
 
 // Real, unsanitized results stay out of git; these two tests run only where they exist.
 // The committed, sanitized copies are covered in fixtures.test.ts.
@@ -230,4 +230,33 @@ test("the same meet across years: the short name first, then the series id, then
   expect(meetSeriesKey({ shortName: "KML", meetSeriesId: null, name: "Kettle Moraine Lutheran Invite" })).toBe(meetSeriesKey({ shortName: "kml", meetSeriesId: "x", name: "KML Charger Cross Country Classic" }));
   expect(meetSeriesKey({ shortName: null, meetSeriesId: "s1", name: "A" })).toBe("s1");
   expect(meetSeriesKey({ shortName: null, meetSeriesId: null, name: "Smiley Invite" })).toBe("name:smiley invite");
+});
+
+test("PTTiming printed results: skips the team-score pages, reads the individual table (team place blank for individuals), mile splits cumulative", () => {
+  const text = [
+    "WIAA State Cross Country Championships",
+    "========== BOYS TEAM SCORE ==========",
+    "1. \t113 St Ambrose Academy \t(17:23.4 86:56.7 2:29.1)",
+    "1 \t1 \tAlan Able \t10 \t16:06.9 \t5 \t56 \tSam Sample \t10 \t18:36.0",
+    "Boys Division 3",
+    "Place \tTmPl \tName \tYear \tTeamname \tRank \t1",
+    "Mile \tRank \t2",
+    "Mile \tSplit \tLast1.1 \tTime \tPac",
+    "1 \t1 \tAlan Able \t10 \tSt Ambrose Academy \t16 \t5:11 \t2 \t10:36 \t5:26 \t5:31 \t16:06.9 \t5:1",
+    "2 \tBen Baker \t11 \tThree Lakes-Phelps \t4 \t5:09 \t1 \t10:36 \t5:27 \t5:36 \t16:11.2 \t5:1",
+    "Timing & Results by PrimeTime Race & Event Management, LLC. www.pttiming.com",
+    "Boys Division 3",
+    "Place \tTmPl \tName \tYear \tTeamname \tRank \t1 Mile \tRank \t2 Mile \tSplit \tLast1.1 \tTime \tPace",
+    "3 \t2 \tCal Cole \t12 \tPhillips \t6 \t5:10 \t3 \t10:36 \t5:27 \t5:47 \t16:23.0 \t5:1",
+  ].join("\n");
+  expect(PTT_HEADER_RE.test(text)).toBe(true);
+  const [c, ...rest] = parsePtTimingText(text, "Boys");
+  expect(rest).toEqual([]);
+  expect(c.name).toBe("Boys Division 3");
+  expect(c.precision).toBe("tenths");
+  expect(c.entries.map((e) => [e.place, e.name, e.grade, e.team, e.finishMs, e.splits])).toEqual([
+    [1, "Alan Able", 10, "St Ambrose Academy", 966_900, { "Mile 1": 311_000, "Mile 2": 636_000 }],
+    [2, "Ben Baker", 11, "Three Lakes-Phelps", 971_200, { "Mile 1": 309_000, "Mile 2": 636_000 }],
+    [3, "Cal Cole", 12, "Phillips", 983_000, { "Mile 1": 310_000, "Mile 2": 636_000 }],
+  ]);
 });

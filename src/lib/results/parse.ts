@@ -406,3 +406,68 @@ export function parseArrowResultsHtml(html: string, contestName: string, url?: s
   }
   return { name: contestName, distanceMeters: null, splitLabels: [], entries, source: { kind: "arrow", url }, precision: precisionOf(timeStrings) };
 }
+
+/** PTTiming / RunScore's printed results header: "Place TmPl Name Year Teamname Rank 1 Mile …" (it may wrap). */
+export const PTT_HEADER_RE = /^\s*Place\s+TmPl\s+Name\s+Year\s+Teamname\b/im;
+
+/**
+ * PTTiming (PrimeTime; RunScore) results printed from their live page, as pdf.js reads them: tab-separated
+ * rows under "Place TmPl Name Year Teamname Rank 1 Mile Rank 2 Mile Split Last1.1 Time Pace", one section
+ * per race headed "Boys Division 3". TmPl (team place) is blank for a runner not on a scoring team, so a row
+ * has 13 cells or 12. The team-score pages before it (runners two to a line) are skipped. Mile times are
+ * cumulative ("Mile 1", "Mile 2").
+ */
+export function parsePtTimingText(text: string, fallbackName: string): ParsedContest[] {
+  const contests: ParsedContest[] = [];
+  const timesOf = new Map<ParsedContest, string[]>();
+  let current: { name: string; entries: ParsedEntry[]; times: string[] } | null = null;
+  let heading: string | null = null;
+  let inTable = false;
+  const isTime = (s: string) => /^\d{1,2}:\d{2}(\.\d+)?$/.test(s);
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (/^(Boys|Girls|Men|Women)\b.*$/i.test(line) && line.split(/\s*\t\s*/).length === 1) heading = line;
+    if (PTT_HEADER_RE.test(line)) {
+      const name = heading ?? fallbackName;
+      // A results table runs over pages with the header repeated: same race, same contest.
+      if (!current || current.name !== name) {
+        current = { name, entries: [], times: [] };
+        const contest: ParsedContest = { name, distanceMeters: null, splitLabels: ["Mile 1", "Mile 2"], entries: current.entries, source: { kind: "text" }, precision: "tenths" };
+        contests.push(contest);
+        timesOf.set(contest, current.times);
+      }
+      inTable = true;
+      continue;
+    }
+    if (!inTable || !current) continue;
+    const cells = line.split(/\s*\t\s*/).filter((c) => c !== "");
+    if (!/^\d+$/.test(cells[0] ?? "")) continue; // wrapped header words, page footers
+    const teamPlaced = cells.length >= 13 || (cells.length >= 4 && /^\d+$/.test(cells[1]) && !/^\d+$/.test(cells[2]));
+    const [place, , name, year, team, , mile1, , mile2, , , time] = teamPlaced ? cells : [cells[0], null, ...cells.slice(1)];
+    if (!name || !team) continue;
+    const finished = isTime(time ?? "");
+    const finishMs = finished ? parseElapsed(time!) : null;
+    if (finished) current.times.push(time!);
+    const [firstName, ...rest] = name.trim().split(/\s+/);
+    const splits: Record<string, number> = {};
+    for (const [label, t] of [["Mile 1", mile1], ["Mile 2", mile2]] as const) {
+      const ms = t && isTime(t) ? parseElapsed(t) : null;
+      if (ms !== null) splits[label] = ms;
+    }
+    current.entries.push({
+      firstName,
+      lastName: rest.join(" "),
+      name: name.trim(),
+      team: team.trim() || null,
+      grade: toGrade(year),
+      bib: null,
+      place: finished ? Number(place) : null,
+      // No time: the status word if the row has one (DNF, DQ), else a DNF.
+      status: finished ? "finished" : placeAndStatus(time).status === "finished" ? "dnf" : placeAndStatus(time).status,
+      finishMs,
+      splits,
+    });
+  }
+  for (const c of contests) c.precision = precisionOf(timesOf.get(c) ?? []);
+  return contests.filter((c) => c.entries.length > 0);
+}
