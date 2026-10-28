@@ -158,3 +158,27 @@ export const TeamLogo = tenantDoc({
   png: z.string().min(1),
 });
 export type TeamLogo = z.infer<typeof TeamLogo>;
+
+// ---------------------------------------------------------------- allTimeEntries
+
+/**
+ * The program's all-time lists from before the app (the State meet list: every performance our runners
+ * ran there, from the coach's records). Years the app has results for come from the app instead.
+ */
+export const AllTimeEntry = tenantDoc({
+  /** Which list: "state" (the WIAA State meet). */
+  list: z.enum(["state"]),
+  gender: Gender,
+  distanceMeters: z.int().positive(),
+  year: z.int(),
+  name: z.string().min(1),
+  grade: z.int().nullable(),
+  /** As printed (old results are whole seconds). */
+  timeText: z.string().min(1),
+  timeMs: z.int().positive(),
+  place: z.int().positive().nullable(),
+  notes: z.string().nullable(),
+  /** Our athlete, when the name matches the roster. */
+  athleteId: Id.nullable(),
+});
+export type AllTimeEntry = z.infer<typeof AllTimeEntry>;

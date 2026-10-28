@@ -126,6 +126,8 @@ function Mapping({ meetId, loaded, races, athletes, teamAliases }: { meetId: str
   });
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  /** Store only our runners (PTTiming's terms, for one, don't allow keeping the whole field). */
+  const [oursOnly, setOursOnly] = useState(false);
 
   const commit = () => {
     // Every flagged runner needs an answer first: a wrong guess is a result on the wrong athlete.
@@ -169,7 +171,7 @@ function Mapping({ meetId, loaded, races, athletes, teamAliases }: { meetId: str
     const plansSlim = payloadPlans.map((p) => ({ ...p, contestIndex: remap.get(p.contestIndex)! }));
     setError(null);
     start(async () => {
-      const result = await commitImportAction(meetId, JSON.stringify({ raw: JSON.stringify(slim), sourceUrl: loaded.sourceUrl ?? null, contests: slim, plans: plansSlim }));
+      const result = await commitImportAction(meetId, JSON.stringify({ raw: JSON.stringify(slim), sourceUrl: loaded.sourceUrl ?? null, contests: slim, plans: plansSlim, oursOnly }));
       if (result?.error) setError(result.error);
     });
   };
@@ -198,6 +200,15 @@ function Mapping({ meetId, loaded, races, athletes, teamAliases }: { meetId: str
           onChange={(p) => setPlans((all) => ({ ...all, [ci]: p }))}
         />
       ))}
+      <Card>
+        <CardBody className="space-y-1">
+          <Checkbox checked={oursOnly} onChange={(e) => setOursOnly(e.target.checked)} label="Keep only our runners" />
+          <p className="text-[13px] text-ink-2">
+            For results whose timer doesn&rsquo;t allow storing the whole field (PTTiming, used at WIAA State). Our runners keep their official times, places and splits; there&rsquo;s no
+            team-scores or Teams page for the race.
+          </p>
+        </CardBody>
+      </Card>
       {error && <Alert tone="danger">{error}</Alert>}
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={() => location.reload()}>

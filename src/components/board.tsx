@@ -18,6 +18,7 @@ import type { AthleteRaceStatus, Precision, RacePlaces } from "@/lib/db/schema";
 import { type CheckpointPlaces, fieldScores, ordinal as placeText, type OurTeam, racePlaces, replayTicks } from "@/lib/race-places";
 import { METERS_PER_MILE, openingEstimate, paceMsPerMile, projectElapsed, segmentLength } from "@/lib/pace";
 import { RECORD_LABEL, recordBadge } from "@/lib/records";
+import { allTimeRank, rankLabel } from "@/lib/reports/all-time";
 import type { LineupBests, PriorFinish } from "@/lib/results/bests";
 import { formatClock, formatDateWithYear, formatElapsed, formatLocalDate, parseTypedTime } from "@/lib/time";
 
@@ -42,6 +43,8 @@ type RaceInfo = {
   places: RacePlaces | null;
   /** Our school, as places show it. */
   ourTeam: OurTeam;
+  /** At the State meet: every State time before this meet (this gender and distance), to rank our finishers on the all-time list. */
+  allTime: { times: number[]; meters: number } | null;
 };
 
 type Props = {
@@ -599,6 +602,31 @@ function RaceBoard({
     );
   };
 
+  // At State: where a finish lands on the program's all-time State list, against every time before this
+  // meet and our runners already in this race. Unofficial while it rests on taps or the timer's live times.
+  const allTimeLine = (row: Row) => {
+    // Out of the race by the app or by the official results: no rank.
+    const out = (r: Row) => !!r.status || (!!r.officialStatus && r.officialStatus !== "finished");
+    if (!race.allTime || out(row)) return null;
+    const finishAt = race.checkpoints.findIndex((c) => c.kind === "finish");
+    const cell = finishAt >= 0 ? row.cells[finishAt] : undefined;
+    const ms = cell ? (cell.official ?? cell.elapsedMs) : null;
+    if (ms === null || cell?.missed || cell?.beforeGun) return null;
+    const others = allRows.flatMap((r) => {
+      if (r.athleteId === row.athleteId || out(r)) return [];
+      const c = finishAt >= 0 ? r.cells[finishAt] : undefined;
+      const t = c ? (c.official ?? c.elapsedMs) : null;
+      return t === null || c?.missed || c?.beforeGun ? [] : [t];
+    });
+    const rank = allTimeRank(ms, [...race.allTime.times, ...others]);
+    const unofficial = cell!.official === null || officialLive;
+    return (
+      <span className={`block text-[11px] leading-4 font-semibold ${rank <= 10 ? "text-gold-text" : "text-ink-2"}`}>
+        {rankLabel(rank, race.allTime.meters)}
+        {unofficial && <span className="font-normal text-ink-3"> · unofficial</span>}
+      </span>
+    );
+  };
   return (
     <>
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -772,6 +800,7 @@ function RaceBoard({
                         ) : (
                           <button type="button" onClick={() => setAthleteSheet(row.athleteId)} className="-mx-1.5 rounded px-1.5 py-1 text-left">
                             <NameWithPill name={athletes[row.athleteId] ?? "?"} pill={statusPill ?? (row.record ? <RecordPill badge={row.record} className="ml-1.5 align-[2px]" /> : null)} />
+                            {allTimeLine(row)}
                           </button>
                         );
                       })()}

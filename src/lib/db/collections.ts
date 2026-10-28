@@ -1,6 +1,7 @@
 import type { Collection, Db } from "mongodb";
 import type { z } from "zod";
 import {
+  AllTimeEntry,
   Athlete,
   Course,
   Distance,
@@ -52,6 +53,7 @@ export const COLLECTIONS = {
   workoutTemplates: { schema: WorkoutTemplate, version: 1 },
   workoutEvents: { schema: WorkoutEvent, version: 1 },
   teamLogos: { schema: TeamLogo, version: 1 },
+  allTimeEntries: { schema: AllTimeEntry, version: 1 },
 } as const;
 
 export type CollectionName = keyof typeof COLLECTIONS;

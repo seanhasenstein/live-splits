@@ -88,6 +88,8 @@ const ParsedContestSchema = z.object({
 
 const CommitPayload = z.object({
   raw: z.string(),
+  /** Keep only our runners' rows (a timer whose terms don't allow storing the whole field, e.g. PTTiming). */
+  oursOnly: z.boolean().default(false),
   sourceUrl: z.string().nullable(),
   contests: z.array(ParsedContestSchema),
   plans: z.array(
@@ -117,6 +119,7 @@ export async function commitImportAction(meetId: string, payloadJson: string): P
   const parsed = CommitPayload.safeParse(json);
   if (!parsed.success) return { error: "Invalid import" };
   const payload = parsed.data;
+  if (payload.oursOnly) keepOnlyOurs(payload);
   const contests = payload.contests as ParsedContest[];
   const [races, program] = await Promise.all([listRaces(meet._id), getProgram(meet.schoolId, "xc")]);
   const genderOf = (race: Race) => program?.settings.raceCategories.find((c) => c.id === race.raceCategoryId)?.gender ?? null;
@@ -162,4 +165,22 @@ export async function commitImportAction(meetId: string, payloadJson: string): P
   const aliases = payload.plans.flatMap((p) => p.newAliases);
   await commitImport(meet, plans, payload.raw, payload.sourceUrl, actor, { lineupAdds, aliases });
   redirect(`/meets/${meet._id}`);
+}
+
+/**
+ * "Our runners only": each contest keeps just the rows assigned to our athletes (with their overall places
+ * as printed), the assignments are renumbered to match, and the raw text saved with the import becomes
+ * those rows. No other school's runner is stored.
+ */
+function keepOnlyOurs(payload: CommitPayload): void {
+  const used = new Map<number, number[]>();
+  for (const p of payload.plans) used.set(p.contestIndex, [...(used.get(p.contestIndex) ?? []), ...p.assignments.map((a) => a.entryIndex)]);
+  const remap = new Map<number, Map<number, number>>();
+  payload.contests = payload.contests.map((c, ci) => {
+    const keep = [...new Set(used.get(ci) ?? [])].sort((a, b) => a - b);
+    remap.set(ci, new Map(keep.map((old, i) => [old, i])));
+    return { ...c, entries: keep.map((i) => c.entries[i]) };
+  });
+  for (const p of payload.plans) p.assignments = p.assignments.map((a) => ({ ...a, entryIndex: remap.get(p.contestIndex)!.get(a.entryIndex)! }));
+  payload.raw = JSON.stringify(payload.contests);
 }

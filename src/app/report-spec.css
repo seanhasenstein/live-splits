@@ -904,3 +904,21 @@
     min-width: 680px;
   }
 }
+
+/* State all-time list: top 10 in gold, a line under #30, this season highlighted. */
+.rpt table.atl td.rk {
+  font-weight: 700;
+  color: var(--soft);
+}
+.rpt table.atl td.rk.gold {
+  color: var(--gold);
+}
+.rpt table.atl tr.cur td {
+  background: var(--cream);
+}
+.rpt table.atl tr.top30 td {
+  border-bottom: 1.5pt solid var(--gold);
+}
+.rpt table.atl td {
+  padding: 3px 5px 4px;
+}

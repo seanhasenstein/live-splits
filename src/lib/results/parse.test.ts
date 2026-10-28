@@ -260,3 +260,31 @@ test("PTTiming printed results: skips the team-score pages, reads the individual
     [3, "Cal Cole", 12, "Phillips", 983_000, { "Mile 1": 310_000, "Mile 2": 636_000 }],
   ]);
 });
+
+test("PTTiming: a missed mat, a DNF and a DQ row, and the next race's team scores kept out of this one", () => {
+  const H = "Place \tTmPl \tName \tYear \tTeamname \tRank \t1 Mile \tRank \t2 Mile \tSplit \tLast1.1 \tTime \tPace";
+  const text = [
+    "========== BOYS TEAM SCORE ==========",
+    "Boys Division 3",
+    H,
+    "1 \t1 \tAlan Able \t10 \tKohler \t16 \t5:11 \t2 \t10:36 \t5:26 \t5:31 \t16:06.9 \t5:1",
+    // Missed the 1-mile mat: its rank and time are blank.
+    "2 \tBen Baker \t11 \tMishicot \t1 \t10:36 \t5:27 \t5:36 \t16:11.2 \t5:1",
+    "DNF \tCal Cole \t12 \tPhillips",
+    "DQ \tDan Dee \t9 \tKohler \t20 \t5:20",
+    "========== GIRLS TEAM SCORE ==========",
+    "1 \t1 \tAmy Able \t10 \t19:06.9 \t5 \t56 \tBea Bell \t10 \t21:36.0",
+    "Girls Division 3",
+    H,
+    "1 \t1 \tAmy Able \t10 \tKohler \t20 \t6:11 \t2 \t12:36 \t6:26 \t6:31 \t19:06.9 \t6:1",
+  ].join("\n");
+  const [boys, girls] = parsePtTimingText(text, "x");
+  expect(boys.name).toBe("Boys Division 3");
+  expect(boys.entries.map((e) => [e.place, e.name, e.team, e.status, e.finishMs, e.splits])).toEqual([
+    [1, "Alan Able", "Kohler", "finished", 966_900, { "Mile 1": 311_000, "Mile 2": 636_000 }],
+    [2, "Ben Baker", "Mishicot", "finished", 971_200, { "Mile 2": 636_000 }],
+    [null, "Cal Cole", "Phillips", "dnf", null, {}],
+    [null, "Dan Dee", "Kohler", "dq", null, {}],
+  ]);
+  expect(girls.entries.map((e) => [e.place, e.name, e.finishMs])).toEqual([[1, "Amy Able", 1_146_900]]);
+});

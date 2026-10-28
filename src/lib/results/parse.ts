@@ -424,9 +424,15 @@ export function parsePtTimingText(text: string, fallbackName: string): ParsedCon
   let heading: string | null = null;
   let inTable = false;
   const isTime = (s: string) => /^\d{1,2}:\d{2}(\.\d+)?$/.test(s);
+  const STATUS = /^(DNF|DNS|DQ|DSQ)$/i;
   for (const raw of text.split("\n")) {
     const line = raw.trim();
-    if (/^(Boys|Girls|Men|Women)\b.*$/i.test(line) && line.split(/\s*\t\s*/).length === 1) heading = line;
+    // A team-score page, or the next race's heading: not this table any more.
+    if (/TEAM SCORE/i.test(line)) inTable = false;
+    if (/^(Boys|Girls|Men|Women)\b.*$/i.test(line) && line.split(/\s*\t\s*/).length === 1) {
+      if (line !== heading) inTable = false;
+      heading = line;
+    }
     if (PTT_HEADER_RE.test(line)) {
       const name = heading ?? fallbackName;
       // A results table runs over pages with the header repeated: same race, same contest.
@@ -441,30 +447,46 @@ export function parsePtTimingText(text: string, fallbackName: string): ParsedCon
     }
     if (!inTable || !current) continue;
     const cells = line.split(/\s*\t\s*/).filter((c) => c !== "");
-    if (!/^\d+$/.test(cells[0] ?? "")) continue; // wrapped header words, page footers
-    const teamPlaced = cells.length >= 13 || (cells.length >= 4 && /^\d+$/.test(cells[1]) && !/^\d+$/.test(cells[2]));
-    const [place, , name, year, team, , mile1, , mile2, , , time] = teamPlaced ? cells : [cells[0], null, ...cells.slice(1)];
-    if (!name || !team) continue;
-    const finished = isTime(time ?? "");
-    const finishMs = finished ? parseElapsed(time!) : null;
-    if (finished) current.times.push(time!);
-    const [firstName, ...rest] = name.trim().split(/\s+/);
+    // Place (or a status word for a DNF / DQ), then the team place when the runner's team scored.
+    let k = 0;
+    let place: number | null = null;
+    let statusWord: string | null = null;
+    if (/^\d+$/.test(cells[0] ?? "")) place = Number(cells[k++]);
+    else if (STATUS.test(cells[0] ?? "")) statusWord = cells[k++];
+    if (/^\d+$/.test(cells[k] ?? "") && !/^\d+$/.test(cells[k + 1] ?? "")) k++;
+    const [name, year, team] = cells.slice(k, k + 3);
+    // Name, year and team, or it's not a runner's row (wrapped header words, page footers).
+    if (!name || !team || /^\d+$/.test(name) || isTime(team) || toGrade(year) === null) continue;
+    if (place === null && statusWord === null && !cells.some((c) => STATUS.test(c))) continue;
+    const rest = cells.slice(k + 3);
+    // The finish is the last time with a decimal (pace, after it, has none). A missed mat leaves its cells
+    // blank and the rest shift left, so the mile times are read by value: Mile 2 is the cumulative one (over
+    // ~45% of the finish), Mile 1 a shorter time before it. No Mile 2, no telling Mile 1 from the stretches.
+    const fi = rest.map((c, i) => (/^\d{1,2}:\d{2}\.\d+$/.test(c) ? i : -1)).filter((i) => i >= 0).at(-1) ?? -1;
+    const finishMs = fi >= 0 ? parseElapsed(rest[fi]) : null;
+    const before = (fi >= 0 ? rest.slice(0, fi) : rest).map((c, i) => ({ i, ms: isTime(c) ? parseElapsed(c) : null })).filter((x): x is { i: number; ms: number } => x.ms !== null);
     const splits: Record<string, number> = {};
-    for (const [label, t] of [["Mile 1", mile1], ["Mile 2", mile2]] as const) {
-      const ms = t && isTime(t) ? parseElapsed(t) : null;
-      if (ms !== null) splits[label] = ms;
+    const m2 = finishMs !== null ? before.find((x) => x.ms > finishMs * 0.45) : undefined;
+    if (m2) {
+      splits["Mile 2"] = m2.ms;
+      const m1 = before.find((x) => x.i < m2.i && x.ms < m2.ms);
+      if (m1) splits["Mile 1"] = m1.ms;
     }
+    const finished = finishMs !== null && place !== null && statusWord === null;
+    if (finished) current.times.push(rest[fi]);
+    const word = statusWord ?? cells.find((c) => STATUS.test(c)) ?? "";
+    const [firstName, ...last] = name.trim().split(/\s+/);
     current.entries.push({
       firstName,
-      lastName: rest.join(" "),
+      lastName: last.join(" "),
       name: name.trim(),
       team: team.trim() || null,
       grade: toGrade(year),
       bib: null,
-      place: finished ? Number(place) : null,
-      // No time: the status word if the row has one (DNF, DQ), else a DNF.
-      status: finished ? "finished" : placeAndStatus(time).status === "finished" ? "dnf" : placeAndStatus(time).status,
-      finishMs,
+      place: finished ? place : null,
+      // No finish: the status word the row carries (DNF, DQ), else a DNF.
+      status: finished ? "finished" : placeAndStatus(word).status === "finished" ? "dnf" : placeAndStatus(word).status,
+      finishMs: finished ? finishMs : null,
       splits,
     });
   }

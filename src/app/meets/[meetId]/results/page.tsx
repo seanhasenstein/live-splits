@@ -8,6 +8,8 @@ import { getDb } from "@/lib/db/client";
 import { collection } from "@/lib/db/collections";
 import { gradeForSeason } from "@/lib/grade";
 import { getLineupBests } from "@/lib/results/bests";
+import { isStateMeet } from "@/lib/reports/all-time";
+import { getStateLists } from "@/lib/reports/all-time-server";
 
 export const metadata: Metadata = { title: "Live results" };
 
@@ -30,6 +32,16 @@ export default async function ResultsPage({ params, searchParams }: PageProps<"/
     getSchool(meet.schoolId),
   ]);
   const levelLabel = (id: string) => program?.settings.levels.find((l) => l.id === id)?.label ?? id;
+  // At State: every State time before this meet, by gender and distance, for the all-time rank on finishers.
+  const stateLists = isStateMeet(meet) && program && isSchoolWide(session) ? await getStateLists(meet.schoolId, program, Number(meet.date.slice(0, 4)), { meetId: meet._id, year: Number(meet.date.slice(0, 4)) }) : [];
+  const allTimeFor = (r: (typeof races)[number]) => {
+    const gender = program?.settings.raceCategories.find((c) => c.id === r.raceCategoryId)?.gender;
+    const meters = distances.find((d) => d._id === r.distanceId)?.meters;
+    if (!isStateMeet(meet) || (gender !== "M" && gender !== "F") || !meters) return null;
+    // No list yet for this gender and distance (a first-ever qualifier): they're #1.
+    const list = stateLists.find((l) => l.gender === gender && l.meters === meters);
+    return { times: list ? list.rows.map((x) => x.timeMs) : [], meters };
+  };
 
   return (
     <Board
@@ -55,6 +67,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps<"/
         // Coaches and managers always; everyone else once the coach shows places to all.
         places: r.places?.on && (r.places.public || can(session, "tap", meet)) ? r.places : null,
         ourTeam: ourTeamOf(school),
+        allTime: allTimeFor(r),
       }))}
       grades={Object.fromEntries(athletes.map((a) => [a._id, a.graduationYear !== null && season ? gradeForSeason(a.graduationYear, season.endDate) : null]))}
       initialAthleteId={typeof athlete === "string" ? athlete : null}
